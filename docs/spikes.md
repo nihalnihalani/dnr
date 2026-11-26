@@ -34,10 +34,10 @@ Common setup unless a spike says otherwise: `kiro-cli` 3.4 or later (version rec
 
 | Item | Value |
 |---|---|
-| Kiro credits request time | {{credits_requested_at}} |
-| Outside labeler (labeler 2), hours booked | {{labeler_2}} |
-| Adjudicator | {{adjudicator}} |
-| SYN author | {{syn_author}} |
-| Pilot maintainers (three or more, one Python, one TypeScript) | {{pilot_maintainers}} |
-| `study-prereg` tag commit time | {{study_prereg_at}} |
-| Bonus eligibility (Crew, Blog, Social Blitz, Startup, Student, Ghost) | {{bonus_eligibility}} |
+| Kiro credits request time | pending (user): request Kiro credits on Devpost and record the time (Phase 0) |
+| Outside labeler (labeler 2), hours booked | pending (user): book an outside labeler by name and hours (Phase 0, §9.5) |
+| Adjudicator | pending (user): name the adjudicator (Phase 0, §9.5) |
+| SYN author | pending (user): name the SYN author, not the builder (Phase 0, §9.10) |
+| Pilot maintainers (three or more, one Python, one TypeScript) | pending (user): recruit three or more maintainers (Phase 0, §9.15) |
+| `study-prereg` tag commit time | pending (user): push the `study-prereg` tag before the first study session (Phase 0, §9.14) |
+| Bonus eligibility (Crew, Blog, Social Blitz, Startup, Student, Ghost) | pending (user): record which bonuses apply (Phase 0) |
