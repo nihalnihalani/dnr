@@ -31,6 +31,8 @@ const HARNESS = new Set([
   'rescore',
   'report',
   'prereg',
+  // internal: the os-user hook relay server, started by `trial run` (packages/trial/src/relay.ts)
+  '__relay',
 ]);
 
 /** Line prompt on the real terminal (labeling is interactive and human-only). */
@@ -47,7 +49,9 @@ async function ask(question: string): Promise<string | null> {
 export async function cmdTrial(argv: string[], io: CliIO): Promise<number> {
   const [sub] = argv;
   if (!sub || sub === '--help' || sub === '-h') {
-    io.out(`dnr trial <${[...MINING, 'falsealarm', ...HARNESS].join('|')}> …\n`);
+    io.out(
+      `dnr trial <${[...MINING, 'falsealarm', ...[...HARNESS].filter((h) => !h.startsWith('_'))].join('|')}> …\n`,
+    );
     return sub ? EXIT.OK : EXIT.USAGE;
   }
   if (sub === 'falsealarm') return (await import('./falsealarm')).cmdFalsealarm(argv, io);

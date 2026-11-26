@@ -10,6 +10,7 @@ import type { Arm } from '@dnr/schemas';
 import { z } from 'zod';
 import { type Bundle, bundleOf } from './arms';
 import { sha256Hex } from './prng';
+import { clientScript } from './relay';
 
 /**
  * Spike S8 outputs (`fixtures/s8.json`, committed by the Kiro workstream once S8 runs). Until it
@@ -20,7 +21,7 @@ export const S8 = z.strictObject({
   credential_rel: z.string().nullable(),
   /** Globs (relative to `$HOME/.kiro`) Kiro writes during a run; excluded from the HOME hash. */
   kiro_write_globs: z.array(z.string()),
-  /** Whether hook commands inherit the environment of kiro-cli (else the sidecar is used). */
+  /** Whether hook commands inherit the environment of kiro-cli (informational: hooks get DNR paths on their command line either way). */
   hooks_inherit_env: z.boolean().nullable(),
 });
 export type S8 = z.infer<typeof S8>;
@@ -117,8 +118,22 @@ export function hookCommand(dnr: string[], args: string, env: HookEnv | null): s
   return `${pre}${dnr.map(shq).join(' ')} ${args}`;
 }
 
-/** Hook files for a bundle, `{ "<name>.json": <Kiro hook file> }` (format of `.kiro/hooks/dnr-*.json`). */
-export function bundleFiles(bundle: Bundle, dnr: string[], env: HookEnv | null): Record<string, unknown> {
+/** os-user isolation: the hook command is the relay client in the run HOME (relay.ts). */
+export function relayCommand(home: string, args: string): string {
+  return `/bin/sh ${shq(join(home, '.kiro', 'dnr-relay.sh'))} ${args}`;
+}
+
+/**
+ * Hook files for a bundle, `{ "<name>.json": <Kiro hook file> }` (format of `.kiro/hooks/dnr-*.json`).
+ * T1(a): DNR paths appear only on the hook command line, never in the agent's environment. With
+ * `relayHome` (os-user isolation) the command is the relay client and names no DNR path at all.
+ */
+export function bundleFiles(
+  bundle: Bundle,
+  dnr: string[],
+  env: HookEnv | null,
+  relayHome: string | null = null,
+): Record<string, unknown> {
   if (bundle === 'none') return {};
   const out: Record<string, unknown> = {};
   for (const h of BUNDLES[bundle])
@@ -129,7 +144,10 @@ export function bundleFiles(bundle: Bundle, dnr: string[], env: HookEnv | null):
           name: h.name,
           trigger: h.trigger,
           ...(h.matcher ? { matcher: h.matcher } : {}),
-          action: { type: 'command', command: hookCommand(dnr, h.args, env) },
+          action: {
+            type: 'command',
+            command: relayHome ? relayCommand(relayHome, h.args) : hookCommand(dnr, h.args, env),
+          },
           timeout: h.timeout,
           enabled: true,
         },
@@ -139,7 +157,8 @@ export function bundleFiles(bundle: Bundle, dnr: string[], env: HookEnv | null):
 }
 
 /** sha256 of a bundle's template (placeholders for per-run paths), hashed in prereg-v1. */
-export function bundleTemplateHash(bundle: Bundle): string {
+export function bundleTemplateHash(bundle: Bundle, relay = false): string {
+  if (relay) return sha256Hex(JSON.stringify(bundleFiles(bundle, ['<DNR>'], null, '<HOME>')));
   const env: HookEnv = {
     DNR_MODE: bundle === 'live' ? 'enforce' : 'record',
     DNR_STATE_DIR: '<TRIAL_ROOT>/state/<RUN_ID>',
@@ -184,8 +203,8 @@ export interface SeedInput {
   s8: S8;
   /** Absolute path of the credential file to copy (S8), or null. */
   credentialFrom: string | null;
-  /** Sidecar `$HOME/.dnr-trial.json` (§9.3 fallback when hooks do not inherit the environment). */
-  sidecar: Record<string, string> | null;
+  /** os-user isolation: the relay directory the hook client talks to (relay.ts). */
+  relayDir: string | null;
 }
 
 export async function seedHome(i: SeedInput): Promise<void> {
@@ -193,7 +212,7 @@ export async function seedHome(i: SeedInput): Promise<void> {
   await mkdir(join(i.home, '.kiro', 'agents'), { recursive: true });
   const cfg = agentConfigFor(i.root, i.agent, i.model);
   await writeFile(join(i.home, '.kiro', 'agents', `${i.agent}.json`), `${JSON.stringify(cfg, null, 2)}\n`);
-  const files = bundleFiles(bundleOf(i.arm), i.dnr, i.env);
+  const files = bundleFiles(bundleOf(i.arm), i.dnr, i.env, i.relayDir ? i.home : null);
   if (Object.keys(files).length > 0) {
     await mkdir(join(i.home, '.kiro', 'hooks'), { recursive: true });
     for (const [n, body] of Object.entries(files))
@@ -204,7 +223,9 @@ export async function seedHome(i: SeedInput): Promise<void> {
     await mkdir(join(dst, '..'), { recursive: true });
     copyFileSync(i.credentialFrom, dst);
   }
-  if (i.sidecar) await writeFile(join(i.home, '.dnr-trial.json'), `${JSON.stringify(i.sidecar, null, 2)}\n`);
+  // No sidecar with DNR paths in HOME (T1(a)): the hook command line carries them.
+  if (i.relayDir && Object.keys(files).length > 0)
+    await writeFile(join(i.home, '.kiro', 'dnr-relay.sh'), clientScript(i.relayDir), { mode: 0o755 });
 }
 
 /** Minimal glob: `**` any depth, `*` within a segment, `?` one char. */

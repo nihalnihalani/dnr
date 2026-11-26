@@ -291,6 +291,8 @@ export async function freeze(input: {
   shaFile: string;
   keyOut: string;
   now: string;
+  /** Runs after labels.json is written and before the key is read (unseals the outputs, T3). */
+  afterLabels?: () => Promise<void>;
 }): Promise<FrozenLabels> {
   const { pair, fallback } = raters(input.labelers);
   const idx = readIndex(input.labelingDir);
@@ -347,6 +349,7 @@ export async function freeze(input: {
   const frozen = FrozenLabels.parse({ frozen_at: input.now, raters: pair, fallback, packets, sessions });
   await mkdir(dirname(input.labelsOut), { recursive: true });
   await writeFile(input.labelsOut, `${JSON.stringify(frozen, null, 2)}\n`);
+  await input.afterLabels?.();
   if (!existsSync(input.shaFile))
     throw new FreezeError(`${input.shaFile} missing: the key's sha256 must be committed before labeling`);
   const want = readFileSync(input.shaFile, 'utf8').trim().split(/\s+/)[0];

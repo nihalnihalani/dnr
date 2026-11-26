@@ -44,6 +44,8 @@ export type KeyEntry = z.infer<typeof KeyEntry>;
 export const PacketKey = z.strictObject({
   generated_at: z.string(),
   seed: z.number(),
+  /** sha256 of the sealed run outputs and state (T3), recorded when the packets are generated. */
+  sealed_sha256: z.string().nullable(),
   packets: z.array(KeyEntry),
 });
 export type PacketKey = z.infer<typeof PacketKey>;
@@ -145,6 +147,7 @@ export async function writePackets(input: {
   shaFile: string;
   now: string;
   rand?: (n: number) => Buffer;
+  sealedSha256?: string | null;
 }): Promise<{ key: PacketKey; sha256: string }> {
   if (existsSync(input.keyFile))
     throw new PacketError(`${input.keyFile} exists; packets were already generated`);
@@ -180,7 +183,12 @@ export async function writePackets(input: {
   }
   const index = entries.map((e, i) => ({ order: i + 1, code: e.code, kind: e.kind }));
   await writeFile(join(input.labelingDir, 'packets', 'index.json'), `${JSON.stringify(index, null, 2)}\n`);
-  const key: PacketKey = { generated_at: input.now, seed: PACKET_SEED, packets: entries };
+  const key: PacketKey = {
+    generated_at: input.now,
+    seed: PACKET_SEED,
+    sealed_sha256: input.sealedSha256 ?? null,
+    packets: entries,
+  };
   const text = `${JSON.stringify(key, null, 2)}\n`;
   await mkdir(dirname(input.keyFile), { recursive: true });
   await writeFile(input.keyFile, text, { mode: 0o600 });

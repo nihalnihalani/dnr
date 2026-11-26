@@ -13,6 +13,7 @@ import { matchesSha, type Namespace, type PlanCase, planRuns, type Selector, sha
 import { generateRules, verifyRules } from './baseline';
 import { layout, type TrialPaths, TrialRootError, trialPaths } from './env';
 import { buildUvEnv, type EnvEntry, realExec, runTests, validateRestored } from './envs';
+import { loadS8 } from './home';
 import {
   gitDirOf,
   loadCases,
@@ -22,6 +23,17 @@ import {
   type TrialCase,
   trialOrdersDir,
 } from './inputs';
+import {
+  DEFAULT_AGENT_USER,
+  DEFAULT_LAUNCHER,
+  type Isolation,
+  IsolationError,
+  loadS1,
+  type OsUser,
+  osUserPreflight,
+  parseIsolation,
+  requireIsolation,
+} from './isolation';
 import { adjudicate, freeze, Labelers, labelSession, raters } from './label';
 import { lock, lockdownTargets, unlock } from './lockdown';
 import { loadAnalyzer } from './mine/analyzer';
@@ -39,13 +51,15 @@ import {
   writePackets,
 } from './packets';
 import { type PrepareDeps, type Prepared, PrepareError, prepareAll, readPreparedIndex } from './prepare';
-import { writePrereg } from './prereg';
+import { preregHashes, writePrereg } from './prereg';
 import { probeAnswers, runProbe } from './probe';
+import { serveForever } from './relay';
 import { replayAll } from './replay';
 import { decisionMarkdown, trialMarkdown, videoNumbers } from './report';
 import { AgentUnavailable, CONCURRENCY, RUN_TIMEOUT_MS, readManifest, runAll } from './run';
-import { KiroRunner } from './runner';
+import { KiroRunner, type Launch } from './runner';
 import { compareResults, loadScoreInputs, ScoreInputError, score } from './score';
+import { isSealedLocked, lockSeal, runOutDir, sealedDir, sealedKeyFile, sealOutputs, unseal } from './seal';
 
 export const EXIT = { OK: 0, FINDINGS: 1, USAGE: 64, DATA: 65, DEPENDENCY: 69, INTERNAL: 70 } as const;
 
@@ -181,13 +195,17 @@ async function cmdPrepare(argv: string[], io: TrialIO): Promise<number> {
     cohort: { type: 'string' },
     only: { type: 'string' },
     'dry-run': { type: 'boolean' },
+    isolation: { type: 'string' },
+    'agent-user': { type: 'string' },
+    launcher: { type: 'string' },
   });
   if (v.help)
     return help(
       io,
-      'dnr trial prepare [--wave 1|2|3 | --namespace trial|demo|practice|probe] [--stratum rdelta] [--cohort syn|repo2] [--only <sha>] [--dry-run]',
+      'dnr trial prepare [--wave 1|2|3 | --namespace trial|demo|practice|probe] [--stratum rdelta] [--cohort syn|repo2] [--only <sha>] [--dry-run] [--isolation none|os-user|sandbox] [--agent-user dnrtrial] [--launcher <path>]',
     );
   const P = paths(io, !!v['dry-run']);
+  const iso = isolationOf(v, P);
   const sel = v.namespace === 'trial' ? ({ wave: 1 } as Selector) : selectorOf(v);
   const log = (m: string) => io.err(`[prepare] ${m}\n`);
   const cases = await casesFor(P, sel, v.only as string | undefined, log);
@@ -200,6 +218,8 @@ async function cmdPrepare(argv: string[], io: TrialIO): Promise<number> {
       pins: loadPins(P.root),
       cases: new Map(cases.map((c) => [c.revert_sha, c])),
       deps: { ...io.deps, log },
+      isolation: iso.mode,
+      osUser: iso.osUser,
     },
     runs,
   );
@@ -216,11 +236,14 @@ async function cmdRun(argv: string[], io: TrialIO): Promise<number> {
     'dry-run': { type: 'boolean' },
     only: { type: 'string' },
     unlock: { type: 'boolean' },
+    isolation: { type: 'string' },
+    'agent-user': { type: 'string' },
+    launcher: { type: 'string' },
   });
   if (v.help)
     return help(
       io,
-      'dnr trial run --wave 1|2|3 | --namespace demo|practice|syn|repo2|rdelta [--concurrency 4] [--resume] [--dry-run] [--only <sha>] | --unlock',
+      'dnr trial run --wave 1|2|3 | --namespace demo|practice|syn|repo2|rdelta [--concurrency 4] [--resume] [--dry-run] [--only <sha>] [--isolation os-user|sandbox|none] | --unlock',
     );
   const dryRun = !!v['dry-run'];
   const P = paths(io, dryRun);
@@ -230,6 +253,8 @@ async function cmdRun(argv: string[], io: TrialIO): Promise<number> {
     return EXIT.OK;
   }
   const sel = selectorOf(v);
+  const iso = isolationOf(v, P);
+  if (!dryRun) requireS8(P);
   const only = v.only as string | undefined;
   const log = (m: string) => io.err(`[run] ${m}\n`);
   const cases = await casesFor(P, sel, only, log);
@@ -246,6 +271,8 @@ async function cmdRun(argv: string[], io: TrialIO): Promise<number> {
         pins: loadPins(P.root),
         cases: new Map(cases.map((c) => [c.revert_sha, c])),
         deps: { ...io.deps, log },
+        isolation: iso.mode,
+        osUser: iso.osUser,
       },
       planned,
     );
@@ -259,21 +286,46 @@ async function cmdRun(argv: string[], io: TrialIO): Promise<number> {
           .join(', ')}`,
       );
     prepared = planned.map((r) => idx.get(r.run_id) as Prepared);
+    const wrong = prepared.filter((p) => p.isolation !== iso.mode);
+    if (wrong.length)
+      throw new Usage(
+        `${wrong[0]?.run_id} was prepared with --isolation ${wrong[0]?.isolation}; re-run prepare with --isolation ${iso.mode}`,
+      );
   }
-  const runner = new KiroRunner(io.env.KIRO_CLI ?? 'kiro-cli', io.env);
+  const runner = new KiroRunner(io.env.KIRO_CLI ?? 'kiro-cli', io.env, launchOf(iso, P));
   const L = layout(P.trialRoot);
   let locked = false;
+  const caseOf = new Map(cases.map((c) => [c.revert_sha, c]));
+  const envMatrix = loadEnvMatrix(P);
+  // Test labels come from $DJANGO_SRC, which the lockdown closes: compute them first.
+  const apps = new Map<string, string[]>();
+  if (!dryRun)
+    for (const c of cases) {
+      const g = gitDirOf(P, c.repo);
+      if (g) apps.set(c.revert_sha, (await planTestLabels(g, c.original_sha, c.revert_sha)).apps);
+    }
   try {
     if (!dryRun) {
       // Fail before locking anything if the agent CLI is missing.
       const ver = await runner.version(prepared[0]?.home ?? P.trialRoot);
       if (ver.startsWith('unavailable'))
         throw new AgentUnavailable(`kiro-cli is not available (${ver}); no trial run was started`);
-      await lock(lockdownTargets(P), L.lockdown, (m) => io.err(`${m}\n`));
+      if (iso.mode === 'os-user' && iso.osUser) {
+        for (const p of prepared) {
+          const problems = await osUserPreflight(
+            iso.osUser,
+            { workdir: p.workdir, home: p.home },
+            forbiddenFor(P, p),
+          );
+          if (problems.length)
+            throw new Dependency(
+              `isolation os-user preflight failed for ${p.run_id}: ${problems.join('; ')}`,
+            );
+        }
+      }
+      await lock(lockdownTargets(P, prepared, idx), L.lockdown, (m) => io.err(`${m}\n`));
       locked = true;
     }
-    const caseOf = new Map(cases.map((c) => [c.revert_sha, c]));
-    const envMatrix = loadEnvMatrix(P);
     const s = await runAll(P.trialRoot, prepared, {
       dryRun,
       resume: !!v.resume,
@@ -284,10 +336,8 @@ async function cmdRun(argv: string[], io: TrialIO): Promise<number> {
       tests: async (p) => {
         const c = caseOf.get(p.revert_sha);
         const env = envMatrix.find((e) => e.revert_sha === p.revert_sha) ?? null;
-        const gitDir = c ? gitDirOf(P, c.repo) : null;
-        if (!c || !gitDir || !p.start_sha) return { tests: 'n/a', restored_tests: 'n/a' };
-        const apps = (await planTestLabels(gitDir, c.original_sha, c.revert_sha)).apps;
-        const t = await runTests(realExec, env, p.workdir, apps);
+        if (!c || !p.start_sha) return { tests: 'n/a', restored_tests: 'n/a' };
+        const t = await runTests(realExec, env, p.workdir, apps.get(c.revert_sha) ?? []);
         const r = c.restored_tests.valid
           ? await runTests(realExec, env, p.workdir, c.restored_tests.labels)
           : null;
@@ -321,6 +371,62 @@ async function cmdRun(argv: string[], io: TrialIO): Promise<number> {
   } finally {
     if (locked) await unlock(L.lockdown, (m) => io.err(`${m}\n`));
   }
+}
+
+interface IsoChoice {
+  mode: Isolation;
+  osUser?: OsUser;
+}
+
+/** `--isolation` (default none) with the §9.3 amendment's rule (T1(d)); `none` only for dry runs. */
+function isolationOf(v: Record<string, unknown>, P: TrialPaths): IsoChoice {
+  let mode: Isolation;
+  try {
+    mode = parseIsolation(v.isolation);
+    requireIsolation(mode, { dryRun: P.dryRun, s1: loadS1(P.root) });
+  } catch (e) {
+    if (e instanceof IsolationError) throw new Dependency(e.message);
+    throw e;
+  }
+  if (mode !== 'os-user') return { mode };
+  return {
+    mode,
+    osUser: {
+      user: (v['agent-user'] as string | undefined) ?? DEFAULT_AGENT_USER,
+      launcher: (v.launcher as string | undefined) ?? DEFAULT_LAUNCHER,
+    },
+  };
+}
+
+function launchOf(iso: IsoChoice, P: TrialPaths): Launch {
+  if (iso.mode === 'os-user' && iso.osUser) return { kind: 'os-user', ...iso.osUser, trialRoot: P.trialRoot };
+  if (iso.mode === 'sandbox') return { kind: 'sandbox' };
+  return { kind: 'direct' };
+}
+
+/** T4: a real run needs the S8 record (credential file, HOME-hash exclusions). */
+function requireS8(P: TrialPaths): void {
+  if (loadS8(P.root).source !== 'fixtures/s8.json')
+    throw new Dependency(
+      'spike S8 not recorded (fixtures/s8.json): without its credential file and HOME-hash exclusions every real run would fail its HOME hash',
+    );
+}
+
+/** What the agent user must not be able to read (os-user preflight). */
+function forbiddenFor(P: TrialPaths, p: Prepared): string[] {
+  const L = layout(P.trialRoot);
+  return [
+    P.root,
+    P.djangoSrc,
+    P.secondSrc,
+    P.trialRoot,
+    join(P.trialRoot, 'repos'),
+    p.orders_dir,
+    p.state_dir,
+    L.config,
+    L.out(p.run_id),
+    p.relay_dir ? `${p.relay_dir}.json` : null,
+  ].filter((x): x is string => !!x && existsSync(x));
 }
 
 function loadEnvMatrix(P: TrialPaths): EnvEntry[] {
@@ -505,7 +611,6 @@ async function cmdLabel(argv: string[], io: TrialIO): Promise<number> {
       'reason labels use the mining packets (`dnr trial packets`, `dnr trial merge-reasons`); --critical-edits is not built yet',
     );
   const P = paths(io, !!v['dry-run']);
-  const L = layout(P.trialRoot);
   const now = () => new Date().toISOString();
   if (v.generate) return generatePacketsCmd(io, P);
   if (v.freeze) {
@@ -513,10 +618,14 @@ async function cmdLabel(argv: string[], io: TrialIO): Promise<number> {
       labelingDir: P.labelingDir,
       labelers: readLabelers(P),
       labelsOut: join(P.reportsDir, 'labeling/labels.json'),
-      keyFile: L.sealedKey,
+      keyFile: sealedKeyFile(P),
       shaFile: join(P.reportsDir, 'labeling/packet-key.sha256'),
       keyOut: join(P.reportsDir, 'labeling/packet-key.json'),
       now: now(),
+      // T3: the sealed outputs (and the key) open only after the labels are written.
+      afterLabels: async () => {
+        await unseal(P, (m) => io.err(`${m}\n`));
+      },
     });
     io.out(
       `DNR: froze ${f.packets.length} packet label(s); key released to ${join(P.reportsDir, 'labeling/packet-key.json')}\n`,
@@ -525,6 +634,11 @@ async function cmdLabel(argv: string[], io: TrialIO): Promise<number> {
   }
   const labeler = v.labeler as string | undefined;
   if (!labeler) throw new Usage('--labeler <name> is required');
+  // T3: blind labeling starts only once the run outputs are sealed and closed.
+  if (!P.dryRun && !isSealedLocked(P))
+    throw new Dependency(
+      'run outputs are not sealed: `dnr trial label --generate` seals them before anyone labels',
+    );
   if (v.adjudicate) {
     const ls = readLabelers(P);
     if (labeler !== ls.adjudicator) throw new Usage(`only the adjudicator (${ls.adjudicator}) adjudicates`);
@@ -574,14 +688,14 @@ async function generatePacketsCmd(io: TrialIO, P: TrialPaths): Promise<number> {
         run_id: l.run_id,
         revert_sha: l.revert_sha,
         event_id: null,
-        agent_diff: readFileSync(join(L.out(l.run_id), 'diff.patch'), 'utf8'),
+        agent_diff: readFileSync(join(runOutDir(P, l.run_id), 'diff.patch'), 'utf8'),
         probe: null,
       });
     }
   } else {
     for (const l of readManifest(L.manifest)) {
       if (l.status !== 'ok' || l.namespace === 'probe' || l.namespace === 'demo') continue;
-      const out = L.out(l.run_id);
+      const out = runOutDir(P, l.run_id);
       items.push({
         kind: 'run',
         run_id: l.run_id,
@@ -617,8 +731,11 @@ async function generatePacketsCmd(io: TrialIO, P: TrialPaths): Promise<number> {
   if (items.length === 0) throw new Dependency('no runs to make packets from (no ok runs in the manifest)');
   const edits = loadCriticalEdits(P.root);
   const orders = loadOrders(trialOrdersDir(P));
-  const keyFile = P.dryRun ? join(P.trialRoot, 'dry-sealed/packet-key.json') : L.sealedKey;
+  // T3: everything the packets need is in memory; seal the run outputs before writing them.
+  const sealedSha256 = await sealOutputs(P);
+  const keyFile = sealedKeyFile(P);
   const r = await writePackets({
+    sealedSha256,
     items,
     labelingDir: P.labelingDir,
     keyFile,
@@ -635,8 +752,9 @@ async function generatePacketsCmd(io: TrialIO, P: TrialPaths): Promise<number> {
       return revertContext(gitDir, original, sha, order?.reason ?? null, edits);
     },
   });
+  const locked = await lockSeal(P, (m) => io.err(`${m}\n`));
   io.out(
-    `DNR: ${r.key.packets.length} packet(s) in ${join(P.labelingDir, 'packets')}; commit the key's sha256 (${r.sha256}) before labeling\n`,
+    `DNR: ${r.key.packets.length} packet(s) in ${join(P.labelingDir, 'packets')}; run outputs sealed in ${sealedDir(P)} (sha256 ${sealedSha256})${locked ? ', locked until --freeze' : ' (dry run: not locked)'}; commit the key's sha256 (${r.sha256}) before labeling\n`,
   );
   return EXIT.OK;
 }
@@ -662,6 +780,8 @@ async function cmdReplay(argv: string[], io: TrialIO): Promise<number> {
     .map((id) => idx.get(id))
     .filter((p): p is Prepared => !!p && p.namespace !== 'probe');
   const cases = new Map(loadCases(P.root).map((c) => [c.revert_sha, c]));
+  if (isSealedLocked(P))
+    throw new Dependency('run outputs are still sealed: `dnr trial label --freeze` unseals them');
   const s = await replayAll(P.trialRoot, P.reportsDir, runs, (p) => ({
     syn: cases.get(p.revert_sha)?.syn,
     restoredTests: latest.get(p.run_id)?.restored_tests,
@@ -689,7 +809,7 @@ async function exportRuns(P: TrialPaths): Promise<void> {
   );
   for (const l of lines)
     for (const f of ['meta.json', 'diff.patch']) {
-      const src = join(L.out(l.run_id), f);
+      const src = join(runOutDir(P, l.run_id), f);
       if (!existsSync(src)) continue;
       const dst = join(P.reportsDir, 'runs', l.run_id, f);
       await mkdir(dirname(dst), { recursive: true });
@@ -731,9 +851,13 @@ async function cmdScore(argv: string[], io: TrialIO, check = false): Promise<num
       ),
     );
     const pre = await git(['show', 'prereg-v1:reports/preregistration.md'], { cwd: P.root }).catch(() => '');
+    // T5: compare against the `.dnr/config.json` row of the "Hashed inputs" table, exactly.
+    const want = preregHashes(pre).get('.dnr/config.json');
+    if (!want)
+      diffs.push('prereg-v1:reports/preregistration.md has no `.dnr/config.json` row in its hashed inputs');
     for (const c of cfg)
-      if (!pre.includes(c))
-        diffs.push(`frozen config sha256 ${c} is not in prereg-v1:reports/preregistration.md`);
+      if (want && c !== want)
+        diffs.push(`a run's frozen config sha256 ${c} ≠ the prereg-v1 \`.dnr/config.json\` hash ${want}`);
     if (diffs.length) {
       for (const d of diffs) io.err(`DNR: rescore: ${d}\n`);
       return EXIT.FINDINGS;
@@ -777,17 +901,25 @@ async function cmdReport(argv: string[], io: TrialIO): Promise<number> {
 }
 
 async function cmdProbe(argv: string[], io: TrialIO): Promise<number> {
-  const v = flags(argv, { 'dry-run': { type: 'boolean' }, only: { type: 'string' } });
-  if (v.help) return help(io, 'dnr trial probe [--dry-run --only <sha>]');
+  const v = flags(argv, {
+    'dry-run': { type: 'boolean' },
+    only: { type: 'string' },
+    isolation: { type: 'string' },
+    'agent-user': { type: 'string' },
+    launcher: { type: 'string' },
+  });
+  if (v.help) return help(io, 'dnr trial probe [--dry-run --only <sha>] [--isolation os-user|sandbox|none]');
   const dryRun = !!v['dry-run'];
   const P = paths(io, dryRun);
+  const iso = isolationOf(v, P);
+  if (!dryRun) requireS8(P);
   const only = v.only as string | undefined;
   const log = (m: string) => io.err(`[probe] ${m}\n`);
   const sel: Selector = { namespace: 'probe' };
   const cases = await casesFor(P, sel, only, log);
   const planned = planFor(sel, cases, only);
   if (planned.length === 0) throw new Usage('no probe runs (Django reverts with a role in assignment.json)');
-  const runner = new KiroRunner(io.env.KIRO_CLI ?? 'kiro-cli', io.env);
+  const runner = new KiroRunner(io.env.KIRO_CLI ?? 'kiro-cli', io.env, launchOf(iso, P));
   if (!dryRun) {
     const ver = await runner.version(P.trialRoot);
     if (ver.startsWith('unavailable'))
@@ -800,6 +932,8 @@ async function cmdProbe(argv: string[], io: TrialIO): Promise<number> {
       pins: loadPins(P.root),
       cases: new Map(cases.map((c) => [c.revert_sha, c])),
       deps: { ...io.deps, log },
+      isolation: iso.mode,
+      osUser: iso.osUser,
     },
     planned,
   );
@@ -860,15 +994,17 @@ async function cmdBaseline(argv: string[], io: TrialIO): Promise<number> {
 }
 
 async function cmdPrereg(argv: string[], io: TrialIO): Promise<number> {
-  const v = flags(argv, { out: { type: 'string' } });
+  const v = flags(argv, { out: { type: 'string' }, isolation: { type: 'string' } });
   if (v.help)
     return help(
       io,
-      'dnr trial prereg [--out <file>]  (writes the draft pre-registration with current hashes; never tags)',
+      'dnr trial prereg --isolation os-user|sandbox [--out <file>]  (writes the draft pre-registration with current hashes; never tags)',
     );
   const P = trialPaths({ TRIAL_ROOT: '/var/tmp/dnr-trial', ...io.env }, {});
+  // T1(d): the pre-registration records an isolation mode that can actually isolate the agent.
+  const iso = isolationOf(v, P);
   const out = (v.out as string | undefined) ?? join(P.root, 'reports/preregistration.md');
-  const missing = await writePrereg(P.root, out);
+  const missing = await writePrereg(P.root, out, iso.mode);
   io.out(`DNR: wrote draft ${out}; ${missing.length} input(s) still missing before prereg-v1\n`);
   return EXIT.OK;
 }
@@ -915,6 +1051,12 @@ export async function runHarness(sub: string, argv: string[], io: TrialIO): Prom
         return await cmdProbe(argv, io);
       case 'baseline':
         return await cmdBaseline(argv, io);
+      case '__relay': {
+        // Internal: the os-user hook relay server for one run (started by `trial run`).
+        const cfg = JSON.parse(readFileSync(argv[0] as string, 'utf8'));
+        serveForever(cfg);
+        return EXIT.OK;
+      }
       case 'prereg':
         return await cmdPrereg(argv, io);
       default:

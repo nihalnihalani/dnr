@@ -4,6 +4,7 @@
  * runs resume, retries only infrastructure failures before the first tool call (at most twice),
  * and stops when the agent CLI's version changes.
  */
+import { type ChildProcess, spawn } from 'node:child_process';
 import { copyFileSync, existsSync, readFileSync } from 'node:fs';
 import { appendFile, mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
@@ -209,6 +210,35 @@ async function runOne(
   if (configNow !== p.config_sha256) notes.push('frozen config changed between prepare and run');
   const prompt = o.promptOf ? await o.promptOf(p) : p.task;
 
+  // os-user isolation: start this run's hook relay (harness user) before the agent, stop it after.
+  const relay = p.relay_dir ? startRelay(p) : null;
+  try {
+    return await agentAttempts(p, o, cliVersion, notes, prompt, homeBefore, ordersBefore, out);
+  } finally {
+    relay?.kill('SIGKILL');
+  }
+}
+
+/** The relay server process: `dnr trial __relay <relay_dir>.json`. */
+export function startRelay(p: Prepared): ChildProcess {
+  const [cmd, ...args] = p.dnr_command as [string, ...string[]];
+  const child = spawn(cmd, [...args, 'trial', '__relay', `${p.relay_dir}.json`], {
+    stdio: 'ignore',
+    detached: false,
+  });
+  return child;
+}
+
+async function agentAttempts(
+  p: Prepared,
+  o: RunOptions,
+  cliVersion: string,
+  notes: string[],
+  prompt: string,
+  homeBefore: { hash: string },
+  ordersBefore: string,
+  out: string,
+): Promise<ManifestLine> {
   let attempts = 0;
   let res: AgentRunResult;
   let flags: RunFlags;
@@ -223,15 +253,8 @@ async function runOne(
       model: p.model,
       prompt,
       timeoutMs: o.timeoutMs,
-      env: p.mode
-        ? {
-            DNR_MODE: p.mode,
-            DNR_STATE_DIR: p.state_dir,
-            DNR_ORDERS: p.orders_dir,
-            DNR_CONFIG: p.config_path,
-            DNR_RECORD_PATH: p.record_path,
-          }
-        : {},
+      // T1(a): no DNR path in the agent's environment; the hook command line carries them.
+      env: {},
     });
     diff = p.start_sha ? await runDiff(p.workdir, p.start_sha) : '';
     flags = runFlags({
@@ -272,6 +295,8 @@ async function runOne(
   if (flags.out_of_tree.length > 0)
     notes.push(`touched outside working copy and HOME: ${flags.out_of_tree.join(', ')}`);
   if (events.error_open > 0) notes.push(`${events.error_open} error_open event(s)`);
+  if (flags.unresolved.length > 0)
+    notes.push(`path words with unexpanded variables (review): ${flags.unresolved.join(', ')}`);
 
   const tests =
     status === 'ok' && o.tests

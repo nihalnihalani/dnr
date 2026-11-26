@@ -120,16 +120,24 @@ export function spawnGroup(
 }
 
 /** The real runner: `kiro-cli chat --v3 --no-interactive --trust-all-tools --model <pin> --agent trial-<arm> --output-format stream-json "<task>"`. */
+/** How the agent process is started (§9.3 isolation amendment). */
+export type Launch =
+  | { kind: 'direct' }
+  | { kind: 'sandbox' }
+  | { kind: 'os-user'; user: string; launcher: string; trialRoot: string };
+
 export class KiroRunner implements AgentRunner {
   readonly name = 'kiro-cli';
   constructor(
     private readonly bin = 'kiro-cli',
     private readonly baseEnv: NodeJS.ProcessEnv = process.env,
+    private readonly launch: Launch = { kind: 'direct' },
   ) {}
 
   args(i: Pick<AgentRunInput, 'model' | 'agent' | 'prompt'>): string[] {
     return [
       'chat',
+      ...(this.launch.kind === 'sandbox' ? ['--sandbox'] : []),
       '--v3',
       '--no-interactive',
       '--trust-all-tools',
@@ -153,7 +161,29 @@ export class KiroRunner implements AgentRunner {
 
   async run(i: AgentRunInput): Promise<AgentRunResult> {
     const startedAt = new Date().toISOString();
-    const r = await spawnGroup(this.bin, this.args(i), {
+    const l = this.launch;
+    // os-user: sudo runs the root-owned launcher as the agent user; the launcher clears the
+    // environment, cds into the worktree and takes its process group down on SIGTERM.
+    const [cmd, args] =
+      l.kind === 'os-user'
+        ? [
+            'sudo',
+            [
+              '-n',
+              '-u',
+              l.user,
+              l.launcher,
+              'run',
+              l.trialRoot,
+              i.workdir,
+              i.home,
+              this.bin,
+              '--',
+              ...this.args(i),
+            ],
+          ]
+        : [this.bin, this.args(i)];
+    const r = await spawnGroup(cmd, args, {
       cwd: i.workdir,
       env: agentEnv(this.baseEnv, i.home, i.env),
       timeoutMs: i.timeoutMs,

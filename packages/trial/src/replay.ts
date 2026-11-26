@@ -12,8 +12,8 @@ import { grammarForPath } from '@dnr/core';
 import { git, runGit } from '@dnr/git';
 import { canonicalDecision, crossingCheck, loadParser, openContext, replayEvents } from '@dnr/hook';
 import { z } from 'zod';
-import { layout } from './env';
 import type { Prepared } from './prepare';
+import { runOutDir } from './seal';
 import { type SynCaseT, synAutoLabel } from './syn';
 
 export const SealedDecision = z.strictObject({
@@ -133,10 +133,9 @@ export async function replayAll(
   runs: readonly Prepared[],
   extraOf: (p: Prepared) => ReplayExtra = () => ({}),
 ): Promise<SealedDecision[]> {
-  const L = layout(trialRoot);
   const out: SealedDecision[] = [];
   for (const p of runs) {
-    const s = await replayRun(p, L.out(p.run_id), extraOf(p));
+    const s = await replayRun(p, runOutDir({ reportsDir, trialRoot }, p.run_id), extraOf(p));
     const f = sealedPath(reportsDir, p.run_id);
     await mkdir(dirname(f), { recursive: true });
     await writeFile(f, `${JSON.stringify(s, null, 2)}\n`);

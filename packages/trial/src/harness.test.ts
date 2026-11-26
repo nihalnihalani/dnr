@@ -348,7 +348,7 @@ describe('run limits and flags (§9.2, §9.3)', () => {
       JSON.stringify({
         type: 'tool_use',
         name: 'execute_bash',
-        input: { command: 'cat /Users/x/dnr/fixtures/discussion/a.json /usr/bin/env' },
+        input: { command: `cat ${join(DEFAULT_ROOT, 'fixtures/discussion')} /usr/bin/env /nonexistent/path` },
       }),
     ].join('\n');
     const f = runFlags({
@@ -360,7 +360,11 @@ describe('run limits and flags (§9.2, §9.3)', () => {
     });
     expect(f.shell_route).toBe(true);
     expect(f.consulted_history).toBe(true);
-    expect(f.out_of_tree).toEqual(['/Users/x/dnr/fixtures/discussion/a.json']);
+    expect(f.out_of_tree).toEqual([
+      execFileSync('realpath', [join(DEFAULT_ROOT, 'fixtures/discussion')])
+        .toString()
+        .trim(),
+    ]);
     const w = runFlags({
       transcript: JSON.stringify({
         type: 'tool_use',

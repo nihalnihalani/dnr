@@ -10,6 +10,7 @@ import { git } from '@dnr/git';
 import { H_TEMPLATES } from './arms';
 import { DECISION_TABLE } from './decision';
 import { bundleTemplateHash } from './home';
+import type { Isolation } from './isolation';
 import { sha256Hex } from './prng';
 import { CONCURRENCY, MAX_INFRA_RETRIES, RUN_TIMEOUT_MS } from './run';
 
@@ -40,6 +41,8 @@ export const PREREG_INPUTS = [
   'packages/trial/src/baseline-gen.ts',
   'scripts/baseline/rules',
   'packages/cli/src/commands/steering.ts',
+  'fixtures/s1.json',
+  'scripts/trial/dnr-trial-agent.sh',
 ] as const;
 
 function files(root: string, rel: string): string[] {
@@ -72,7 +75,7 @@ export function hashTable(root: string): {
   return { rows, missing };
 }
 
-export async function writePrereg(root: string, out: string): Promise<string[]> {
+export async function writePrereg(root: string, out: string, isolation: Isolation): Promise<string[]> {
   const { rows, missing } = hashTable(root);
   const head = (await git(['rev-parse', 'HEAD'], { cwd: root })).trim();
   const t = { file: '<file>', qualname: '<qualname>' };
@@ -108,6 +111,12 @@ export async function writePrereg(root: string, out: string): Promise<string[]> 
     'Target unit: the heaviest non-pseudo unit (w(A)+w(R)) of the revert\'s order; `<module>` is rendered "the module-level code".',
     '',
     `Arm hook bundle template hashes: record \`${bundleTemplateHash('record')}\`, live \`${bundleTemplateHash('live')}\`.`,
+    '',
+    '## Isolation (§9.3 isolation amendment, 2026-11-27, before any data)',
+    '',
+    `Mode: **${isolation}**. ${isolation === 'os-user' ? "Each agent runs as the dedicated OS user `dnrtrial` through the root-owned launcher `scripts/trial/dnr-trial-agent.sh`; that user can read only its run's worktree and HOME (ACLs), and hooks reach the harness through a FIFO relay." : 'Each agent runs under `kiro-cli --sandbox`, which spike S1 recorded as confining the file and shell tools (`fixtures/s1.json`).'} No DNR path is in the agent's environment. Leak detection resolves relative paths, \`..\`, symlinks and variables; a run that touches an existing path outside its worktree and HOME is excluded and listed. While waves run, the dnr repo's \`reports/\` and \`fixtures/\`, every truncated repo, and other runs' outputs, order sets, state, worktrees and HOMEs are \`chmod 000\`.`,
+    '',
+    `Relay bundle template hashes (os-user): record \`${bundleTemplateHash('record', true)}\`, live \`${bundleTemplateHash('live', true)}\`.`,
     '',
     '## Waves, limits and budget',
     '',
@@ -152,4 +161,21 @@ export async function writePrereg(root: string, out: string): Promise<string[]> 
   await mkdir(dirname(out), { recursive: true });
   await writeFile(out, L.join('\n'));
   return missing;
+}
+
+/**
+ * The "Hashed inputs (sha256)" table of a pre-registration, path → sha256 (T5). Only rows of that
+ * section count, and each must be exactly `| \`<path>\` | \`<64 hex>\` |`.
+ */
+export function preregHashes(text: string): Map<string, string> {
+  const m = new Map<string, string>();
+  const start = text.indexOf('## Hashed inputs (sha256)');
+  if (start < 0) return m;
+  const rest = text.slice(start).split('\n').slice(1);
+  for (const line of rest) {
+    if (line.startsWith('## ')) break;
+    const r = /^\| `([^`]+)` \| `([0-9a-f]{64})` \|$/.exec(line);
+    if (r) m.set(r[1] as string, r[2] as string);
+  }
+  return m;
 }

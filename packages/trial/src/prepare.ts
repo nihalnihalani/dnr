@@ -3,8 +3,9 @@
  * steering, the frozen config, and per-run HOMEs seeded and hashed. Everything lands under
  * $TRIAL_ROOT; nothing in $ROOT changes.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { chmodSync, existsSync, readFileSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { userInfo } from 'node:os';
 import { dirname, join } from 'node:path';
 import { unitWeights } from '@dnr/core';
 import { git } from '@dnr/git';
@@ -13,8 +14,10 @@ import { agentOf, bundleOf, modeOf, type PlannedRun, type TaskTarget, taskFor } 
 import { layout, type TrialPaths } from './env';
 import { type HookEnv, hashKiroDir, loadS8, seedHome } from './home';
 import { gitDirOf, loadOrders, orderSetPool, type TrialCase, trialOrdersDir } from './inputs';
+import { closeOthers, grantRunDirs, type Isolation, type OsUser } from './isolation';
 import { buildOrderSet } from './orderset';
 import { sha256Hex } from './prng';
+import { makeRelayDir } from './relay';
 import { buildTruncatedRepo, checkNothingNewer, cloneRun, porcelain } from './repo';
 
 export const UNPINNED = 'UNPINNED-DRY-RUN';
@@ -42,6 +45,9 @@ export interface Prepared {
   config_sha256: string;
   order_set: { size: number; ids: string[]; missing: string[]; approved: number; hash: string };
   home_hash_seeded: string;
+  isolation: Isolation;
+  /** os-user: the relay directory; its config is `<relay_dir>.json` (harness-only). */
+  relay_dir: string | null;
   /** S8 exclusion globs used for both HOME hashes (frozen at prepare time). */
   home_exclusions: string[];
   s8_source: string;
@@ -166,6 +172,9 @@ export interface PrepareContext {
   pins: Pins | null;
   cases: Map<string, TrialCase>;
   deps: PrepareDeps;
+  /** §9.3 isolation amendment (T1). Defaults to `none` (dry runs only). */
+  isolation?: Isolation;
+  osUser?: OsUser;
 }
 
 /** Prepare one planned run. */
@@ -247,6 +256,18 @@ export async function prepareRun(ctx: PrepareContext, run: PlannedRun): Promise<
           DNR_RECORD_PATH: recordPath,
         };
   const credentialFrom = ctx.env.DNR_TRIAL_CREDENTIAL_FILE ?? null;
+  const isolation = ctx.isolation ?? 'none';
+  // os-user: hooks go through the FIFO relay; the relay config (with the DNR paths) stays harness-only.
+  const relayDir = isolation === 'os-user' && hookEnv ? join(paths.trialRoot, 'relay', run.run_id) : null;
+  if (relayDir && hookEnv) {
+    await makeRelayDir(relayDir, ctx.osUser?.user ?? null);
+    const cfgFile = `${relayDir}.json`;
+    await writeFile(
+      cfgFile,
+      `${JSON.stringify({ relayDir, workdir, dnr, env: hookEnv, log: join(L.out(run.run_id), 'relay.log') }, null, 2)}\n`,
+      { mode: 0o600 },
+    );
+  }
   await seedHome({
     root: paths.root,
     home,
@@ -257,7 +278,7 @@ export async function prepareRun(ctx: PrepareContext, run: PlannedRun): Promise<
     env: hookEnv,
     s8: s8.s8,
     credentialFrom,
-    sidecar: hookEnv && s8.s8.hooks_inherit_env !== true ? { ...hookEnv } : null,
+    relayDir,
   });
   const seeded = hashKiroDir(home, s8.s8.kiro_write_globs);
 
@@ -287,6 +308,8 @@ export async function prepareRun(ctx: PrepareContext, run: PlannedRun): Promise<
     config_sha256: cfg.sha256,
     order_set: orderSet,
     home_hash_seeded: seeded.hash,
+    isolation,
+    relay_dir: relayDir,
     home_exclusions: s8.s8.kiro_write_globs,
     s8_source: s8.source,
     steering,
@@ -311,6 +334,39 @@ export async function prepareAll(ctx: PrepareContext, runs: readonly PlannedRun[
     const p = await prepareRun(ctx, r);
     idx.set(p.run_id, p);
     out.push(p);
+  }
+  if ((ctx.isolation ?? 'none') === 'os-user') {
+    const o = ctx.osUser;
+    if (!o) throw new PrepareError('os-user isolation needs the agent user');
+    // T1(b)/(f): nothing under $TRIAL_ROOT is readable by other users, then each run's worktree
+    // and HOME are opened to the agent user only.
+    const tr = ctx.paths.trialRoot;
+    for (const sub of [
+      'repos',
+      'runs',
+      'homes',
+      'orders',
+      'state',
+      'out',
+      'envs',
+      'probe',
+      'sealed',
+      'relay',
+    ])
+      await closeOthers(join(tr, sub));
+    for (const f of ['config.json', 'manifest.jsonl', 'prepared.jsonl']) await closeOthers(join(tr, f));
+    const harnessUser = userInfo().username;
+    for (const p of out) {
+      await grantRunDirs({ trialRoot: tr, dirs: [p.workdir, p.home], agentUser: o.user, harnessUser });
+      if (p.relay_dir) {
+        await makeRelayDir(p.relay_dir, o.user);
+        let cur = p.relay_dir;
+        while (cur !== tr && cur.startsWith(tr)) {
+          cur = dirname(cur);
+          chmodSync(cur, 0o711);
+        }
+      }
+    }
   }
   await writePreparedIndex(ctx.paths.trialRoot, idx);
   return out;
