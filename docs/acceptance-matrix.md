@@ -198,8 +198,8 @@ Run with `DNR_ORDERS=$ROOT/reports/orders`, `cwd=DEMO`.
 | P5-03 | 5 | P3 accumulation across writes | `pnpm test -t 'P3:'` | hook | local | **proven** (core) — `properties.test.ts` › P3 |
 | P5-04 | 5 | P10 grant scope (own order; unexpired or used) | `pnpm test -t 'P10:'` | hook | local | **proven** — `prewrite.test.ts` › P10 (own order, expiry with DNR_NOW, used-this-session) |
 | P5-05 | 5 | Record mode: `DNR_MODE=record` and config `mode`; `proposed_text` and `session_patch` on every event | `DNR_MODE=record dnr check --stdin --hook kiro < fixtures/hook-events/reapply-43933a1dca.json; jq -e '.proposed_text and .session_patch' $DNR_STATE_DIR/events.jsonl` | hook | local | **proven** — `prewrite.test.ts` › P5-05 record mode; live outcome `record`, exit 0 |
-| P5-06 | 5 | Fail-open: every internal error or timeout exits 0 and logs to `hook.log` (`error_open`) | `pnpm test -t 'R7:'` with injected faults | hook | local | **fails (security)** — behaves per R7, but invalid config or session state turns every hook off (see review-wave2 C1) |
-| P5-07 | 5 | p95 < 300 ms (match) and < 80 ms (fast path); results in `reports/perf.md` | `hyperfine -i --export-json perf.json -r 30 "dnr check --stdin --hook kiro < $ROOT/fixtures/hook-events/reapply-43933a1dca.json" "dnr check --stdin --hook kiro < $ROOT/fixtures/hook-events/uncovered.json" && node scripts/p95.mjs perf.json` | hook | local | **proven** — `reports/perf.md` (p95 161.7 / 65.3 ms); review timing agrees |
+| P5-06 | 5 | Fail-open: every internal error or timeout exits 0 and logs to `hook.log` (`error_open`) | `pnpm test -t 'R7:'` with injected faults | hook | local | partial — invalid config/session no longer fail open; a broken `.git/HEAD` still does (see review-wave3-security N1) |
+| P5-07 | 5 | p95 < 300 ms (match) and < 80 ms (fast path); results in `reports/perf.md` | `hyperfine -i --export-json perf.json -r 30 "dnr check --stdin --hook kiro < $ROOT/fixtures/hook-events/reapply-43933a1dca.json" "dnr check --stdin --hook kiro < $ROOT/fixtures/hook-events/uncovered.json" && node scripts/p95.mjs perf.json` | hook | local | **proven** — review: fast p95 67–71 ms, match 158–172 ms; Linux CI owed |
 | P5-08 | 5 | First write of a fresh Django session (temp-index baseline) < 2 s | timed first event with empty `$DNR_STATE_DIR` in DEMO | hook | local | **proven** — 359 ms (perf.md); 0.32 s in review |
 | P5-09 | 5 | Temp-index baseline never touches the real index; works on unborn HEAD; includes untracked, respects .gitignore | `pnpm test -t 'R4:'` ; `git -C DEMO status --porcelain` unchanged | hook | local | open |
 | P5-10 | 5 | `dnr check --commit` (crossing vs `X^`) and `dnr trial falsealarm` | `dnr check --commit <sha>` on a fixture repo ; `pnpm test -t 'falsealarm:'` | hook | local | **proven** — live: `dnr check --commit` exit 1 on the re-applying commit |
@@ -209,7 +209,7 @@ Run with `DNR_ORDERS=$ROOT/reports/orders`, `cwd=DEMO`.
 | P5-14 | 5 | Five scripted hard negatives `hardneg-<sha10>.json`, one per gate revert, template `sha256("dnr-2026:hn:"+sha) mod 3` | `ls fixtures/hook-events/hardneg-*.json \| wc -l` ≥ 7 ; template check test | hook | needs-user | open |
 | P5-15 | 5 | Demo hard negatives `hardneg-43933a1dca.json`, `hardneg-d0e4dd5cdd.json` | files exist and replay to `allow` or `warn_*` | hook | local | **proven** — `golden.test.ts` › P5-15 (both demo hard negatives) |
 | P5-16 | 5 | Block stderr ≤ 1,200 chars, first line `DNR: <reason> <revert URL>`, names `dnr board --open <id>` and `dnr allow <id>` | `pnpm test -t 'R1:'` ; `wc -c` on captured stderr | hook | local | **proven** — live stderr matches §6, under 1,200 chars |
-| P5-17 | 5 | Protect tier denies `.dnr/**`, `.kiro/{hooks,settings,agents}/**`, `$HOME/.kiro/**`, realpath of `DNR_ORDERS`, `DNR_STATE_DIR`, `DNR_CONFIG` | `pnpm test -t 'R6:'` | hook | local | partial — case-insensitive, `.git/hooks` covered; `.git/config` and parent-dir deletes open (see review-wave2 H2) |
+| P5-17 | 5 | Protect tier denies `.dnr/**`, `.kiro/{hooks,settings,agents}/**`, `$HOME/.kiro/**`, realpath of `DNR_ORDERS`, `DNR_STATE_DIR`, `DNR_CONFIG` | `pnpm test -t 'R6:'` | hook | local | partial — `.git/config`, steering, parent dirs fixed; `.git/HEAD`/refs and DNR's own bundle writable (see review-wave3-security N1, N2) |
 | P5-18 | 5 | Tool adapters: fs_write (incl. legacy `command`), str_replace (0 or ≥ 2 matches allowed through), fs_append, delete_file = empty, unknown write tool → warn | `pnpm test -t 'adapter:'` | hook | local | partial — adapters tested; S2 pending |
 | P5-19 | 5 | Fast path + blob-SHA cache for uncovered files | `jq -e '.decision.fast_path' ` on the uncovered event | hook | local | **proven** — fast path ~65 ms |
 | P5-20 | 5 | Credit budget recomputed with S11 cost and K | `docs/spikes.md` "Budget (Phase 5)" | user | needs-user | open |
@@ -218,10 +218,10 @@ Run with `DNR_ORDERS=$ROOT/reports/orders`, `cwd=DEMO`.
 
 | ID | Ph | Check | Proof | Owner | Class | Status |
 |---|---|---|---|---|---|---|
-| P6-01 | 6 | guard-shell table of ≥ 40 commands passes (R1–R7, wrappers, splits on `; && \|\| \| $( )` and backticks) | `pnpm test -t 'guard-shell:'` ; table in `packages/hook/test/shell-table.ts` | hook | local | partial — `shell.test.ts` 40-command table passes; many R2–R5 forms still pass (see review-wave2 H3) |
-| P6-02 | 6 | guard-shell PreToolUse tree snapshot + `dnr session shell-after` adds changed files to `touched` | `pnpm test -t 'post-shell:'` | hook | local | **proven** — `session.test.ts` › post-shell; live |
+| P6-01 | 6 | guard-shell table of ≥ 40 commands passes (R1–R7, wrappers, splits on `; && \|\| \| $( )` and backticks) | `pnpm test -t 'guard-shell:'` ; table in `packages/hook/test/shell-table.ts` | hook | local | partial — wave-2 catalog now denied except `$(git rev-parse …)` and `:/msg`; post-shell catches those |
+| P6-02 | 6 | guard-shell PreToolUse tree snapshot + `dnr session shell-after` adds changed files to `touched` | `pnpm test -t 'post-shell:'` | hook | local | **proven** — post-shell scores after every shell call, committed or not (review) |
 | P6-03 | 6 | Stop forces ≤ 2 turns, exits 0 on crash, skips orders whose grant applies; scores only `touched` | `pnpm test -t 'stop:'` | hook | local | **proven** — `session.test.ts` › stop; live: 2 forced turns then allow |
-| P6-04 | 6 | Stop order-set hash check: any non-R6 change to orders/config/hook files forces a reporting turn | `pnpm test -t 'stop: orders hash'` | hook | local | **fails** — not reported when the config is invalid or `mode: record` (see review-wave2 C1, H1) |
+| P6-04 | 6 | Stop order-set hash check: any non-R6 change to orders/config/hook files forces a reporting turn | `pnpm test -t 'stop: orders hash'` | hook | local | partial — reported once; laundered into the next session or via a commit (see review-wave3-security N3) |
 | P6-05 | 6 | P12, P13, P15 and P10's pre-commit blob clause pass | `pnpm test -t 'P12:' -t 'P13:' -t 'P15:' -t 'P10: pre-commit'` | hook | local | **proven** — `session.test.ts` › P12, P13, P15, P10 pre-commit blobs |
 | P6-06 | 6 | Mode acceptance (`commit-enforce`): pre-write records + warns; Stop capped at 1; `dnr check --staged` exits 1 on a crossing | `pnpm test -t 'mode: commit-enforce'` | hook | local | **proven** — `prewrite.test.ts` › commit-enforce; live staged exit 1 |
 | P6-07 | 6 | `warn-only`: match downgraded to warn tier; Stop 1 turn with "Tell the user; do not revert unless asked"; pre-commit exits 0 | `pnpm test -t 'mode: warn-only'` | hook | local | **proven** — `prewrite.test.ts` / `session.test.ts` warn-only; live |
@@ -231,7 +231,7 @@ Run with `DNR_ORDERS=$ROOT/reports/orders`, `cwd=DEMO`.
 | P6-11 | 6 | `dnr doctor` green in DEMO (node, git, grammar ABI, hook JSON, PATH as hooks see it, kiro-cli version, board port) | `cd DEMO && dnr doctor` exits 0 | hook | needs-kiro | partial — `dnr doctor` all green except kiro-cli (not installed) |
 | P6-12 | 6 | `dnr orders verify` | `dnr orders verify --orders reports/orders` exits 0; exits 65 on a corrupted copy | hook | local | open |
 | P6-13 | 6 | Re-run `make-demo-checkout.sh` with full init | script runs `dnr init --hooks all` | kiro | local | open |
-| P6-14 | 6 | R6 process-ancestry guard and Kiro-variable check refuse approval subcommands from an agent; pass from a node-pty human terminal | `pnpm test -t 'R6 guard:'` | hook | local | **fails (security)** — `ancestry.test.ts` passes, but the guard can be escaped (see review-wave2 C3) |
+| P6-14 | 6 | R6 process-ancestry guard and Kiro-variable check refuse approval subcommands from an agent; pass from a node-pty human terminal | `pnpm test -t 'R6 guard:'` | hook | local | **fails (security)** — guard still escapable; suspect grant still applies (see review-wave3-security N5) |
 | P6-15 | 6 | Live: headless `git cherry-pick <C>` denied | `cd DEMO && kiro-cli chat --v3 --no-interactive --trust-all-tools "run git cherry-pick <C>"` ; `git log -1` unchanged | hook | needs-kiro | open |
 | P6-16 | 6 | Live: `sed` re-application undone by a forced Stop turn; human's pre-session tracked and untracked edits survive | scripted session; `git diff` shows only the human edits | hook | needs-kiro | open |
 | P6-17 | 6 | Live: `python -c` write that never names its file caught by `dnr-post-shell` + Stop | scripted session; event log shows `touched` + forced turn | hook | needs-kiro | open |
@@ -421,9 +421,9 @@ P6 was dropped (jsdiff). All fast-check, 500 runs locally, 2,000 nightly.
 | REQ-R3 | 5 | Later non-matching write to same order in session allowed (`warn_pass`) | `pnpm test -t 'R3:'` | hook | local | **proven** — `prewrite.test.ts` › R3 |
 | REQ-R4 | 5 | Baseline = session snapshot tree | `pnpm test -t 'R4:'` | hook | local | **proven** — `prewrite.test.ts` › R4 (incl. unborn HEAD) |
 | REQ-R5 | 4 | A and R matched separately with repeats; two-sided rule (≥ 0.3 each side) | `pnpm test -t 'R5:'` | engine | local | **proven** — `django.test.ts` › half of the re-application does not meet the two-sided rule; mutation M1 caught |
-| REQ-R6 | 5 | Protected globs denied in every format | `pnpm test -t 'R6:'` | hook | local | partial — `prewrite.test.ts` › R6; gaps (see review-wave2 H2) |
-| REQ-R7 | 5 | Internal errors allow and log; Stop always exits 0 | `pnpm test -t 'R7:'` | hook | local | **fails (security)** — per spec, but exploitable (see review-wave2 C1) |
-| REQ-R8 | 5 | p95 < 300 ms on the demo file | = P5-07 | hook | local | **proven** — `reports/perf.md` |
+| REQ-R6 | 5 | Protected globs denied in every format | `pnpm test -t 'R6:'` | hook | local | partial — gaps closed except git internals and the DNR bundle (see review-wave3-security N1, N2) |
+| REQ-R7 | 5 | Internal errors allow and log; Stop always exits 0 | `pnpm test -t 'R7:'` | hook | local | partial — amended R7 holds for DNR state; not for a broken repo (see review-wave3-security N1) |
+| REQ-R8 | 5 | p95 < 300 ms on the demo file | = P5-07 | hook | local | **proven** — fast path p95 67–71 ms, match 158–172 ms (review); margin thin (N8) |
 | REQ-R9 | 5 | Grant applies while unexpired or for rest of session once used; each use logged, added to `grants_used` | `pnpm test -t 'R9:'` | hook | local | **proven** — `prewrite.test.ts` › R9 |
 | REQ-R10 | 4 | Stale orders only warn | `pnpm test -t 'R10:'` | engine | local | **proven** — `engine.test.ts` › stale and re-landed orders only warn |
 | REQ-R11 | 10 | Missing unit → fingerprint lookup; else warn, unless `kind=removed`/`added` (score with `[]`) | `pnpm test -t 'R11:'` | engine | local | partial — `engine.test.ts` › a missing modified unit falls to warn; fingerprint tests; missing cap not pinned (H6) |
@@ -566,7 +566,7 @@ Each command exists, prints help, and returns 64 on bad usage. Behavioural check
 | AUTH-05 | 12 | No cookie → 401 on every `/api/*` except health and ping | `-t 'AUTH-05:'` | ui | local | **proven** — `board.test.ts` |
 | AUTH-06 | 12 | Mutating route with missing or foreign `Origin` → 403 | `-t 'AUTH-06:'` | ui | local | **proven** — `board.test.ts` |
 | AUTH-07 | 12 | Mutating route without `X-DNR-CSRF: 1` → 403 | `-t 'AUTH-07:'` | ui | local | **proven** — `board.test.ts` |
-| AUTH-08 | 12 | Nonce never printed or written to stderr | `dnr board 2>&1 \| grep -c 'n='` = 0 | ui | local | **fails** — nonce is in the browser-open argv (see review-wave2 H4) |
+| AUTH-08 | 12 | Nonce never printed or written to stderr | `dnr board 2>&1 \| grep -c 'n='` = 0 | ui | local | partial — off argv; 0600 temp file readable by same user (see review-wave3-security N7) |
 | AUTH-09 | 12 | R7: board's live port in `$DNR_STATE_DIR/board.json` covered by guard-shell; other localhost ports allowed | `pnpm test -t 'R7 port:'` | hook | local | **proven** — `shell.test.ts` › R7 port |
 | DEPLOY-01 | 7 | GitHub Pages mirror serves WASM (no custom CSP) | `curl -sI https://<you>.github.io/dnr/… \| grep application/wasm` | ui | needs-user | open |
 
@@ -653,16 +653,16 @@ Each command exists, prints help, and returns 64 on bad usage. Behavioural check
 
 (Counted with `awk '/^## Row counts/{exit} 1' docs/acceptance-matrix.md | grep -oE '[|] (local|needs-kiro|needs-user|needs-trial-data) [|] [^|]* [|]$' | awk '{print $2}' | sort | uniq -c`; re-run after edits.)
 
-**Status after wave 2 (`5b62bb3`, reviewed Nov 26, clean clone):**
+**Status after the wave-3 security re-attack (`292e43b`, Nov 26):**
 
 | Status | Rows |
 |---|---:|
 | proven | 101 |
-| partial (incl. 1 proven in review only) | 31 |
-| fails (10, 4 of them security findings) | 10 |
+| partial (incl. 1 proven in review only) | 35 |
+| fails | 6 |
 | open | 305 |
 
-The rows now pass on a clean clone; wave 1's C1 is fixed. The four security failures (P5-06, P6-14, REQ-R7, AUTH-08) and P6-04 are explained in [docs/review-wave2.md](review-wave2.md). Wave 1 history: [docs/review-wave1.md](review-wave1.md).
+All wave-2 critical reproductions are fixed except the human-guard escape: the grant is now flagged suspect but still applies. New gaps are in [docs/review-wave3-security.md](review-wave3-security.md): a broken `.git/HEAD` makes every hook fail open, DNR's own bundle is writable, a tamper is laundered into the next session or into a commit, and an agent's re-land commit downgrades the order. Earlier reviews: [wave 2](review-wave2.md), [wave 1](review-wave1.md).
 
 ---
 
