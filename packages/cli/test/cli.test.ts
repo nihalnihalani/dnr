@@ -616,6 +616,13 @@ describe('steering, explain, export-case', () => {
     expect(b.presets.map((p) => p.kind)).toEqual(['original-change', 'half-of-two-file', 'formatting-only']);
     expect(b.files.map((f) => f.path)).toEqual(['shop.py', 'util.py']);
     expect(b.files[0]?.baseline_text).toBe(BEFORE);
+    // formatting-only is C reformatted: formatting cannot hide a re-application (P5), so it still blocks.
+    const writes = b.presets.find((p) => p.kind === 'formatting-only')?.writes ?? [];
+    expect(writes.map((w) => w.path)).toEqual(['shop.py', 'util.py']);
+    fx.repo.write('util.py', writes[1]?.proposed_text as string); // the other half is already in the session state
+    writeFileSync(join(fx.repo.dir, 'fmt.py'), writes[0]?.proposed_text as string);
+    const r2 = await dnr(fx.repo.dir, ['check', '--file', 'shop.py', '--proposed', 'fmt.py']);
+    expect(JSON.parse(r2.out).decision.outcome).toBe('block');
   });
 });
 

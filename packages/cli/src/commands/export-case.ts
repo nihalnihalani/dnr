@@ -5,8 +5,9 @@
  *  - held-out-paraphrase: `fixtures/mutations/<sha10>/extract-helper/2000` (omitted until it exists);
  *  - hard-negative: `fixtures/hook-events/hardneg-<sha10>.json`, applied to the baseline;
  *  - half-of-two-file: C's text for the first order file only (omitted when the order has one file);
- *  - formatting-only: the baseline reformatted (`ruff format` / `biome format` when installed;
- *    otherwise blank-line and comment changes), which changes no token.
+ *  - formatting-only: C reformatted (`ruff format --line-length 60` / `biome format --line-width 60`
+ *    when installed; otherwise blank-line and comment changes). Formatting cannot hide a
+ *    re-application, so this preset blocks like original-change (P5).
  * Omitted presets are listed in `omitted_presets` with the reason.
  */
 import { execFileSync } from 'node:child_process';
@@ -29,13 +30,13 @@ export function formatOnly(path: string, text: string): string {
   const g = grammarForPath(path);
   try {
     if (g === 'python')
-      return execFileSync('ruff', ['format', '--stdin-filename', path, '-'], {
+      return execFileSync('ruff', ['format', '--line-length', '60', '--stdin-filename', path, '-'], {
         input: text,
         encoding: 'utf8',
         stdio: ['pipe', 'pipe', 'ignore'],
       });
     if (g)
-      return execFileSync('biome', ['format', `--stdin-file-path=${path}`], {
+      return execFileSync('biome', ['format', '--line-width=60', `--stdin-file-path=${path}`], {
         input: text,
         encoding: 'utf8',
         stdio: ['pipe', 'pipe', 'ignore'],
@@ -152,9 +153,9 @@ export async function cmdExportCase(argv: string[], io: CliIO): Promise<number> 
 
   presets.push({
     id: 'formatting-only',
-    label: 'Formatting only',
+    label: 'Formatting only (C reformatted)',
     kind: 'formatting-only',
-    writes: texts.map((t) => ({ path: t.path, proposed_text: formatOnly(t.path, t.baseline_text) })),
+    writes: texts.map((t) => ({ path: t.path, proposed_text: formatOnly(t.path, t.change_text) })),
   });
 
   const bundle = {
