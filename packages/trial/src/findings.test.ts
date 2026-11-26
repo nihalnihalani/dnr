@@ -16,6 +16,7 @@ import {
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
+import { aclCommand, aclListing, aclMechanism } from './acl';
 import { runHarness } from './commands';
 import { DEFAULT_ROOT, type TrialPaths } from './env';
 import { bundleFiles } from './home';
@@ -192,16 +193,38 @@ describe('T1 run isolation (§9.3 isolation amendment)', () => {
     expect(statSync(join(DEFAULT_ROOT, 'scripts/trial/dnr-trial-agent.sh')).mode & 0o111).not.toBe(0);
   });
 
-  it('T1b: grantRunDirs gives the named users an inherited ACL and removes other access (owner-only, no root)', async () => {
-    const tr = tmp('dnr-acl-');
-    const wd = join(tr, 'runs/trial/T/x/r1');
-    mkdirSync(wd, { recursive: true });
-    writeFileSync(join(wd, 'a.py'), 'x');
-    const me = execFileSync('id', ['-un']).toString().trim();
-    await grantRunDirs({ trialRoot: tr, dirs: [wd], agentUser: me, harnessUser: me });
-    expect(statSync(join(wd, 'a.py')).mode & 0o007).toBe(0);
-    expect(statSync(join(tr, 'runs')).mode & 0o777).toBe(0o711);
-    expect(execFileSync('ls', ['-led', wd]).toString()).toMatch(new RegExp(`${me} allow .*inherit`));
+  const acl = aclMechanism();
+  it.skipIf(acl === null)(
+    `T1b: grantRunDirs gives the named users an inherited ACL and removes other access (owner-only, no root) via ${acl ?? 'no ACL mechanism (neither macOS chmod +a nor setfacl): skipped'}`,
+    async () => {
+      const tr = tmp('dnr-acl-');
+      const wd = join(tr, 'runs/trial/T/x/r1');
+      mkdirSync(wd, { recursive: true });
+      writeFileSync(join(wd, 'a.py'), 'x');
+      const me = execFileSync('id', ['-un']).toString().trim();
+      await grantRunDirs({ trialRoot: tr, dirs: [wd], agentUser: me, harnessUser: me });
+      expect(statSync(join(wd, 'a.py')).mode & 0o007).toBe(0);
+      expect(statSync(join(tr, 'runs')).mode & 0o777).toBe(0o711);
+      const listing = aclListing(wd);
+      if (acl === 'macos-chmod') expect(listing).toMatch(new RegExp(`${me} allow .*inherit`));
+      else {
+        expect(listing).toMatch(new RegExp(`^user:${me}:rwx`, 'm'));
+        expect(listing).toMatch(new RegExp(`^default:user:${me}:rwx`, 'm'));
+      }
+    },
+  );
+
+  it('T1b: os-user is refused (exit 69 path) where no ACL mechanism exists', () => {
+    expect(() => requireIsolation('os-user', { dryRun: false, s1: null, acl: null })).toThrow(/ACL/);
+    expect(aclCommand('posix-setfacl', 'dnrtrial', 'full', '/w')).toEqual({
+      cmd: 'setfacl',
+      args: ['-R', '-m', 'u:dnrtrial:rwX,d:u:dnrtrial:rwX', '/w'],
+    });
+    expect(aclCommand('macos-chmod', 'dnrtrial', 'read', '/f').args).toEqual([
+      '+a',
+      'dnrtrial allow read',
+      '/f',
+    ]);
   });
 
   it('T1c: sandbox mode adds --sandbox and stays refused until S1 records that it confines', () => {
@@ -221,7 +244,9 @@ describe('T1 run isolation (§9.3 isolation amendment)', () => {
   it('T1d: real runs need os-user or verified sandbox; none only with --dry-run; prereg refuses none (exit 69)', async () => {
     expect(() => requireIsolation('none', { dryRun: false, s1: null })).toThrow(/os-user/);
     expect(() => requireIsolation('none', { dryRun: true, s1: null })).not.toThrow();
-    expect(() => requireIsolation('os-user', { dryRun: false, s1: null })).not.toThrow();
+    expect(() =>
+      requireIsolation('os-user', { dryRun: false, s1: null, acl: 'posix-setfacl' }),
+    ).not.toThrow();
     const tr = tmp('dnr-tr-');
     const a = io({ TRIAL_ROOT: tr });
     expect(await runHarness('run', ['--wave', '1', '--only', '1674c70525'], a.io)).toBe(69);
@@ -370,19 +395,22 @@ describe('T3 sealed outputs before labeling', () => {
 });
 
 describe('T4 S8 record required', () => {
-  it('T4: a real trial run and probe exit 69 until fixtures/s8.json exists', async () => {
-    if (existsSync(join(DEFAULT_ROOT, 'fixtures/s8.json'))) return;
-    const tr = tmp('dnr-tr-');
-    for (const [cmd, args] of [
-      ['run', ['--wave', '1', '--isolation', 'os-user', '--only', '1674c70525']],
-      ['probe', ['--isolation', 'os-user', '--only', '1674c70525']],
-    ] as const) {
-      const a = io({ TRIAL_ROOT: tr, DJANGO_SRC: DJ });
-      expect(await runHarness(cmd, [...args], a.io)).toBe(69);
-      expect(a.err.join('')).toMatch(/spike S8 not recorded \(fixtures\/s8\.json\)/);
-    }
-    expect(existsSync(join(tr, 'manifest.jsonl'))).toBe(false);
-  });
+  it.skipIf(aclMechanism() === null)(
+    'T4: a real trial run and probe exit 69 until fixtures/s8.json exists (os-user needs an ACL mechanism to get that far)',
+    async () => {
+      if (existsSync(join(DEFAULT_ROOT, 'fixtures/s8.json'))) return;
+      const tr = tmp('dnr-tr-');
+      for (const [cmd, args] of [
+        ['run', ['--wave', '1', '--isolation', 'os-user', '--only', '1674c70525']],
+        ['probe', ['--isolation', 'os-user', '--only', '1674c70525']],
+      ] as const) {
+        const a = io({ TRIAL_ROOT: tr, DJANGO_SRC: DJ });
+        expect(await runHarness(cmd, [...args], a.io)).toBe(69);
+        expect(a.err.join('')).toMatch(/spike S8 not recorded \(fixtures\/s8\.json\)/);
+      }
+      expect(existsSync(join(tr, 'manifest.jsonl'))).toBe(false);
+    },
+  );
 });
 
 describe('T5 frozen config compared by hash', () => {

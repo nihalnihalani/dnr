@@ -71,6 +71,16 @@ export function shellCommand(c: ToolCall): string | null {
   return typeof v === 'string' ? v : null;
 }
 
+/** System executables and devices: touching them is not "outside the working copy" (pre-registered). */
+const ALLOWED_PREFIXES = [
+  '/dev/',
+  '/usr/bin/',
+  '/bin/',
+  '/usr/local/bin/',
+  '/opt/homebrew/bin/',
+  '/usr/sbin/',
+];
+
 /** Keys of file-tool inputs that name a path. */
 const PATH_KEYS =
   /^(path|paths|file|file_path|filePath|target_file|dir|directory|cwd|source|destination|dest|from|to|pattern|glob)$/;
@@ -129,7 +139,13 @@ export function touchedPaths(
     PWD: cwd,
     OLDPWD: oldpwd,
   });
-  const add = (raw: string, base: string) => out.push(realLoose(resolve(base, raw)));
+  const add = (raw: string, base: string) => {
+    const lexical = resolve(base, raw);
+    // System executables are allowed by the name the agent used: on some systems /usr/bin/env is
+    // itself a symlink into a package directory (e.g. uutils coreutils on Ubuntu runners).
+    if (ALLOWED_PREFIXES.some((a) => lexical.startsWith(a))) return;
+    out.push(realLoose(lexical));
+  };
   for (const c of calls) {
     if (isShellTool(c.name)) {
       const cmd = shellCommand(c) ?? '';
@@ -175,16 +191,6 @@ export function touchedPaths(
   }
   return out;
 }
-
-/** System executables and devices: touching them is not "outside the working copy" (pre-registered). */
-const ALLOWED_PREFIXES = [
-  '/dev/',
-  '/usr/bin/',
-  '/bin/',
-  '/usr/local/bin/',
-  '/opt/homebrew/bin/',
-  '/usr/sbin/',
-];
 
 export interface RunFlags {
   tool_calls: number;

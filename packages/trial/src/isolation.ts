@@ -3,8 +3,8 @@
  * read anything the harness can, so real runs need one of:
  * - `os-user`: the agent runs as a dedicated OS user (default `dnrtrial`) through a root-owned
  *   launcher that sudoers lets the harness user run without a password. That user can read only
- *   its run's worktree and HOME (macOS ACLs set by the harness, which owns them; no root at run
- *   time). Hooks reach the harness through a FIFO relay (relay.ts).
+ *   its run's worktree and HOME (ACLs set by the harness, which owns them: macOS `chmod +a`,
+ *   Linux `setfacl`; no root at run time; refused where neither exists). Hooks reach the harness through a FIFO relay (relay.ts).
  * - `sandbox`: `kiro-cli --sandbox`, allowed only when spike S1 records that it confines the file
  *   and shell tools (`fixtures/s1.json`).
  * `none` is allowed only for dry runs, which never start an agent.
@@ -24,6 +24,7 @@ import { execFile } from 'node:child_process';
 import { chmodSync, existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
+import { type AclMechanism, aclMechanism, grantAcl } from './acl';
 
 export type Isolation = 'none' | 'os-user' | 'sandbox';
 export const ISOLATIONS: readonly Isolation[] = ['none', 'os-user', 'sandbox'];
@@ -56,7 +57,15 @@ export class IsolationError extends Error {
  * T1(d): real runs and prereg need `os-user`, or `sandbox` with S1 recorded as confining.
  * `none` only with --dry-run (no agent is started).
  */
-export function requireIsolation(mode: Isolation, opts: { dryRun: boolean; s1: S1 | null }): void {
+export const NO_ACL =
+  'isolation os-user needs owner-set ACLs (macOS chmod +a, or Linux setfacl from the acl package); none is available here';
+
+export function requireIsolation(
+  mode: Isolation,
+  opts: { dryRun: boolean; s1: S1 | null; acl?: AclMechanism | null },
+): void {
+  if (mode === 'os-user' && (opts.acl === undefined ? aclMechanism() : opts.acl) === null)
+    throw new IsolationError(NO_ACL);
   if (opts.dryRun) return;
   if (mode === 'os-user') return;
   if (mode === 'sandbox') {
@@ -154,8 +163,7 @@ export async function grantRunDirs(input: {
   agentUser: string;
   harnessUser: string;
 }): Promise<void> {
-  const ace = (u: string) =>
-    `${u} allow list,add_file,search,add_subdirectory,delete_child,readattr,writeattr,readextattr,writeextattr,readsecurity,read,write,append,execute,delete,file_inherit,directory_inherit`;
+  if (!aclMechanism()) throw new IsolationError(NO_ACL);
   for (const d of input.dirs) {
     // ancestors: traverse only
     let cur = d;
@@ -166,8 +174,11 @@ export async function grantRunDirs(input: {
     const r1 = await run('chmod', ['-R', 'o-rwx', d]);
     if (r1.code !== 0) throw new IsolationError(`chmod -R o-rwx ${d}: ${r1.err.trim()}`);
     for (const u of [input.agentUser, input.harnessUser]) {
-      const r = await run('chmod', ['-R', '+a', ace(u), d]);
-      if (r.code !== 0) throw new IsolationError(`chmod +a ${u} on ${d}: ${r.err.trim()}`);
+      try {
+        await grantAcl(u, 'full', d);
+      } catch (e) {
+        throw new IsolationError((e as Error).message.trim());
+      }
     }
   }
 }

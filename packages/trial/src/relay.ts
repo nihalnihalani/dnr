@@ -16,6 +16,7 @@
 import { execFile, spawnSync } from 'node:child_process';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { grantAcl } from './acl';
 import { BUNDLES, type HookEnv } from './home';
 
 export const RELAY_FIFOS = ['req', 'out', 'err', 'code'] as const;
@@ -66,14 +67,10 @@ export async function makeRelayDir(dir: string, agentUser: string | null): Promi
   await sh('chmod', ['0711', dir]);
   await sh('chmod', ['0700', join(dir, 'lock')]);
   if (!agentUser) return;
-  await sh('chmod', ['+a', `${agentUser} allow search`, dir]);
-  await sh('chmod', [
-    '+a',
-    `${agentUser} allow search,list,add_subdirectory,delete_child`,
-    join(dir, 'lock'),
-  ]);
-  await sh('chmod', ['+a', `${agentUser} allow write,append`, join(dir, 'req')]);
-  for (const f of ['out', 'err', 'code']) await sh('chmod', ['+a', `${agentUser} allow read`, join(dir, f)]);
+  await grantAcl(agentUser, 'search', dir);
+  await grantAcl(agentUser, 'lockdir', join(dir, 'lock'));
+  await grantAcl(agentUser, 'write', join(dir, 'req'));
+  for (const f of ['out', 'err', 'code']) await grantAcl(agentUser, 'read', join(dir, f));
 }
 
 export interface RelayConfig {
