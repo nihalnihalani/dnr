@@ -34,6 +34,7 @@ Common setup unless a spike says otherwise: `kiro-cli` 3.4 or later (version rec
 
 | Item | Value |
 |---|---|
+| Kiro CLI | 3.6.2, installed 2026-11-27 at `~/.local/bin/kiro-cli` with the official installer (`curl -fsSL https://cli.kiro.dev/install`, checksum-verified, `--no-modify-path`). Not logged in yet: pending (user) `kiro-cli login` |
 | Kiro credits request time | pending (user): request Kiro credits on Devpost and record the time (Phase 0) |
 | Outside labeler (labeler 2), hours booked | pending (user): book an outside labeler by name and hours (Phase 0, §9.5) |
 | Adjudicator | pending (user): name the adjudicator (Phase 0, §9.5) |
