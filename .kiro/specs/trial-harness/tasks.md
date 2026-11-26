@@ -12,7 +12,7 @@ Tasks follow plan §13.1 in dependency order. Run them one at a time in Kiro spe
   - [ ] 0.3 `fixtures/pins.json`: Django SHA, model and cutoff, kiro-cli version, Docker digests, tool versions, demo C/file/qualname for `43933a1dca` and `d0e4dd5cdd`, `npm_package`
     - _Requirements: TH8, TH10_
     - commit:
-  - [ ] 0.4 Fill the model pin into `trial/agents/trial-*.json` and `.kiro/agents/*.json` (replace `{{pins.model}}`)
+  - [ ] 0.4 Add the pinned `model` field to `trial/agents/trial-*.json` and `.kiro/agents/*.json` (left out until pinned, so Kiro uses its default); `dnr trial prepare` checks it matches `pins.json` when it copies a config into the run HOME
     - _Requirements: TH8_
     - commit:
   - [ ] 0.5 **(user)** Credits requested; outside labeler, adjudicator, SYN author and pilot maintainers booked; `dnr-labeling` and `django-syn` private repos; Touch the Plan study started and `study-prereg` tagged; bookings recorded in `docs/spikes.md`

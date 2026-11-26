@@ -1,7 +1,6 @@
 {
   "name": "trial-L",
   "description": "Trial arm L (DNR live): same task as T. Hooks: enforcing pre-write, guard-shell, post-shell, session-start and Stop in deny format, seeded in $HOME/.kiro/hooks by trial prepare.",
-  "model": "{{pins.model}}",
   "tools": ["read", "write", "shell"],
   "mcpServers": {},
   "includeMcpJson": false,

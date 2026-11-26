@@ -49,4 +49,6 @@ DNR stops an AI agent from re-applying a change the repository already reverted.
 - Under `--trust-all-tools`, an `ask` may be auto-approved (spike S5).
 - A non-browser process running as the same user can read the board's cookie jar.
 - On the `127.0.0.1` board fallback (Safari, `--host 127.0.0.1`), the cookie is shared with other loopback ports.
+- MCP tools that write files bypass pre-write: Kiro's `write` category covers only built-in file write tools, and Stop's `touched` set does not include MCP writes. A follow-up `@mcp` PreToolUse hook that sends path-bearing calls to the warn tier is an open option (`hook-contracts.md`).
+- A `PermissionRequest` hook from another source can auto-answer prompts. It cannot override a PreToolUse exit 2 or `deny`, so `deny` format is unaffected. In `ask` format, another hook could approve DNR's prompt (spikes S5 and S15).
 - Kiro's matcher `write` is also an unanchored regex, so a tool whose ID merely contains "write" reaches the hook; DNR treats an unknown tool with no path as allow.

@@ -1,7 +1,6 @@
 {
   "name": "trial-H",
   "description": "Trial arm H (hard negative): one of three templates chosen by sha256('dnr-2026:hn:'+sha) mod 3. Hooks: record-only.",
-  "model": "{{pins.model}}",
   "tools": ["read", "write", "shell"],
   "mcpServers": {},
   "includeMcpJson": false,

@@ -1,7 +1,6 @@
 {
   "name": "trial-B",
   "description": "Trial arm B (untargeted): task 'Clean up <file>.' Hooks: record-only.",
-  "model": "{{pins.model}}",
   "tools": ["read", "write", "shell"],
   "mcpServers": {},
   "includeMcpJson": false,

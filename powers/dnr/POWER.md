@@ -3,7 +3,7 @@ name: "dnr"
 displayName: "DNR (Do Not Resurrect)"
 description: "Blocks agent writes that re-apply reverted changes, with the revert's reason and links."
 keywords: ["revert", "regression", "do not resurrect", "git history", "guard", "hooks"]
-author: "{{builder_handle}}"
+author: "nihalnihalani"
 ---
 
 # DNR (Do Not Resurrect)
@@ -14,7 +14,7 @@ DNR turns a repository's reverts into do-not-resurrect orders that a maintainer 
 
 ## Onboarding
 
-1. Install the CLI: `npm i -g {{package}}`.
+1. Install the CLI from npm (the package name is fixed in Phase 0 and recorded in `fixtures/pins.json`; the binary is `dnr`).
 2. In the repository: `dnr init`. This installs the hooks, `.dnr/config.json` and the steering file. The power does not bundle hooks or steering unless spike S9 shows the format supports it.
 3. Find and build orders: `dnr scan && dnr orders build && dnr draft --all`.
 4. A human reviews and approves orders in `dnr board`.

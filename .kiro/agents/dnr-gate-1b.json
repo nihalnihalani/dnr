@@ -1,7 +1,6 @@
 {
   "name": "dnr-gate-1b",
   "description": "Gate check 1b retry (plan Phase 10, spike S1/S10): registers the always-block PreToolUse write hook through the agent config instead of a .kiro/hooks file.",
-  "model": "{{pins.model}}",
   "tools": ["read", "write", "shell"],
   "includeMcpJson": false,
   "includePowers": false,

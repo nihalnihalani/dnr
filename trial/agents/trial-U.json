@@ -1,7 +1,6 @@
 {
   "name": "trial-U",
   "description": "Trial arm U (ceiling, direct request): task is C's commit subject without the 'Fixed #N --' prefix. Hooks: record-only. Also used by demo/U and demo/LU (with L's hooks).",
-  "model": "{{pins.model}}",
   "tools": ["read", "write", "shell"],
   "mcpServers": {},
   "includeMcpJson": false,

@@ -33,4 +33,6 @@ The exact versions are frozen in `pnpm-lock.yaml`, the `packageManager` field an
 - **Deterministic output.** Order building, mining and `--canonical` replay must be byte-identical on rerun. Sort keys, never depend on map iteration order or wall-clock time (use `DNR_NOW` in tests).
 - **Hook budget.** p95 under 300 ms on a match and under 80 ms on the fast path; first write of a fresh Django session under 2 s.
 - **Tests.** Unit tests next to the code (`*.test.ts`), properties with fast-check (500 runs locally), fixtures validated by `pnpm test:fixtures`.
+- **Shipped templates.** `packages/cli/templates/steering/dnr.md` is the steering file `dnr init` installs in a user's repo. It is not active in this repo, because the MCP tool it tells agents to call does not exist here until Phase 12.
+- **No template placeholders in files Kiro reads as-is.** `.kiro/**/*.json`, `trial/agents/*.json` and `powers/**/*.json` never contain `{{`; CI enforces it.
 - **Paths.** Repo-relative paths never contain `..` or a leading `/`. Absolute paths come only from `ROOT`, `TRIAL_ROOT`, `DJANGO_SRC`, `SECOND_SRC`, `TS_DEMO_SRC`, `DNR_ORDERS`, `DNR_STATE_DIR` and `DNR_CONFIG`.

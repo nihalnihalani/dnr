@@ -13,7 +13,7 @@ If `.dnr/config.json` or `.kiro/hooks/dnr-pre-write.json` is missing from the re
 
 ## Step 2: before you edit a function
 
-Call the MCP tool `explain_function` with the file and qualified name (for example `{"file": "django/db/models/sql/query.py", "qualname": "Query.set_group_by"}`). If it returns approved orders, read each `reason` and avoid re-introducing the reverted change. `list_orders_for_file` lists every order for a file.
+Call the MCP tool `explain_function` with the file and qualified name (for example `{"file": "django/db/models/sql/query.py", "qualname": "Query.clear_ordering"}`). If it returns approved orders, read each `reason` and avoid re-introducing the reverted change. `list_orders_for_file` lists every order for a file.
 
 ## Step 3: if a write is blocked
 

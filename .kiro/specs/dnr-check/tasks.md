@@ -3,18 +3,18 @@
 Tasks follow the build phases in plan §13.1, in dependency order. Run them one at a time in Kiro spec mode. When a task is done, tick it and fill its `commit:` slot with the SHA that completed it. Trial-only work (mining, harness, gate, trial waves) is in `.kiro/specs/trial-harness/tasks.md`.
 
 - [ ] 0. Phase 0: Kiro artifacts and workspace
-  - [ ] 0.1 Write the six DNR hook files and the dev hook exactly as §6 specifies (`.kiro/hooks/`)
+  - [x] 0.1 Write the six DNR hook files and the dev hook exactly as §6 specifies (`.kiro/hooks/`)
     - _Requirements: R1, R6, R13, DC10, DC11_
-    - commit:
-  - [ ] 0.2 Write steering (`tech`, `hook-contracts`, `trial-integrity`, `dnr`), the drafter prompt, `dnr-drafter` and `dnr-gate-1b` agents, `.kiro/settings/mcp.json`, and the power skeleton
+    - commit: 59f5040
+  - [x] 0.2 Write steering (`tech`, `hook-contracts`, `trial-integrity`; the shipped `dnr.md` lives at `packages/cli/templates/steering/dnr.md`), the drafter prompt, `dnr-drafter` and `dnr-gate-1b` agents, `.kiro/settings/mcp.json`, and the power skeleton
     - _Requirements: DC19, DC20_
-    - commit:
-  - [ ] 0.3 CI on Node 24 (lint, typecheck, test, build) and the Kiro-artifact validation job
+    - commit: 59f5040
+  - [x] 0.3 CI on Node 24 (lint, typecheck, test, build) and the Kiro-artifact validation job (workflow committed; first green run pending the C1 clean-clone fix)
     - _Plan: Phase 0 Workspace_
-    - commit:
-  - [ ] 0.4 Vendor the grammars into `vendor/grammars/` with `PROVENANCE.md`; `node scripts/check-grammar.mjs` passes
+    - commit: 59f5040
+  - [x] 0.4 Vendor the grammars into `vendor/grammars/` with `PROVENANCE.md`; `node scripts/check-grammar.mjs` passes
     - _Plan: §4 pins_
-    - commit:
+    - commit: 59f5040
   - [ ] 0.5 `scripts/demo/make-demo-checkout.sh` and `scripts/demo/prompts/{write,direct,cleanup}.txt`; the script runs and the demo env passes `aggregation_regress`
     - _Plan: Phase 0 Django, §10_
     - commit:

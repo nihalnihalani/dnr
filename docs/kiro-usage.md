@@ -26,9 +26,11 @@ The human arguments in a mid-2000s bug tracker (Django's Trac), deterministic sy
 
 ### 3b. What surprised us
 
-- The mining regex first missed Django's usual `Fixed #N -- Reverted "…"` subject; fixing it roughly doubled the pool in each year.
+To be filled from build-time findings only, each with its commit or report link. Planning research (such as the mining regex correction made while writing the plan) does not go here.
+
 - Spike findings: {{spike_findings}} ([docs/spikes.md](spikes.md)).
-- The first failing property: {{first_property_failure}} ([reports/property-failures.md](../reports/property-failures.md)).
+- The first failing property and its fix: {{first_property_failure}} ([reports/property-failures.md](../reports/property-failures.md)).
+- Other build-time surprises: {{build_findings}}.
 
 ## 4. Trial
 

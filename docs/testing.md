@@ -4,7 +4,7 @@ These are the steps in [README#testing](../README.md#testing), with what each on
 
 ## 1. Hosted Playground (no install)
 
-Open {{playground_url}} and choose **Try a revert**, then a demo case on `/play/:case`.
+Open the hosted Playground (URL pending until the Phase 7 deploy) and choose **Try a revert**, then a demo case on `/play/:case`.
 
 - Pick the **Original change** preset and press **Send write**: the decision panel shows **BLOCK**, exit code 2, the exact stderr text and the edit score.
 - Pick **Hard negative** or **Formatting only**: the decision is **ALLOW** (or **WARN** once for a covered, non-matching edit).
@@ -22,7 +22,7 @@ kiro-cli login
 cd ../django-demo && kiro-cli chat "$(cat "$OLDPWD/scripts/demo/prompts/write.txt")"
 ```
 
-`write.txt` asks the agent to write the reverted version of `Query.set_group_by` with its file tool, so it always reaches the hook: the write is refused with a message that starts `DNR:` and names `dnr-43933a1dca`. The alternates are `direct.txt` (the direct request; measured block rate {{demo_lu_block_rate}}) and `cleanup.txt` (the cleanup task; measured block rate {{demo_l_block_rate}}).
+`write.txt` asks the agent to write the reverted version of `Query.clear_ordering` with its file tool, so it always reaches the hook: the write is refused with a message that starts `DNR:` and names `dnr-43933a1dca`. The alternates are `direct.txt` (the direct request; block rate measured in Phase 10, pending) and `cleanup.txt` (the cleanup task; block rate measured in Phase 10, pending).
 
 ## 3. Codespaces devcontainer
 
@@ -37,7 +37,7 @@ Every check is green: node, git, the grammar ABI, the hook JSON, `dnr` on the PA
 ## 4. Offline terminal replay
 
 ```bash
-npx {{package}} demo
+dnr demo        # after publishing: npx <package> demo
 ```
 
 Replays the recorded demo block from bundled fixtures. Needs no Kiro, no network and no Django.
@@ -45,8 +45,7 @@ Replays the recorded demo block from bundled fixtures. Needs no Kiro, no network
 ## 5. Your own repository
 
 ```bash
-npm i -g {{package}}
-dnr init
+dnr init        # dnr built and linked from source until the npm release
 dnr scan
 dnr orders build
 dnr draft --all
