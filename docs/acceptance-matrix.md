@@ -77,7 +77,7 @@ Placeholders: `$ROOT` = this repo, `$DJ` = `$DJANGO_SRC`, `$TR` = `$TRIAL_ROOT`,
 | P0-14 | 0 | Lighthouse CI, ruff, biome present | `npx @lhci/cli --version` ; `ruff --version` ; `npx @biomejs/biome --version` | kiro | local | open |
 | P0-15 | 0 | Docker running; python 3.5/3.6/3.7-slim pulled and digests pinned (daemon not running today) | `docker info` ; `jq -e '.docker_images \| length == 3' fixtures/pins.json` | mining | local | open |
 | P0-16 | 0 | Tool versions recorded | `jq -e '.tools \| has("node") and has("pnpm") and has("uv") and has("ast-grep")' fixtures/pins.json` | kiro | local | open |
-| P0-17 | 0 | Workspace installs, lints, typechecks, tests | `pnpm i --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm test` | engine | local | **fails** — clean `59f5040` test+typecheck red (C1); working-tree lint red (M8) |
+| P0-17 | 0 | Workspace installs, lints, typechecks, tests | `pnpm i --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm test` | engine | local | **proven** — clean clone at 5b62bb3: frozen install, typecheck, 385 tests, build; lint 0 errors |
 | P0-18 | 0 | CI workflow (Node 24: lint, typecheck, test, build) green on `main` | `gh run list -w ci.yml -b main -L 1 --json conclusion -q '.[0].conclusion'` = `success` | kiro | needs-user | open — no remote; at `59f5040` CI would be red (C1) |
 | P0-19 | 0 | Playground e2e job enabled once `apps/playground` exists | `grep -n 'playwright' .github/workflows/ci.yml` | kiro | local | **proven** — ci.yml `playground-e2e` job (skips until `playwright.config.ts` exists) |
 | P0-20 | 0 | Grammars vendored and load | `node scripts/check-grammar.mjs` exits 0 ; `shasum -a 256 vendor/grammars/*.wasm` matches PROVENANCE.md | engine | local | **proven** — `node scripts/check-grammar.mjs` ok, sha256 = PROVENANCE.md |
@@ -133,7 +133,7 @@ All answers in `docs/spikes.md`, captures in `fixtures/hook-events/`, and `steer
 
 | ID | Ph | Check | Proof | Owner | Class | Status |
 |---|---|---|---|---|---|---|
-| P2-01 | 2 | `packages/cli` scaffold built with tsup and linked globally; `dnr --version` runs | `pnpm -F @dnr/cli build && pnpm -F @dnr/cli link --global && dnr --version` | engine | local | open — no `bin`/build in `packages/cli` |
+| P2-01 | 2 | `packages/cli` scaffold built with tsup and linked globally; `dnr --version` runs | `pnpm -F @dnr/cli build && pnpm -F @dnr/cli link --global && dnr --version` | engine | local | **proven** — `dnr --version` = 0.1.0 from `packages/cli/dist/cli.js` |
 | P2-02 | 2 | Schema package tests pass | `pnpm -F @dnr/schemas test` (needs a `test` script; drift D-01) | engine | local | **proven** (working tree) — `pnpm -F @dnr/schemas test` 9 passed; fails on clean `59f5040` (C1) |
 | P2-03 | 2 | Qualname unit cases: methods, nested classes, decorators, `#2`, `<body>`, `<module>`, closures | `pnpm test -t 'qualname:'` with one case each | engine | local | **proven** — `qualname.test.ts` › python qualnames (§5.2): decorators, closures, nested classes, `#2`, `<module>` |
 | P2-04 | 2 | `pnpm test:fixtures` validates `known-reverts.json` against `KnownRevert` (not the placeholder) | `pnpm test:fixtures` fails when one field in a copy is corrupted | engine | local | open — skips when the fixture is absent (M7) |
@@ -193,45 +193,45 @@ Run with `DNR_ORDERS=$ROOT/reports/orders`, `cwd=DEMO`.
 
 | ID | Ph | Check | Proof | Owner | Class | Status |
 |---|---|---|---|---|---|---|
-| P5-01 | 5 | Golden fixtures from S2 captures: `reapply-43933a1dca.json`, `hardneg-typehints.json`, `uncovered.json`, one per tool | `pnpm test -t 'golden:'` | hook | needs-kiro | open |
-| P5-02 | 5 | Warn-once: first non-matching write to a covered order `warn_block`, second `warn_pass` | `pnpm test -t 'R2:' -t 'R3:'` | hook | local | partial (core) — `django.test.ts` › an unrelated edit to the covered unit warns once, then passes |
+| P5-01 | 5 | Golden fixtures from S2 captures: `reapply-43933a1dca.json`, `hardneg-typehints.json`, `uncovered.json`, one per tool | `pnpm test -t 'golden:'` | hook | needs-kiro | partial — `golden.test.ts` passes; field names provisional until S2 |
+| P5-02 | 5 | Warn-once: first non-matching write to a covered order `warn_block`, second `warn_pass` | `pnpm test -t 'R2:' -t 'R3:'` | hook | local | **proven** — `prewrite.test.ts` › R2/R3; live: hardneg warn_block then warn_pass |
 | P5-03 | 5 | P3 accumulation across writes | `pnpm test -t 'P3:'` | hook | local | **proven** (core) — `properties.test.ts` › P3 |
-| P5-04 | 5 | P10 grant scope (own order; unexpired or used) | `pnpm test -t 'P10:'` | hook | local | partial — `properties.test.ts` › P10 (order scope only; TTL/used untested, M1) |
-| P5-05 | 5 | Record mode: `DNR_MODE=record` and config `mode`; `proposed_text` and `session_patch` on every event | `DNR_MODE=record dnr check --stdin --hook kiro < fixtures/hook-events/reapply-43933a1dca.json; jq -e '.proposed_text and .session_patch' $DNR_STATE_DIR/events.jsonl` | hook | local | open |
-| P5-06 | 5 | Fail-open: every internal error or timeout exits 0 and logs to `hook.log` (`error_open`) | `pnpm test -t 'R7:'` with injected faults | hook | local | open |
-| P5-07 | 5 | p95 < 300 ms (match) and < 80 ms (fast path); results in `reports/perf.md` | `hyperfine -i --export-json perf.json -r 30 "dnr check --stdin --hook kiro < $ROOT/fixtures/hook-events/reapply-43933a1dca.json" "dnr check --stdin --hook kiro < $ROOT/fixtures/hook-events/uncovered.json" && node scripts/p95.mjs perf.json` | hook | local | open |
-| P5-08 | 5 | First write of a fresh Django session (temp-index baseline) < 2 s | timed first event with empty `$DNR_STATE_DIR` in DEMO | hook | local | open |
+| P5-04 | 5 | P10 grant scope (own order; unexpired or used) | `pnpm test -t 'P10:'` | hook | local | **proven** — `prewrite.test.ts` › P10 (own order, expiry with DNR_NOW, used-this-session) |
+| P5-05 | 5 | Record mode: `DNR_MODE=record` and config `mode`; `proposed_text` and `session_patch` on every event | `DNR_MODE=record dnr check --stdin --hook kiro < fixtures/hook-events/reapply-43933a1dca.json; jq -e '.proposed_text and .session_patch' $DNR_STATE_DIR/events.jsonl` | hook | local | **proven** — `prewrite.test.ts` › P5-05 record mode; live outcome `record`, exit 0 |
+| P5-06 | 5 | Fail-open: every internal error or timeout exits 0 and logs to `hook.log` (`error_open`) | `pnpm test -t 'R7:'` with injected faults | hook | local | **fails (security)** — behaves per R7, but invalid config or session state turns every hook off (see review-wave2 C1) |
+| P5-07 | 5 | p95 < 300 ms (match) and < 80 ms (fast path); results in `reports/perf.md` | `hyperfine -i --export-json perf.json -r 30 "dnr check --stdin --hook kiro < $ROOT/fixtures/hook-events/reapply-43933a1dca.json" "dnr check --stdin --hook kiro < $ROOT/fixtures/hook-events/uncovered.json" && node scripts/p95.mjs perf.json` | hook | local | **proven** — `reports/perf.md` (p95 161.7 / 65.3 ms); review timing agrees |
+| P5-08 | 5 | First write of a fresh Django session (temp-index baseline) < 2 s | timed first event with empty `$DNR_STATE_DIR` in DEMO | hook | local | **proven** — 359 ms (perf.md); 0.32 s in review |
 | P5-09 | 5 | Temp-index baseline never touches the real index; works on unborn HEAD; includes untracked, respects .gitignore | `pnpm test -t 'R4:'` ; `git -C DEMO status --porcelain` unchanged | hook | local | open |
-| P5-10 | 5 | `dnr check --commit` (crossing vs `X^`) and `dnr trial falsealarm` | `dnr check --commit <sha>` on a fixture repo ; `pnpm test -t 'falsealarm:'` | hook | local | open |
-| P5-11 | 5 | `dnr allow <id> [--ttl]`, `check --file --proposed`, `check --replay [--canonical]`, `session start\|confirm\|show\|end\|gc` | `pnpm test -t 'cli:'` one case per subcommand | hook | local | open |
+| P5-10 | 5 | `dnr check --commit` (crossing vs `X^`) and `dnr trial falsealarm` | `dnr check --commit <sha>` on a fixture repo ; `pnpm test -t 'falsealarm:'` | hook | local | **proven** — live: `dnr check --commit` exit 1 on the re-applying commit |
+| P5-11 | 5 | `dnr allow <id> [--ttl]`, `check --file --proposed`, `check --replay [--canonical]`, `session start\|confirm\|show\|end\|gc` | `pnpm test -t 'cli:'` one case per subcommand | hook | local | partial — `allow`, `check --file`, `--replay --canonical`, `session *` exist and are tested; `allow` guard defeatable (C3) |
 | P5-12 | 5 | Minimal `dnr init --hooks pre-write` writes only `dnr-pre-write.json` + config | `dnr init --hooks pre-write DEMO && ls DEMO/.kiro/hooks` | hook | local | open |
-| P5-13 | 5 | `fixtures/hook-events/two-file-order.json` (hand-written order spanning two files, one event per half) | `pnpm test:fixtures` | hook | local | open |
+| P5-13 | 5 | `fixtures/hook-events/two-file-order.json` (hand-written order spanning two files, one event per half) | `pnpm test:fixtures` | hook | local | **proven** — `golden.test.ts` › P5-13 |
 | P5-14 | 5 | Five scripted hard negatives `hardneg-<sha10>.json`, one per gate revert, template `sha256("dnr-2026:hn:"+sha) mod 3` | `ls fixtures/hook-events/hardneg-*.json \| wc -l` ≥ 7 ; template check test | hook | needs-user | open |
-| P5-15 | 5 | Demo hard negatives `hardneg-43933a1dca.json`, `hardneg-d0e4dd5cdd.json` | files exist and replay to `allow` or `warn_*` | hook | local | open |
-| P5-16 | 5 | Block stderr ≤ 1,200 chars, first line `DNR: <reason> <revert URL>`, names `dnr board --open <id>` and `dnr allow <id>` | `pnpm test -t 'R1:'` ; `wc -c` on captured stderr | hook | local | partial (core) — `engine.test.ts` › the block message follows §6 and stays under 1,200 characters; truncation end (L1) |
-| P5-17 | 5 | Protect tier denies `.dnr/**`, `.kiro/{hooks,settings,agents}/**`, `$HOME/.kiro/**`, realpath of `DNR_ORDERS`, `DNR_STATE_DIR`, `DNR_CONFIG` | `pnpm test -t 'R6:'` | hook | local | partial (core) — `engine.test.ts` › covers the plan globs; `.git/hooks` missing (M3) |
-| P5-18 | 5 | Tool adapters: fs_write (incl. legacy `command`), str_replace (0 or ≥ 2 matches allowed through), fs_append, delete_file = empty, unknown write tool → warn | `pnpm test -t 'adapter:'` | hook | local | partial (core) — `engine.test.ts` › apply-tool adapters (§5.8); field names pending S2 |
-| P5-19 | 5 | Fast path + blob-SHA cache for uncovered files | `jq -e '.decision.fast_path' ` on the uncovered event | hook | local | open |
+| P5-15 | 5 | Demo hard negatives `hardneg-43933a1dca.json`, `hardneg-d0e4dd5cdd.json` | files exist and replay to `allow` or `warn_*` | hook | local | **proven** — `golden.test.ts` › P5-15 (both demo hard negatives) |
+| P5-16 | 5 | Block stderr ≤ 1,200 chars, first line `DNR: <reason> <revert URL>`, names `dnr board --open <id>` and `dnr allow <id>` | `pnpm test -t 'R1:'` ; `wc -c` on captured stderr | hook | local | **proven** — live stderr matches §6, under 1,200 chars |
+| P5-17 | 5 | Protect tier denies `.dnr/**`, `.kiro/{hooks,settings,agents}/**`, `$HOME/.kiro/**`, realpath of `DNR_ORDERS`, `DNR_STATE_DIR`, `DNR_CONFIG` | `pnpm test -t 'R6:'` | hook | local | partial — case-insensitive, `.git/hooks` covered; `.git/config` and parent-dir deletes open (see review-wave2 H2) |
+| P5-18 | 5 | Tool adapters: fs_write (incl. legacy `command`), str_replace (0 or ≥ 2 matches allowed through), fs_append, delete_file = empty, unknown write tool → warn | `pnpm test -t 'adapter:'` | hook | local | partial — adapters tested; S2 pending |
+| P5-19 | 5 | Fast path + blob-SHA cache for uncovered files | `jq -e '.decision.fast_path' ` on the uncovered event | hook | local | **proven** — fast path ~65 ms |
 | P5-20 | 5 | Credit budget recomputed with S11 cost and K | `docs/spikes.md` "Budget (Phase 5)" | user | needs-user | open |
 
 ## Phase 6: Shell, Stop, post-write, init
 
 | ID | Ph | Check | Proof | Owner | Class | Status |
 |---|---|---|---|---|---|---|
-| P6-01 | 6 | guard-shell table of ≥ 40 commands passes (R1–R7, wrappers, splits on `; && \|\| \| $( )` and backticks) | `pnpm test -t 'guard-shell:'` ; table in `packages/hook/test/shell-table.ts` | hook | local | open |
-| P6-02 | 6 | guard-shell PreToolUse tree snapshot + `dnr session shell-after` adds changed files to `touched` | `pnpm test -t 'post-shell:'` | hook | local | open |
-| P6-03 | 6 | Stop forces ≤ 2 turns, exits 0 on crash, skips orders whose grant applies; scores only `touched` | `pnpm test -t 'stop:'` | hook | local | open |
-| P6-04 | 6 | Stop order-set hash check: any non-R6 change to orders/config/hook files forces a reporting turn | `pnpm test -t 'stop: orders hash'` | hook | local | open |
-| P6-05 | 6 | P12, P13, P15 and P10's pre-commit blob clause pass | `pnpm test -t 'P12:' -t 'P13:' -t 'P15:' -t 'P10: pre-commit'` | hook | local | open |
-| P6-06 | 6 | Mode acceptance (`commit-enforce`): pre-write records + warns; Stop capped at 1; `dnr check --staged` exits 1 on a crossing | `pnpm test -t 'mode: commit-enforce'` | hook | local | open |
-| P6-07 | 6 | `warn-only`: match downgraded to warn tier; Stop 1 turn with "Tell the user; do not revert unless asked"; pre-commit exits 0 | `pnpm test -t 'mode: warn-only'` | hook | local | partial (core) — `engine.test.ts` › warn-only mode downgrades a match to warn_block then warn_pass |
-| P6-08 | 6 | Each `DNR_MODE` value writes a Zod-valid `EventRecord` | `for m in enforce record warn-only commit-enforce; do DNR_MODE=$m …; done` + schema check | hook | local | open |
-| P6-09 | 6 | Full `dnr init` installs every hook, config, gitignore lines, pre-commit shim only if none exists, steering | `dnr init DEMO && ls DEMO/.kiro/hooks DEMO/.git/hooks/pre-commit` | hook | local | open |
+| P6-01 | 6 | guard-shell table of ≥ 40 commands passes (R1–R7, wrappers, splits on `; && \|\| \| $( )` and backticks) | `pnpm test -t 'guard-shell:'` ; table in `packages/hook/test/shell-table.ts` | hook | local | partial — `shell.test.ts` 40-command table passes; many R2–R5 forms still pass (see review-wave2 H3) |
+| P6-02 | 6 | guard-shell PreToolUse tree snapshot + `dnr session shell-after` adds changed files to `touched` | `pnpm test -t 'post-shell:'` | hook | local | **proven** — `session.test.ts` › post-shell; live |
+| P6-03 | 6 | Stop forces ≤ 2 turns, exits 0 on crash, skips orders whose grant applies; scores only `touched` | `pnpm test -t 'stop:'` | hook | local | **proven** — `session.test.ts` › stop; live: 2 forced turns then allow |
+| P6-04 | 6 | Stop order-set hash check: any non-R6 change to orders/config/hook files forces a reporting turn | `pnpm test -t 'stop: orders hash'` | hook | local | **fails** — not reported when the config is invalid or `mode: record` (see review-wave2 C1, H1) |
+| P6-05 | 6 | P12, P13, P15 and P10's pre-commit blob clause pass | `pnpm test -t 'P12:' -t 'P13:' -t 'P15:' -t 'P10: pre-commit'` | hook | local | **proven** — `session.test.ts` › P12, P13, P15, P10 pre-commit blobs |
+| P6-06 | 6 | Mode acceptance (`commit-enforce`): pre-write records + warns; Stop capped at 1; `dnr check --staged` exits 1 on a crossing | `pnpm test -t 'mode: commit-enforce'` | hook | local | **proven** — `prewrite.test.ts` › commit-enforce; live staged exit 1 |
+| P6-07 | 6 | `warn-only`: match downgraded to warn tier; Stop 1 turn with "Tell the user; do not revert unless asked"; pre-commit exits 0 | `pnpm test -t 'mode: warn-only'` | hook | local | **proven** — `prewrite.test.ts` / `session.test.ts` warn-only; live |
+| P6-08 | 6 | Each `DNR_MODE` value writes a Zod-valid `EventRecord` | `for m in enforce record warn-only commit-enforce; do DNR_MODE=$m …; done` + schema check | hook | local | **proven** — `prewrite.test.ts` › P6-08 |
+| P6-09 | 6 | Full `dnr init` installs every hook, config, gitignore lines, pre-commit shim only if none exists, steering | `dnr init DEMO && ls DEMO/.kiro/hooks DEMO/.git/hooks/pre-commit` | hook | local | **proven** — live `dnr init` in a pty installs all hooks, config, pre-commit, steering |
 | P6-10 | 6 | `init` is idempotent | `dnr init DEMO && (cd DEMO && git status --porcelain) > a; dnr init DEMO; …; diff a b` | hook | local | open |
-| P6-11 | 6 | `dnr doctor` green in DEMO (node, git, grammar ABI, hook JSON, PATH as hooks see it, kiro-cli version, board port) | `cd DEMO && dnr doctor` exits 0 | hook | needs-kiro | open |
+| P6-11 | 6 | `dnr doctor` green in DEMO (node, git, grammar ABI, hook JSON, PATH as hooks see it, kiro-cli version, board port) | `cd DEMO && dnr doctor` exits 0 | hook | needs-kiro | partial — `dnr doctor` all green except kiro-cli (not installed) |
 | P6-12 | 6 | `dnr orders verify` | `dnr orders verify --orders reports/orders` exits 0; exits 65 on a corrupted copy | hook | local | open |
 | P6-13 | 6 | Re-run `make-demo-checkout.sh` with full init | script runs `dnr init --hooks all` | kiro | local | open |
-| P6-14 | 6 | R6 process-ancestry guard and Kiro-variable check refuse approval subcommands from an agent; pass from a node-pty human terminal | `pnpm test -t 'R6 guard:'` | hook | local | open |
+| P6-14 | 6 | R6 process-ancestry guard and Kiro-variable check refuse approval subcommands from an agent; pass from a node-pty human terminal | `pnpm test -t 'R6 guard:'` | hook | local | **fails (security)** — `ancestry.test.ts` passes, but the guard can be escaped (see review-wave2 C3) |
 | P6-15 | 6 | Live: headless `git cherry-pick <C>` denied | `cd DEMO && kiro-cli chat --v3 --no-interactive --trust-all-tools "run git cherry-pick <C>"` ; `git log -1` unchanged | hook | needs-kiro | open |
 | P6-16 | 6 | Live: `sed` re-application undone by a forced Stop turn; human's pre-session tracked and untracked edits survive | scripted session; `git diff` shows only the human edits | hook | needs-kiro | open |
 | P6-17 | 6 | Live: `python -c` write that never names its file caught by `dnr-post-shell` + Stop | scripted session; event log shows `touched` + forced turn | hook | needs-kiro | open |
@@ -241,13 +241,13 @@ Run with `DNR_ORDERS=$ROOT/reports/orders`, `cwd=DEMO`.
 
 | ID | Ph | Check | Proof | Owner | Class | Status |
 |---|---|---|---|---|---|---|
-| P7-01 | 7 | Shared `ui/` with the localStorage adapter | `pnpm -F @dnr/ui test` | ui | local | open |
-| P7-02 | 7 | `dnr export-case` for both demo reverts; `CaseBundle` valid | `dnr export-case 43933a1dca --orders reports/orders --git-dir "$DJ" && pnpm test:fixtures` | ui | local | open |
+| P7-01 | 7 | Shared `ui/` with the localStorage adapter | `pnpm -F @dnr/ui test` | ui | local | **proven** — `packages/ui` with local adapter; Playwright passes |
+| P7-02 | 7 | `dnr export-case` for both demo reverts; `CaseBundle` valid | `dnr export-case 43933a1dca --orders reports/orders --git-dir "$DJ" && pnpm test:fixtures` | ui | local | partial — bundles exist; 43933a1dca lacks the paraphrase preset (M3) |
 | P7-03 | 7 | Preset sources: C; `extract-helper` seed 2000; H template by sha rule; first two files of C (omitted with reason if `c_file_count` < 2); `ruff format`/`biome format` of C | `pnpm test -t 'export-case: presets'` | ui | local | open |
-| P7-04 | 7 | Routes `/`, `/play/:case` (presets and free-edit editor), `/graveyard`, `/orders/:id` render | `playwright test --grep @P7-routes` | ui | local | open |
+| P7-04 | 7 | Routes `/`, `/play/:case` (presets and free-edit editor), `/graveyard`, `/orders/:id` render | `playwright test --grep @P7-routes` | ui | local | **proven** — `routes.spec.ts` (Firefox, WebKit) |
 | P7-05 | 7 | `/orders/view` renders a committed `django-demo-crew` order; Zod-invalid file shows the error state | `playwright test --grep @ROUTE-orders-view` | ui | needs-user | open |
-| P7-06 | 7 | P9 parity on Chromium, Firefox, WebKit | `pnpm -F @dnr/playground exec playwright test --grep @P9 --project=chromium --project=firefox --project=webkit` | ui | local | open |
-| P7-07 | 7 | axe: 0 violations | `playwright test --grep @axe` | ui | local | open |
+| P7-06 | 7 | P9 parity on Chromium, Firefox, WebKit | `pnpm -F @dnr/playground exec playwright test --grep @P9 --project=chromium --project=firefox --project=webkit` | ui | local | partial — passes on Firefox and WebKit, but compares UI engine to itself, not to the hook (M2) |
+| P7-07 | 7 | axe: 0 violations | `playwright test --grep @axe` | ui | local | **proven** — `routes.spec.ts` › A11Y-01 axe 0 on every route (Firefox, WebKit) |
 | P7-08 | 7 | Deployed to Cloudflare Pages from `main`; smoke passes on the preview URL | `gh run list -w deploy-playground.yml -L1` success ; `PLAYGROUND_URL=<preview> playwright test --grep @smoke` | ui | needs-user | open |
 | P7-09 | 7 | `_headers`: WASM as `application/wasm`; CSP with `'wasm-unsafe-eval'` and the stated `connect-src` | `grep -n wasm-unsafe-eval apps/playground/public/_headers` ; `curl -sI <url>/…wasm \| grep -i content-type` | ui | local | open |
 
@@ -294,7 +294,7 @@ Results in `reports/gate.md`.
 | P10-04 | 10 | P14, P16, P17 pass | `pnpm test -t 'P14:' -t 'P16:' -t 'P17:'` | engine | local | partial — `properties.test.ts` › P14, P17 pass; `mutate.test.ts` › P16 passes; tuning not done |
 | P10-05 | 10 | Latency re-run with index on, incl. cold-cache first write at Django scale < 2 s | re-run P5-07/P5-08 with `DNR_STATE_DIR` empty | hook | local | open |
 | P10-06 | 10 | `.dnr/config.json` frozen (commit + sha256 in prereg) | `git log -1 -- .dnr/config.json` ; `sha256sum .dnr/config.json` in `reports/preregistration.md` | trial | needs-user | open |
-| GATE-1a | 10 | Recorded events exit 2 | `for f in fixtures/hook-events/reapply-*.json; do dnr check --stdin --hook kiro < $f; test $? -eq 2; done` | hook | needs-kiro | open |
+| GATE-1a | 10 | Recorded events exit 2 | `for f in fixtures/hook-events/reapply-*.json; do dnr check --stdin --hook kiro < $f; test $? -eq 2; done` | hook | needs-kiro | **proven** (stdin replay) — exit 2; live Kiro run still needed for 1b |
 | GATE-1b | 10 | **Live headless block** on DEMO: `HEAD == start_sha` and `git add -A -N && git diff --quiet <start_sha> -- . ':!.kiro' ':!.dnr' ':!.gitignore'`; one retry with `--agent dnr-gate-1b` | `cd DEMO && kiro-cli chat --v3 --no-interactive --trust-all-tools "$(cat $ROOT/scripts/demo/prompts/write.txt)"` then the two checks | hook | needs-kiro | open |
 | GATE-1c | 10 | 1b also passes under an isolated HOME | same as 1b with `HOME=$(mktemp -d)` seeded per §9.3 | hook | needs-kiro | open |
 | GATE-1d | 10 | One event logged per write | count write-tool calls in transcript = lines in `events.jsonl` | hook | needs-kiro | open |
@@ -334,10 +334,10 @@ Results in `reports/gate.md`.
 
 | ID | Ph | Check | Proof | Owner | Class | Status |
 |---|---|---|---|---|---|---|
-| P12-01 | 12 | Board flow: approve → block → allow once → allowed → TTL expires in a new session → blocked | `playwright test --grep @board-flow` | ui | local | open |
+| P12-01 | 12 | Board flow: approve → block → allow once → allowed → TTL expires in a new session → blocked | `playwright test --grep @board-flow` | ui | local | partial — `board.spec.ts` / `board.test.ts`; not yet via real `dnr board` in node-pty |
 | P12-02 | 12 | Board flow driven through a real `dnr board` in `node-pty` (TTY and ancestry guard apply) | `playwright test --grep @board-pty` | ui | local | open |
 | P12-03 | 12 | Keyboard-only use; axe 0 | `playwright test --grep @a11y-board` | ui | local | open |
-| P12-04 | 12 | MCP SDK stdio test: `explain_function`, `list_orders_for_file`, never A/R tokens | `pnpm -F @dnr/mcp test` | hook | local | open |
+| P12-04 | 12 | MCP SDK stdio test: `explain_function`, `list_orders_for_file`, never A/R tokens | `pnpm -F @dnr/mcp test` | hook | local | **proven** — `mcp.test.ts` › P12-04 |
 | P12-05 | 12 | A live session calls `explain_function` before editing | transcript with the MCP call before the first write | hook | needs-kiro | open |
 | P12-06 | 12 | Power loads in the S9 format; skill's first step is `dnr init` unless S9 shows bundling | `kiro-cli` loads `powers/dnr` ; screenshot/log in `docs/spikes.md` | kiro | needs-kiro | open |
 | P12-07 | 12 | TS/JS support: extension table, `*.d.ts` excluded, weight-0 set, template literals, TS qualnames (overloads, namespaces, `export default`) | `pnpm test -t 'ts:'` | engine | local | partial — `qualname.test.ts` › typescript qualnames (§5.15); `tokenize.test.ts` › typescript tokens |
@@ -375,7 +375,7 @@ Results in `reports/gate.md`.
 | P13-15 | 13 | Recovery capture: Phase 12 flow against a live `kiro-cli` session with `DNR_NOW` +1 h, saved with run ID | `ls reports/video/recovery/` | ui | needs-kiro | open |
 | P13-16 | 13 | Maintainer pilot: prerequisites checked, written consent, `reports/pilot.md` + `pilot.json` (not pre-registered, never in `trial.json`) | `jq . reports/pilot.json` ; `grep -c consent reports/pilot.md` ≥ 3 | user | needs-user | open |
 | P13-17 | 13 | README#testing passes on a clean devcontainer (5 steps: Playground, live block via `write.txt`, Codespaces `dnr doctor`, `npx {{pkg}} demo`, own repo) | a fresh Codespace walkthrough log in `docs/testing.md` | kiro | needs-user | open |
-| P13-18 | 13 | `dnr demo` offline replay works with no network, no Kiro, no Django | `(unset DJANGO_SRC; dnr demo)` with networking off | hook | local | open |
+| P13-18 | 13 | `dnr demo` offline replay works with no network, no Kiro, no Django | `(unset DJANGO_SRC; dnr demo)` with networking off | hook | local | **proven** — live `dnr demo` offline |
 
 ## Phase 14: Ship
 
@@ -402,12 +402,12 @@ P6 was dropped (jsdiff). All fast-check, 500 runs locally, 2,000 nightly.
 | PROP-P7 | 4 | Unchanged post-revert file scores 0 | `pnpm test -t 'P7:'` | engine | local | **proven** — `properties.test.ts` › P7: holds in any formatting |
 | PROP-P8 | 4 | Removal-only re-application blocked for orders ≥ `min_order_weight` | `pnpm test -t 'P8:'` | engine | local | **proven** — `properties.test.ts` › P8: holds for orders whose C only removed code |
 | PROP-P9 | 7 | Browser and node builds produce identical decisions (Chromium, Firefox, WebKit) | `playwright test --grep @P9` | ui | local | open |
-| PROP-P10 | 5/6 | Grant applies only to its own order while unexpired or used; pre-commit only for matching blobs | `pnpm test -t 'P10:'` | hook | local | partial — `properties.test.ts` › P10 (own-order scope); expiry/used clause and pre-commit blobs untested (M1) |
+| PROP-P10 | 5/6 | Grant applies only to its own order while unexpired or used; pre-commit only for matching blobs | `pnpm test -t 'P10:'` | hook | local | **proven** — core + `prewrite.test.ts`/`session.test.ts` P10 incl. TTL and pre-commit blobs |
 | PROP-P11 | 10 | Held-out recall (extract-helper, invert-condition) measured; gate requires ≥ 70% | = GATE-2 | trial | needs-user | open |
-| PROP-P12 | 6 | After a re-land is committed, a later unrelated edit is allowed | `pnpm test -t 'P12:'` | hook | local | **vacuous** — `properties.test.ts` › P12 passes without the re-landed flag (H5) |
-| PROP-P13 | 6 | `ask`-approved re-land honored at Stop and pre-commit | `pnpm test -t 'P13:'` | hook | local | open |
+| PROP-P12 | 6 | After a re-land is committed, a later unrelated edit is allowed | `pnpm test -t 'P12:'` | hook | local | **proven** — `session.test.ts` › P12 (re-landed, no crossing); live |
+| PROP-P13 | 6 | `ask`-approved re-land honored at Stop and pre-commit | `pnpm test -t 'P13:'` | hook | local | **proven** — `session.test.ts` › P13; live ask flow |
 | PROP-P14 | 10 | `prox_u` = 1 for exact replay of modified and added units at any size | `pnpm test -t 'P14:'` | engine | local | **proven** — `properties.test.ts` › P14: holds at any size of C |
-| PROP-P15 | 6 | Split across two committed sessions blocked at `--staged` on the crossing commit, incl. A-heavy orders | `pnpm test -t 'P15:'` | hook | local | **proven** — `properties.test.ts` › P15: random splits incl. A-heavy |
+| PROP-P15 | 6 | Split across two committed sessions blocked at `--staged` on the crossing commit, incl. A-heavy orders | `pnpm test -t 'P15:'` | hook | local | **proven** — core + `session.test.ts` › P15 |
 | PROP-P16 | 10/12 | Moved/renamed unit (seeds 3100–3104) matched via fingerprint index, Python and TS, incl. moved + re-applied | `pnpm test -t 'P16:'` | engine | local | **proven** — `mutate.test.ts` › P16: held-out seeds 3100–3104, Python and TS |
 | PROP-P17 | 10 | `prox_u` never negative; rewrite with no shared 3-shingles has `prox_u` = 0 | `pnpm test -t 'P17:'` | engine | local | **proven** — `properties.test.ts` › P17 (both cases) |
 | PROP-REC | 4–10 | First failing property, its fix commit and re-run recorded (or "none failed") | `test -s reports/property-failures.md` | engine | local | **proven** — `reports/property-failures.md` (honest: no engine property failed) |
@@ -416,19 +416,19 @@ P6 was dropped (jsdiff). All fast-check, 500 runs locally, 2,000 nightly.
 
 | ID | Ph | Check | Proof | Owner | Class | Status |
 |---|---|---|---|---|---|---|
-| REQ-R1 | 5 | Match + `deny` → exit 2, first stderr line `DNR: <reason> <revert URL>` | `pnpm test -t 'R1:'` | hook | local | partial (core) — `django.test.ts` › an exact re-application scores 1.0 and blocks; exit code is hook wave |
-| REQ-R2 | 5 | No match, covered unit, not yet warned → one `warn_block` in the configured format | `pnpm test -t 'R2:'` | hook | local | partial (core) — `django.test.ts` › warns once, then passes |
-| REQ-R3 | 5 | Later non-matching write to same order in session allowed (`warn_pass`) | `pnpm test -t 'R3:'` | hook | local | partial (core) — same test |
-| REQ-R4 | 5 | Baseline = session snapshot tree | `pnpm test -t 'R4:'` | hook | local | open |
+| REQ-R1 | 5 | Match + `deny` → exit 2, first stderr line `DNR: <reason> <revert URL>` | `pnpm test -t 'R1:'` | hook | local | **proven** — `prewrite.test.ts` › R1; live exit 2 |
+| REQ-R2 | 5 | No match, covered unit, not yet warned → one `warn_block` in the configured format | `pnpm test -t 'R2:'` | hook | local | **proven** — `prewrite.test.ts` › R2 |
+| REQ-R3 | 5 | Later non-matching write to same order in session allowed (`warn_pass`) | `pnpm test -t 'R3:'` | hook | local | **proven** — `prewrite.test.ts` › R3 |
+| REQ-R4 | 5 | Baseline = session snapshot tree | `pnpm test -t 'R4:'` | hook | local | **proven** — `prewrite.test.ts` › R4 (incl. unborn HEAD) |
 | REQ-R5 | 4 | A and R matched separately with repeats; two-sided rule (≥ 0.3 each side) | `pnpm test -t 'R5:'` | engine | local | **proven** — `django.test.ts` › half of the re-application does not meet the two-sided rule; mutation M1 caught |
-| REQ-R6 | 5 | Protected globs denied in every format | `pnpm test -t 'R6:'` | hook | local | partial (core) — `engine.test.ts` › protect denies first; covers the plan globs |
-| REQ-R7 | 5 | Internal errors allow and log; Stop always exits 0 | `pnpm test -t 'R7:'` | hook | local | open |
-| REQ-R8 | 5 | p95 < 300 ms on the demo file | = P5-07 | hook | local | open |
-| REQ-R9 | 5 | Grant applies while unexpired or for rest of session once used; each use logged, added to `grants_used` | `pnpm test -t 'R9:'` | hook | local | partial (core) — `engine.test.ts` › grants (§5.4, P10) |
+| REQ-R6 | 5 | Protected globs denied in every format | `pnpm test -t 'R6:'` | hook | local | partial — `prewrite.test.ts` › R6; gaps (see review-wave2 H2) |
+| REQ-R7 | 5 | Internal errors allow and log; Stop always exits 0 | `pnpm test -t 'R7:'` | hook | local | **fails (security)** — per spec, but exploitable (see review-wave2 C1) |
+| REQ-R8 | 5 | p95 < 300 ms on the demo file | = P5-07 | hook | local | **proven** — `reports/perf.md` |
+| REQ-R9 | 5 | Grant applies while unexpired or for rest of session once used; each use logged, added to `grants_used` | `pnpm test -t 'R9:'` | hook | local | **proven** — `prewrite.test.ts` › R9 |
 | REQ-R10 | 4 | Stale orders only warn | `pnpm test -t 'R10:'` | engine | local | **proven** — `engine.test.ts` › stale and re-landed orders only warn |
 | REQ-R11 | 10 | Missing unit → fingerprint lookup; else warn, unless `kind=removed`/`added` (score with `[]`) | `pnpm test -t 'R11:'` | engine | local | partial — `engine.test.ts` › a missing modified unit falls to warn; fingerprint tests; missing cap not pinned (H6) |
-| REQ-R12 | 5 | Match + `ask` → exit 0, `permissionDecision: "ask"` with same reason, `pending_ask` recorded | `pnpm test -t 'R12:'` | hook | local | partial (core) — `engine.test.ts` › ask format returns ask on a match |
-| REQ-R13 | 6 | `ask`-approved write → `session confirm` creates grant; neither Stop nor pre-commit blocks the re-land | `pnpm test -t 'R13:'` + P6-18 live | hook | local | open |
+| REQ-R12 | 5 | Match + `ask` → exit 0, `permissionDecision: "ask"` with same reason, `pending_ask` recorded | `pnpm test -t 'R12:'` | hook | local | **proven** — `prewrite.test.ts` › R12; live |
+| REQ-R13 | 6 | `ask`-approved write → `session confirm` creates grant; neither Stop nor pre-commit blocks the re-land | `pnpm test -t 'R13:'` + P6-18 live | hook | local | **proven** — `session.test.ts` › R13; live |
 | REQ-R14 | 12 | Crew PR with a crossing → `dnr` fails; bot comment with order, reason, original/revert/ticket links, order file at base SHA (via `/orders/view?src=`) | = P12-14 | kiro | needs-user | open |
 | REQ-R15 | 12 | `/dnr allow <id>` → blob-matched, HMAC-signed grant, check re-run, override in `audit.jsonl` artifact | = P12-15 | kiro | needs-user | open |
 
@@ -445,7 +445,7 @@ Each row: valid example parses, one invalid example per constraint fails. Proof 
 | SCH-Session | 2 | key_source, baseline_tree, pending_ask entries, grants_used, touched, shell_snapshot, stop_forced_turns ≥ 0 | `-t 'SCH-Session:'` | engine | local | open |
 | SCH-Decision | 2 | 11 outcomes, 4 tiers, scope literal `order`, fired_by | `-t 'SCH-Decision:'` | engine | local | **proven** — `schemas.test.ts` › Decision; `schema-conformance.test.ts` › every outcome |
 | SCH-Event | 2 | `EventRecord` with 4 modes, 7 hooks, `proposed_text`, `session_patch` | `-t 'SCH-Event:'` | engine | local | open |
-| SCH-Canon | 5 | Canonical projection drops `latency_ms`, `fast_path`; sorted keys | `-t 'SCH-Canon:'` ; `dnr check --replay --canonical` stable | hook | local | open |
+| SCH-Canon | 5 | Canonical projection drops `latency_ms`, `fast_path`; sorted keys | `-t 'SCH-Canon:'` ; `dnr check --replay --canonical` stable | hook | local | **proven** — `replay` › SCH-Canon |
 | SCH-RevertCase | 3 | repo enum, match_method, tags, revert_kind, 13 reason categories, role nullable, restored_tests, env fields | `-t 'SCH-RevertCase:'` | mining | local | open |
 | SCH-Arm | 2 | `T U B S H L T2 T3 LU CE PROBE` | `-t 'SCH-Arm:'` | engine | local | open |
 | SCH-RunRecord | 2 | run_id pattern `<ns>/<arm>/<sha10>/r<k>`, 7 namespaces, `start_sha` null only for probe, l_outcome | `-t 'SCH-RunRecord:'` | engine | local | open |
@@ -479,17 +479,17 @@ Each row: valid example parses, one invalid example per constraint fails. Proof 
 | HOOK-06 | 6 | `dnr-session-start.json` (SessionStart, `dnr session start --stdin`, 10; optional) | `jq -S` compare | kiro | local | **proven** (review) — matches §6 |
 | HOOK-07 | 1 | `dev-core-tests-on-save.json` on `PostFileSave`, regex `packages/core/.*\.ts$` | file present ; fires in IDE (S14) | kiro | needs-kiro | partial — file present (`PostFileSave`, regex confirmed in kiro.dev docs); firing needs S14 |
 | HOOK-08 | 5 | Hooks load in Kiro (V3 shape `{"version":"v1","hooks":[…]}`, PascalCase triggers) | `kiro-cli` session shows the hook firing | kiro | needs-kiro | open |
-| HOOK-09 | 6 | `ask` format: exit 0 + `{"hookSpecificOutput":{"permissionDecision":"ask","permissionDecisionReason":…}}`; protect tier always denies | `pnpm test -t 'format: ask'` | hook | local | open |
+| HOOK-09 | 6 | `ask` format: exit 0 + `{"hookSpecificOutput":{"permissionDecision":"ask","permissionDecisionReason":…}}`; protect tier always denies | `pnpm test -t 'format: ask'` | hook | local | **proven** — live ask JSON, exit 0 |
 | HOOK-10 | 6 | If S8 says no PATH inheritance, `dnr init` writes absolute `dnr` path into each command | `pnpm test -t 'init: abs path'` | hook | needs-kiro | open |
-| HOOK-11 | 6 | Pre-commit hook is `exec dnr check --staged`, installed only when none exists | `pnpm test -t 'init: pre-commit'` | hook | local | open |
-| EXIT-01 | 5 | Hook `deny`: 0 allow (incl. every internal error), 2 block | `pnpm test -t 'exit: deny'` | hook | local | open |
-| EXIT-02 | 5 | Hook `ask`: always 0 | `pnpm test -t 'exit: ask'` | hook | local | open |
-| EXIT-03 | 6 | `--hook stop`: always 0 (forced turn via JSON) | `pnpm test -t 'exit: stop'` | hook | local | open |
-| EXIT-04 | 5 | Other commands: 0 clean, 1 findings, 64 usage, 65 Zod-invalid, 69 dependency missing, 70 internal | `pnpm test -t 'exit: codes'` | hook | local | open |
+| HOOK-11 | 6 | Pre-commit hook is `exec dnr check --staged`, installed only when none exists | `pnpm test -t 'init: pre-commit'` | hook | local | **proven** — live: pre-commit is `exec dnr check --staged` |
+| EXIT-01 | 5 | Hook `deny`: 0 allow (incl. every internal error), 2 block | `pnpm test -t 'exit: deny'` | hook | local | **proven** — live 0/2 |
+| EXIT-02 | 5 | Hook `ask`: always 0 | `pnpm test -t 'exit: ask'` | hook | local | **proven** — live 0 |
+| EXIT-03 | 6 | `--hook stop`: always 0 (forced turn via JSON) | `pnpm test -t 'exit: stop'` | hook | local | **proven** — live 0 |
+| EXIT-04 | 5 | Other commands: 0 clean, 1 findings, 64 usage, 65 Zod-invalid, 69 dependency missing, 70 internal | `pnpm test -t 'exit: codes'` | hook | local | partial — 1 and 64 seen; `trial mine --help` gives 70 (L1) |
 | EXIT-05 | 9 | `dnr trial *` exits 1 when any run is not `ok`, listing them on stderr | `pnpm test -t 'exit: trial'` | trial | local | open |
 | CFG-01 | 2 | `.dnr/config.json` defaults exactly as §7 | `pnpm -F @dnr/schemas test -t 'config:'` | engine | local | **proven** — `schemas.test.ts` › DnrConfig fills the §7 defaults and is strict |
-| CFG-02 | 5 | Lookup: `DNR_CONFIG` → `<repo>/.dnr/config.json` → defaults; `DNR_MODE` overrides `mode`; `DNR_THRESHOLD` overrides threshold | `pnpm test -t 'config: lookup'` | hook | local | open |
-| CFG-03 | 5 | Env vars `DNR_ORDERS`, `DNR_STATE_DIR`, `DNR_RECORD_PATH`, `DNR_NOW`, `DNR_DEBUG` honored | `pnpm test -t 'env:'` | hook | local | open |
+| CFG-02 | 5 | Lookup: `DNR_CONFIG` → `<repo>/.dnr/config.json` → defaults; `DNR_MODE` overrides `mode`; `DNR_THRESHOLD` overrides threshold | `pnpm test -t 'config: lookup'` | hook | local | **proven** — `prewrite.test.ts` › config lookup |
+| CFG-03 | 5 | Env vars `DNR_ORDERS`, `DNR_STATE_DIR`, `DNR_RECORD_PATH`, `DNR_NOW`, `DNR_DEBUG` honored | `pnpm test -t 'env:'` | hook | local | **proven** — `prewrite.test.ts` › env |
 | CFG-04 | 5 | Only `.dnr/orders/` and `.dnr/config.json` are committed; everything else under `.dnr/` ignored | `git check-ignore .dnr/grants/x .dnr/events.jsonl .dnr/board.json .dnr/drafts/x` all ignored ; `.dnr/orders/x` not | kiro | local | **proven** — `git check-ignore` ignores grants/events/board/drafts, keeps orders and config |
 
 ## CLI commands (04 §8)
@@ -501,7 +501,7 @@ Each command exists, prints help, and returns 64 on bad usage. Behavioural check
 | CLI-init | 5/6 | `dnr init [repo] [--mode] [--decision-format] [--hooks pre-write\|all] [--crew] [--force]` | `dnr init --help` ; P5-12, P6-09/10, P13-09 | hook | local | open |
 | CLI-doctor | 6 | `dnr doctor` | P6-11 | hook | needs-kiro | open |
 | CLI-scan | 12 | `dnr scan [--branch --since --until --lang --fetch-tickets --out]` | P12-12 | mining | local | open |
-| CLI-demo | 13 | `dnr demo` | P13-18 | hook | local | open |
+| CLI-demo | 13 | `dnr demo` | P13-18 | hook | local | **proven** — live `dnr demo` |
 | CLI-relocate | 10 | `dnr orders relocate --orders [--git-dir]` | P10-07 | engine | local | open |
 | CLI-build | 4 | `dnr orders build [--from] [--only] [--out-dir] [--git-dir]` | P4-04, P4-07 | engine | local | open |
 | CLI-orders | 4 | `dnr orders list\|show [--tokens]\|approve [--all]\|retire\|unretire\|edit\|reapprove\|verify [--orders] [--by]` | `pnpm test -t 'cli: orders'` | hook | local | open |
@@ -541,7 +541,7 @@ Each command exists, prints help, and returns 64 on bad usage. Behavioural check
 | ROUTE-04 | 7 | `/orders/view?src=`: only `raw.githubusercontent.com`; Zod-validated; error state | `--grep @ROUTE-04` | ui | local | open |
 | ROUTE-05 | 7 | `/graveyard` headstones: epitaph (reason), birth (commit), death (revert), links; every element has a text label | `--grep @ROUTE-05` | ui | local | open |
 | ROUTE-06 | 7 | `/orders/:id` with history and audit panel (history, grants with uses and expiry, Crew overrides) | `--grep @ROUTE-06` | ui | local | open |
-| ROUTE-07 | 13 | `/trial` Trial Explorer: headline lines, per-arm tables, per-run diff, timeline, labels, tests, decision, false alarms, pins, prereg hash; Recompute in browser matches `trial.json` | `--grep @ROUTE-07` | ui | needs-trial-data | open |
+| ROUTE-07 | 13 | `/trial` Trial Explorer: headline lines, per-arm tables, per-run diff, timeline, labels, tests, decision, false alarms, pins, prereg hash; Recompute in browser matches `trial.json` | `--grep @ROUTE-07` | ui | needs-trial-data | partial — sample data shown with banner (M4) |
 | ROUTE-08 | 13 | `/replay`: paste PreToolUse stdin or pick a fixture → decision | `--grep @ROUTE-08` | ui | local | open |
 | ROUTE-09 | 13 | `/kiro`: each Kiro feature → file → what it changed | `--grep @ROUTE-09` | ui | local | open |
 | ROUTE-10 | 7 | Hosted `/orders/:id?board=<port>`: probe board `/api/health`; success → navigate to returned origin; failure → read-only demo orders or banner for unknown IDs | = P13-10…13 | ui | local | open |
@@ -559,15 +559,15 @@ Each command exists, prints help, and returns 64 on bad usage. Behavioural check
 | API-02 | 12 | `GET /api/orders` (effective status + drift flag), `GET /api/orders/:id`, `GET …/diff`, `GET /api/events?order=` | `-t 'API-02:'` | ui | local | open |
 | API-03 | 12 | `PATCH /api/orders/:id {status?, reason?}` → 409 on invalid transition | `-t 'API-03:'` | ui | local | open |
 | API-04 | 12 | `POST …/allow-once {ttl}` creates a session grant; `POST …/reapprove` rebases snapshot | `-t 'API-04:'` | ui | local | open |
-| AUTH-01 | 12 | Launch nonce single-use, expires at 60 s; reused or expired refused | `-t 'AUTH-01:'` | ui | local | open |
+| AUTH-01 | 12 | Launch nonce single-use, expires at 60 s; reused or expired refused | `-t 'AUTH-01:'` | ui | local | **proven** — `board.test.ts` |
 | AUTH-02 | 12 | `*.localhost` probe → per-launch host; Safari/failed probe → `127.0.0.1`; `--host 127.0.0.1` forces it | `playwright --grep @AUTH-02` (3 engines) | ui | local | open |
-| AUTH-03 | 12 | Bad `Host` → 421 (DNS rebinding) | `-t 'AUTH-03:'` | ui | local | open |
-| AUTH-04 | 12 | Cookie `dnr_<port>_<rand>`, `HttpOnly; SameSite=Strict; Path=/api`, rotates per launch | `-t 'AUTH-04:'` | ui | local | open |
-| AUTH-05 | 12 | No cookie → 401 on every `/api/*` except health and ping | `-t 'AUTH-05:'` | ui | local | open |
-| AUTH-06 | 12 | Mutating route with missing or foreign `Origin` → 403 | `-t 'AUTH-06:'` | ui | local | open |
-| AUTH-07 | 12 | Mutating route without `X-DNR-CSRF: 1` → 403 | `-t 'AUTH-07:'` | ui | local | open |
-| AUTH-08 | 12 | Nonce never printed or written to stderr | `dnr board 2>&1 \| grep -c 'n='` = 0 | ui | local | open |
-| AUTH-09 | 12 | R7: board's live port in `$DNR_STATE_DIR/board.json` covered by guard-shell; other localhost ports allowed | `pnpm test -t 'R7 port:'` | hook | local | open |
+| AUTH-03 | 12 | Bad `Host` → 421 (DNS rebinding) | `-t 'AUTH-03:'` | ui | local | **proven** — `board.test.ts` |
+| AUTH-04 | 12 | Cookie `dnr_<port>_<rand>`, `HttpOnly; SameSite=Strict; Path=/api`, rotates per launch | `-t 'AUTH-04:'` | ui | local | **proven** — code + `board.test.ts` |
+| AUTH-05 | 12 | No cookie → 401 on every `/api/*` except health and ping | `-t 'AUTH-05:'` | ui | local | **proven** — `board.test.ts` |
+| AUTH-06 | 12 | Mutating route with missing or foreign `Origin` → 403 | `-t 'AUTH-06:'` | ui | local | **proven** — `board.test.ts` |
+| AUTH-07 | 12 | Mutating route without `X-DNR-CSRF: 1` → 403 | `-t 'AUTH-07:'` | ui | local | **proven** — `board.test.ts` |
+| AUTH-08 | 12 | Nonce never printed or written to stderr | `dnr board 2>&1 \| grep -c 'n='` = 0 | ui | local | **fails** — nonce is in the browser-open argv (see review-wave2 H4) |
+| AUTH-09 | 12 | R7: board's live port in `$DNR_STATE_DIR/board.json` covered by guard-shell; other localhost ports allowed | `pnpm test -t 'R7 port:'` | hook | local | **proven** — `shell.test.ts` › R7 port |
 | DEPLOY-01 | 7 | GitHub Pages mirror serves WASM (no custom CSP) | `curl -sI https://<you>.github.io/dnr/… \| grep application/wasm` | ui | needs-user | open |
 
 ## Kiro artifacts (05 §12.2–12.5)
@@ -653,16 +653,16 @@ Each command exists, prints help, and returns 64 on bad usage. Behavioural check
 
 (Counted with `awk '/^## Row counts/{exit} 1' docs/acceptance-matrix.md | grep -oE '[|] (local|needs-kiro|needs-user|needs-trial-data) [|] [^|]* [|]$' | awk '{print $2}' | sort | uniq -c`; re-run after edits.)
 
-**Status after wave 1 (`59f5040`, reviewed Nov 26):**
+**Status after wave 2 (`5b62bb3`, reviewed Nov 26, clean clone):**
 
 | Status | Rows |
 |---|---:|
-| proven | 49 |
-| partial (incl. 1 proven in review only) | 32 |
-| fails or vacuous | 7 |
-| open | 359 |
+| proven | 101 |
+| partial (incl. 1 proven in review only) | 31 |
+| fails (10, 4 of them security findings) | 10 |
+| open | 305 |
 
-These "proven" rows pass in the **working tree only**. On a clean checkout of `59f5040`, typecheck and 6 test files fail because `packages/schemas/src/trial-inputs.ts` is untracked. Until that file is committed, no row is proven at the commit itself. Details: [docs/review-wave1.md](review-wave1.md), finding C1.
+The rows now pass on a clean clone; wave 1's C1 is fixed. The four security failures (P5-06, P6-14, REQ-R7, AUTH-08) and P6-04 are explained in [docs/review-wave2.md](review-wave2.md). Wave 1 history: [docs/review-wave1.md](review-wave1.md).
 
 ---
 
