@@ -17,6 +17,7 @@ export {
   checkStaged,
   checkWorktree,
   crossingCheck,
+  stagedOrderWeakening,
 } from './commit';
 export {
   baseDecision,
@@ -39,7 +40,8 @@ export {
 } from './engine';
 export { type HookEvent, parseHookEvent, StdinError, shellCommandOf } from './event';
 export { failOpen } from './failopen';
-export { grantOrigin } from './grant-origin';
+export { grantOrigin, launchMarkers } from './grant-origin';
+export { bundleSha256, type InstallRecord, installGlobs, installMismatch, installRoot } from './install';
 export {
   blockText,
   cap,
@@ -49,6 +51,7 @@ export {
   stopReason,
   warnMessage,
 } from './messages';
+export { orderSetAt, weakenedBetween } from './order-history';
 export { loadEntries } from './orders';
 export { postShellCheck, postShellReason } from './post-shell';
 export {
@@ -80,5 +83,14 @@ export {
 } from './shell';
 export { isDnr, parseCommands, type SimpleCommand } from './shell-parse';
 export { runStop, scoreTouched, tamperFindings } from './stop';
-export { coverageOf, loadTrusted, parseConfigText, type TrustedState } from './trusted';
+export {
+  coverageOf,
+  loadTrusted,
+  openTamper,
+  parseConfigText,
+  readTamper,
+  type TamperFlag,
+  type TrustedState,
+} from './trusted';
 export { DNR_VERSION } from './version';
+export { clearViolation, readViolations, recordViolation, type Violation } from './violations';

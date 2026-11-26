@@ -21,7 +21,7 @@ import {
 } from '@dnr/store';
 import { createPatch } from 'diff';
 import type { HookEvent } from './event';
-import { loadTrusted, type TrustedState } from './trusted';
+import { loadTrusted, openTamper, type TrustedState, writeSessionOrders } from './trusted';
 import { DNR_VERSION } from './version';
 
 export type HookName = EventRecord['hook'];
@@ -70,7 +70,11 @@ export function caseInsensitive(repoRoot: string): boolean {
   return ci;
 }
 
-export async function openContext(cwd: string, env: NodeJS.ProcessEnv): Promise<HookContext | null> {
+export async function openContext(
+  cwd: string,
+  env: NodeJS.ProcessEnv,
+  sessionKey: string | null = null,
+): Promise<HookContext | null> {
   const found = findRepoRoot(cwd);
   if (!found) return null;
   let repoRoot = found;
@@ -82,9 +86,22 @@ export async function openContext(cwd: string, env: NodeJS.ProcessEnv): Promise<
     repoRoot,
     ordersDir: store.paths.ordersDir,
     configFile: store.paths.configFile,
+    stateDir: store.paths.stateDir,
+    attestedFile: store.paths.attestedFile,
     env,
+    sessionKey,
   });
   if (trusted.configIssue) hookLog(store.paths.hookLog, `config: ${trusted.configIssue}`);
+  // Wave-3 N1/N3: weakened orders and a broken repository open the persistent tamper flag.
+  const tamper = [
+    ...trusted.weakened.map((id) => `order ${id} was removed or weakened without a human-attested change`),
+    ...(trusted.gitBroken ? [`the git repository is unusable: ${trusted.gitBroken}`] : []),
+  ];
+  const held = trusted.weakened
+    .map((id) => trusted.orders.get(id))
+    .filter((o): o is NonNullable<typeof o> => !!o);
+  const fresh = openTamper(store.paths.stateDir, tamper, new Date(nowMs(env)).toISOString(), held);
+  for (const f of fresh) hookLog(store.paths.hookLog, `tamper: ${f}`);
   return {
     env,
     repoRoot,
@@ -219,6 +236,13 @@ export async function prepareSession(
         async () => (await headTree(ctx.repoRoot)) ?? EMPTY_TREE,
       );
     }
+    writeSessionOrders(
+      ctx.store.paths.stateDir,
+      key.key,
+      ctx.trusted.headSha,
+      ctx.trusted.orders.values(),
+      [...ctx.trusted.sources.committed.values()].filter((o) => o.status === 'approved').map((o) => o.id),
+    );
     s = newSession({
       key,
       baseline_tree: baseline,

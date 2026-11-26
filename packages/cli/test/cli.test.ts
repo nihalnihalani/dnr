@@ -34,7 +34,8 @@ function io(
 ): CliIO & { buf: { out: string; err: string } } {
   const buf = { out: '', err: '' };
   return {
-    env: opts.env ?? envFor({ dir: cwd } as never),
+    env: { TERM: 'xterm-256color', ...(opts.env ?? envFor({ dir: cwd } as never)) },
+    isTTY: opts.isTTY ?? (() => true),
     cwd,
     readStdin: async () => opts.stdin ?? '',
     out: (s) => {
@@ -46,6 +47,7 @@ function io(
     guard: opts.guard ?? (() => ({ ok: true })),
     scriptPath: opts.scriptPath ?? '/usr/local/lib/node_modules/dnr-guard/dist/cli.js',
     ...(opts.draftRunner ? { draftRunner: opts.draftRunner } : {}),
+    ...(opts.prompt ? { prompt: opts.prompt } : {}),
     processChain: opts.processChain ?? (() => []),
     buf,
   };
@@ -408,7 +410,9 @@ describe('init', () => {
       });
       expect(readFileSync(join(repo.dir, '.gitignore'), 'utf8')).toContain('!.dnr/orders/');
       const pc = join(repo.dir, '.git', 'hooks', 'pre-commit');
-      expect(readFileSync(pc, 'utf8')).toContain('exec dnr check --staged');
+      expect(readFileSync(pc, 'utf8')).toMatch(
+        /^exec \S*node\S* \/usr\/local\/lib\/node_modules\/dnr-guard\/dist\/cli\.js check --staged$/m,
+      );
       expect(statSync(pc).mode & 0o111).not.toBe(0);
       expect(readFileSync(join(repo.dir, '.kiro', 'steering', 'dnr.md'), 'utf8')).toContain(
         'inclusion: always',
@@ -477,15 +481,68 @@ describe('init', () => {
     }
   });
 
-  it('init: abs path writes the absolute dnr path into every hook when asked', async () => {
+  it('N2: init writes absolute node + cli.js paths into every hook and records the bundle sha256', async () => {
     const repo = makeRepo();
     try {
-      await dnr(repo.dir, ['init', '--absolute-paths'], {
-        scriptPath: '/opt/dnr/dist/cli.js',
-        env: { ...envFor(repo), PATH: '/nonexistent' },
+      const { mkdirSync, writeFileSync: wf } = await import('node:fs');
+      const dist = join(repo.dir, '.home', 'pkg', 'dist');
+      mkdirSync(dist, { recursive: true });
+      wf(join(dist, 'cli.js'), '// bundle\n');
+      wf(join(dist, 'chunk-a.js'), '// chunk\n');
+      await dnr(repo.dir, ['init', '--no-permissions'], { scriptPath: join(dist, 'cli.js') });
+      const realDist = require('node:fs').realpathSync.native(dist);
+      for (const h of DNR_HOOKS) {
+        const j = JSON.parse(readFileSync(join(repo.dir, '.kiro', 'hooks', `${h.name}.json`), 'utf8'));
+        expect(j.hooks[0].action.command, h.name).toBe(
+          `${process.execPath} ${join(realDist, 'cli.js')}${h.command.slice(3)}`,
+        );
+      }
+      const inst = JSON.parse(readFileSync(join(repo.dir, '.dnr', 'install.json'), 'utf8'));
+      expect(inst.sha256).toMatch(/^[0-9a-f]{64}$/);
+      expect((await dnr(repo.dir, ['doctor'])).out).toMatch(/ok\s+bundle integrity/);
+      // Tampering with any file of the bundle is reported by doctor and by Stop.
+      wf(join(dist, 'chunk-a.js'), 'process.exit(0)\n');
+      expect((await dnr(repo.dir, ['doctor'])).out).toMatch(
+        /FAIL bundle integrity .*changed since `dnr init`/,
+      );
+      const st = await dnr(repo.dir, ['check', '--worktree', '--hook', 'stop'], {
+        stdin: JSON.stringify({ hook_event_name: 'Stop', cwd: repo.dir, session_id: 's' }),
       });
-      const j = JSON.parse(readFileSync(join(repo.dir, '.kiro', 'hooks', 'dnr-pre-write.json'), 'utf8'));
-      expect(j.hooks[0].action.command).toBe('/opt/dnr/dist/cli.js check --stdin --hook kiro');
+      expect(JSON.parse(st.out).reason).toContain("DNR's installation was modified");
+    } finally {
+      repo.cleanup();
+    }
+  });
+
+  it('N2: init offers Kiro deny rules for ~/.kiro/settings/permissions.yaml, merges without clobbering, and needs a y at the TTY', async () => {
+    const repo = makeRepo();
+    try {
+      const { mkdirSync, writeFileSync: wf } = await import('node:fs');
+      const settings = join(repo.dir, '.home', '.kiro', 'settings');
+      mkdirSync(settings, { recursive: true });
+      const file = join(settings, 'permissions.yaml');
+      wf(file, 'rules:\n  - capability: web_fetch\n    match: ["*"]\n    effect: ask\n');
+      const no = await dnr(repo.dir, ['init'], { prompt: async () => 'n' });
+      expect(no.out).toContain('DNR would add Kiro deny rules');
+      expect(readFileSync(file, 'utf8')).not.toContain('dnr-guard: begin');
+      expect((await dnr(repo.dir, ['doctor'])).out).toMatch(/FAIL kiro permissions/);
+      await dnr(repo.dir, ['init'], { prompt: async () => 'y' });
+      const text = readFileSync(file, 'utf8');
+      expect(text).toContain('capability: web_fetch'); // the user's rule survives
+      expect(text).toContain('# dnr-guard: begin');
+      expect(text).toContain('".dnr/**", "**/.dnr/**", ".git/**", "**/.git/**"');
+      expect(text).toContain('"git commit --no-verify*"');
+      expect((await dnr(repo.dir, ['doctor'])).out).toMatch(/ok\s+kiro permissions/);
+      // Idempotent: a second init changes nothing and does not ask.
+      let asked = false;
+      await dnr(repo.dir, ['init'], {
+        prompt: async () => {
+          asked = true;
+          return 'y';
+        },
+      });
+      expect(asked).toBe(false);
+      expect(readFileSync(file, 'utf8')).toBe(text);
     } finally {
       repo.cleanup();
     }
@@ -509,6 +566,8 @@ describe('init', () => {
       expect(y).toContain('uses: acme/dnr-crew/.github/workflows/dnr.yml@v1');
       expect(y).toContain(`DNR_BOT_APP_KEY: ${'$'}{{ secrets.DNR_BOT_APP_KEY }}`);
       expect(y).toContain('dnr-grants');
+      expect(y).toContain('types: [opened, synchronize, reopened, edited]');
+      expect(y).toMatch(/permissions:\n {2}contents: read\njobs:/);
     } finally {
       repo.cleanup();
     }
@@ -661,11 +720,14 @@ describe('event records from the CLI', () => {
 });
 
 describe('board', () => {
-  it('H4: board keeps the nonce out of argv (0600 temp launch file, deleted after use) and never prints it', async () => {
+  it('N7: board keeps the nonce out of argv and out of the launch file (one-shot loopback redirect, file deleted on first use)', async () => {
     fx = await revertFixture();
     const i = io(fx.repo.dir);
     let opened = '';
     let launchText = '';
+    let goStatus = 0;
+    let goLocation = '';
+    let secondStatus = '';
     let launchMode = 0;
     let health: unknown = null;
     let rows: unknown = null;
@@ -677,6 +739,13 @@ describe('board', () => {
         launchMode = statSync(u).mode;
       },
       untilExit: async () => {
+        const go = /location\.replace\("([^"]+)"\)/.exec(launchText)?.[1] as string;
+        const r1 = await fetch(go, { redirect: 'manual' });
+        goStatus = r1.status;
+        goLocation = r1.headers.get('location') ?? '';
+        secondStatus = await fetch(go, { redirect: 'manual' })
+          .then((r) => String(r.status))
+          .catch(() => 'refused');
         const b = JSON.parse(readFileSync(join(fx?.repo.dir as string, '.dnr', 'board.json'), 'utf8'));
         health = await (await fetch(`http://127.0.0.1:${b.port}/api/health`)).json();
         const { createBoardStore } = await import('../src/board-store');
@@ -690,58 +759,84 @@ describe('board', () => {
     });
     expect(code).toBe(0);
     expect(i.buf.out + i.buf.err).not.toContain('n=');
-    expect(launchText).toMatch(/\/launch\?n=/);
+    expect(launchText).not.toContain('n='); // the file holds only a one-shot loopback URL
     expect(launchMode & 0o077).toBe(0);
-    expect(existsSync(opened)).toBe(false); // deleted after use
+    expect(goStatus).toBe(302);
+    expect(goLocation).toMatch(/\/launch\?n=/);
+    expect(secondStatus).toBe('refused');
+    expect(existsSync(opened)).toBe(false); // deleted on first use
     expect(health).toHaveProperty('version');
     expect(rows).toEqual([{ order: fx.order, effective: 'approved', drift: false }]);
     expect(existsSync(join(fx.repo.dir, '.dnr', 'board.json'))).toBe(false);
   });
 });
 
-describe('grant provenance (wave-2 C3/H4)', () => {
-  it('C3: a grant made while an agent session is active is flagged suspect in `dnr orders show` and in the Stop report', async () => {
+describe('grant provenance (wave-2 C3/H4, wave-3 N5)', () => {
+  it('N5: a human in their own terminal is not flagged just because an agent session is open', async () => {
     fx = await revertFixture();
     const d = fx.repo.dir;
-    // An agent session is live.
     await dnr(d, ['check', '--stdin', '--hook', 'kiro'], { stdin: writeEvent(fx.repo, 'notes.txt', 'n\n') });
-    const r = await dnr(d, ['allow', fx.order.id], { processChain: () => [] });
+    const r = await dnr(d, ['allow', fx.order.id], {
+      processChain: () => [
+        { pid: 500, ppid: 400, command: '-zsh' },
+        { pid: 400, ppid: 1, command: '/usr/bin/login -pfl me' },
+      ],
+    });
     expect(r.code).toBe(0);
-    expect(r.err).toContain('flagged suspect');
     const g = JSON.parse(readFileSync(join(d, '.dnr', 'grants', `${fx.order.id}.pending.json`), 'utf8'));
-    expect(g.origin).toMatchObject({ via: 'cli', suspect: true });
-    expect(g.origin.markers.some((m: string) => m.startsWith('active-session:'))).toBe(true);
+    expect(g.origin).toEqual({ via: 'cli', suspect: false, markers: [] });
+  });
+
+  it('N5: a grant made by a process with agent markers is suspect and does not apply until a human confirms it', async () => {
+    fx = await revertFixture();
+    const d = fx.repo.dir;
+    // The C3 escape: a double-forked daemon opens its own pty with `bash -i` (parent: launchd).
+    const r = await dnr(d, ['allow', fx.order.id], {
+      env: envFor(fx.repo, { KIRO_SESSION_ID: 'x' }),
+      processChain: () => [
+        { pid: 700, ppid: 1, command: 'bash -i' },
+        { pid: 1, ppid: 0, command: '/sbin/launchd' },
+      ],
+    });
+    expect(r.code).toBe(0); // the injected guard is fooled, as the double fork fools the real one
+    expect(r.err).toContain('does not apply until a human confirms it');
+    const g = JSON.parse(readFileSync(join(d, '.dnr', 'grants', `${fx.order.id}.pending.json`), 'utf8'));
+    expect(g.origin.suspect).toBe(true);
+    expect(g.origin.markers).toEqual(expect.arrayContaining(['env:KIRO_SESSION_ID', 'shell-host:launchd']));
     expect((await dnr(d, ['orders', 'show', fx.order.id])).out).toContain('SUSPECT');
-    // The live session claims it; Stop reports it.
-    await dnr(d, ['check', '--stdin', '--hook', 'kiro'], { stdin: writeEvent(fx.repo, 'notes.txt', 'm\n') });
+    // Not applied: the re-application is still blocked, and Stop reports the suspect grant.
+    const w = await dnr(d, ['check', '--stdin', '--hook', 'kiro'], {
+      stdin: writeEvent(fx.repo, 'shop.py', AFTER),
+    });
+    expect(w.code).toBe(2);
     const st = await dnr(d, ['check', '--worktree', '--hook', 'stop'], {
       stdin: JSON.stringify({ hook_event_name: 'Stop', cwd: d, session_id: 'sess-1' }),
     });
     expect(JSON.parse(st.out).reason).toContain(`grant for ${fx.order.id} is suspect`);
+    // A human confirms it; now it applies.
+    expect((await dnr(d, ['allow', '--confirm', fx.order.id])).code).toBe(0);
+    const w2 = await dnr(d, ['check', '--stdin', '--hook', 'kiro'], {
+      stdin: writeEvent(fx.repo, 'shop.py', AFTER),
+    });
+    expect(w2.code).toBe(0);
+    expect(
+      (await dnr(d, ['allow', '--confirm', fx.order.id], { guard: () => ({ ok: false, reason: 'agent' }) }))
+        .code,
+    ).toBe(64);
   });
 
-  it('C3: a grant made with no agent session active and no agent markers is not suspect', async () => {
+  it('N5: no TTY, a cleared environment and a kiro-cli ancestor are each recorded as markers', async () => {
     fx = await revertFixture();
-    const r = await dnr(fx.repo.dir, ['allow', fx.order.id], { processChain: () => [] });
+    const r = await dnr(fx.repo.dir, ['allow', fx.order.id], {
+      env: { PATH: process.env.PATH ?? '' },
+      isTTY: () => false,
+      processChain: () => [{ pid: 9, ppid: 1, command: '/usr/local/bin/kiro-cli chat' }],
+    });
     expect(r.code).toBe(0);
     const g = JSON.parse(
       readFileSync(join(fx.repo.dir, '.dnr', 'grants', `${fx.order.id}.pending.json`), 'utf8'),
     );
-    expect(g.origin).toEqual({ via: 'cli', suspect: false, markers: [] });
-  });
-
-  it('C3: agent markers (Kiro env, a kiro-cli ancestor) are recorded even when the guard is fooled', async () => {
-    fx = await revertFixture();
-    const r = await dnr(fx.repo.dir, ['allow', fx.order.id], {
-      env: envFor(fx.repo, { KIRO_SESSION_ID: 'x' }),
-      processChain: () => [{ pid: 9, ppid: 1, command: '/usr/local/bin/kiro-cli chat' }],
-    });
-    expect(r.code).toBe(0); // the injected guard says ok, as a double-forked process would make it
-    const g = JSON.parse(
-      readFileSync(join(fx.repo.dir, '.dnr', 'grants', `${fx.order.id}.pending.json`), 'utf8'),
-    );
-    expect(g.origin.suspect).toBe(true);
-    expect(g.origin.markers).toEqual(expect.arrayContaining(['env:KIRO_SESSION_ID', 'ancestor:kiro-cli']));
+    expect(g.origin.markers).toEqual(expect.arrayContaining(['no-tty', 'cleared-env', 'ancestor:kiro-cli']));
   });
 });
 
@@ -818,5 +913,49 @@ describe('trial falsealarm (wave-2 M5)', () => {
     const r = await dnr(fx.repo.dir, ['trial', 'mine', '--help']);
     expect(r.code).toBe(0);
     expect(r.err).not.toContain('at ');
+  });
+});
+
+describe('tamper and demo (wave-3)', () => {
+  it('N3: `dnr tamper accept` (human-only) shows the findings and diff, attests the working copy and closes the flag', async () => {
+    fx = await revertFixture();
+    const d = fx.repo.dir;
+    await dnr(d, ['check', '--stdin', '--hook', 'kiro'], { stdin: writeEvent(fx.repo, 'notes.txt', 'n\n') });
+    const f = join(d, '.dnr', 'orders', `${fx.order.id}.json`);
+    writeFileSync(f, readFileSync(f, 'utf8').replace('"status": "approved"', '"status": "retired"'));
+    // Still enforced (the session-start set and the tamper flag hold it).
+    expect(
+      (await dnr(d, ['check', '--stdin', '--hook', 'kiro'], { stdin: writeEvent(fx.repo, 'shop.py', AFTER) }))
+        .code,
+    ).toBe(2);
+    const show = await dnr(d, ['tamper', 'show']);
+    expect(show.code).toBe(1);
+    expect(show.out).toContain(`order ${fx.order.id} was removed or weakened`);
+    expect((await dnr(d, ['tamper', 'accept'], { guard: () => ({ ok: false, reason: 'agent' }) })).code).toBe(
+      64,
+    );
+    const acc = await dnr(d, ['tamper', 'accept']);
+    expect(acc.code).toBe(0);
+    expect(acc.out).toContain('working copy says retired');
+    expect((await dnr(d, ['tamper', 'show'])).out).toContain('no open tamper findings');
+    // The human's acceptance now stands: a new session no longer enforces the retired order.
+    expect(
+      (
+        await dnr(d, ['check', '--stdin', '--hook', 'kiro'], {
+          stdin: writeEvent(fx.repo, 'shop.py', AFTER, 'sess-new'),
+        })
+      ).code,
+    ).toBe(0);
+  });
+
+  it('demo: with no real recorded Kiro session bundled, `dnr demo` says so and exits 69; `--live` runs the real hook offline', async () => {
+    fx = await revertFixture();
+    const r = await dnr(fx.repo.dir, ['demo']);
+    expect(r.code).toBe(69);
+    expect(r.err).toContain('no recorded Kiro session is bundled yet');
+    const live = await dnr(fx.repo.dir, ['demo', '--live']);
+    expect(live.code).toBe(0);
+    expect(live.out).toContain('Live check (not a recording)');
+    expect(live.out).toContain('DNR order dnr-43933a1dca matched (edit 1.00 ≥ 0.60) in Query.clear_ordering');
   });
 });

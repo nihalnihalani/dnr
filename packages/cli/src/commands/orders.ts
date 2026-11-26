@@ -15,7 +15,7 @@ import {
   unitWeights,
 } from '@dnr/core';
 import { headCommit, resolveCommit, treeDiffNames } from '@dnr/git';
-import { BlobReader, filesOf, type HookContext, loadParser } from '@dnr/hook';
+import { BlobReader, filesOf, type HookContext, loadParser, readViolations } from '@dnr/hook';
 import { Order, RevertCase, ScanCandidate } from '@dnr/schemas';
 import { nowIso, OrderStore, TransitionError } from '@dnr/store';
 import { z } from 'zod';
@@ -252,6 +252,11 @@ export async function cmdOrders(argv: string[], io: CliIO): Promise<number> {
         `w(A)+w(R) = ${w} ${w >= ctx.config.min_order_weight ? '≥' : '<'} min_order_weight ${ctx.config.min_order_weight}\n`,
       );
       for (const h of o.history) io.out(`history ${h.at} ${h.action} by ${h.by}\n`);
+      const viol = readViolations(ctx.store.paths.stateDir)[o.id];
+      if (viol && eff === 'violated')
+        io.out(
+          `VIOLATED: commit ${viol.commit} re-applied this order during an agent session without a grant (${viol.at}); it is still enforced\n`,
+        );
       for (const g of await ctx.store.grants.list(o.id))
         io.out(
           `grant ${g.kind} via ${g.origin?.via ?? 'unknown'} by ${g.granted_by} at ${g.granted_at} (expires ${g.expires_at}, ${g.used.length} use(s))${g.origin?.suspect ? ` SUSPECT: made while an agent session was active (${g.origin.markers.join(', ')})` : ''}\n`,

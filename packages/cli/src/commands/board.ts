@@ -4,8 +4,11 @@
  * for guard-shell R7, and opens the launch URL. The launch URL holds the nonce and is never printed.
  */
 import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DNR_VERSION } from '@dnr/hook';
@@ -23,21 +26,59 @@ function defaultOpen(target: string): void {
 }
 
 /**
- * Wave-2 H4: the launch URL carries the single-use nonce, so it must not appear in any argv
- * (`ps` shows argv to every same-user process). Write it into a 0600 HTML file in a 0700 temp
- * dir that redirects, open that file, and delete it after first use (or on exit).
+ * Wave-2 H4 / wave-3 N7: the launch URL carries the single-use nonce, so it never goes in any
+ * argv (`ps` shows argv to every same-user process). `dnr board` opens a 0600 HTML file in a 0700
+ * temp dir. The file holds a one-shot loopback URL served by this process, not the nonce. The
+ * first request to it redirects to the launch URL, then the file is deleted and the redirect
+ * stops. Residual risk (documented): a same-user process that reads the file and requests the
+ * one-shot URL before the browser does gets the nonce; the browser then shows an expired launch.
  */
-export function writeLaunchFile(launchUrl: string): { file: string; remove: () => void } {
+export async function oneShotLaunch(
+  launchUrl: string,
+  ttlMs = 60_000,
+): Promise<{ file: string; used: Promise<void>; remove: () => void }> {
   const dir = mkdtempSync(join(tmpdir(), 'dnr-board-'));
+  chmodSync(dir, 0o700);
   const file = join(dir, 'open.html');
-  const u = JSON.stringify(launchUrl);
+  const token = randomBytes(24).toString('base64url');
+  let resolveUsed: () => void = () => {};
+  const used = new Promise<void>((r) => {
+    resolveUsed = r;
+  });
+  let done = false;
+  const server = createServer((req, res) => {
+    if (!done && req.method === 'GET' && req.url === `/go/${token}`) {
+      done = true;
+      res.writeHead(302, {
+        Location: launchUrl,
+        'Cache-Control': 'no-store',
+        'Referrer-Policy': 'no-referrer',
+      });
+      res.end();
+      remove();
+      resolveUsed();
+      return;
+    }
+    res.writeHead(404, { 'Cache-Control': 'no-store' });
+    res.end();
+  });
+  await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
+  const port = (server.address() as AddressInfo).port;
+  const go = JSON.stringify(`http://127.0.0.1:${port}/go/${token}`);
   writeFileSync(
     file,
-    `<!doctype html><meta charset="utf-8"><title>DNR board</title><meta name="referrer" content="no-referrer"><script>location.replace(${u})</script><noscript>Enable JavaScript to open the DNR board.</noscript>\n`,
+    `<!doctype html><meta charset="utf-8"><title>DNR board</title><meta name="referrer" content="no-referrer"><script>location.replace(${go})</script><noscript>Enable JavaScript to open the DNR board.</noscript>\n`,
     { mode: 0o600 },
   );
   chmodSync(file, 0o600);
-  return { file, remove: () => rmSync(dir, { recursive: true, force: true }) };
+  function remove(): void {
+    rmSync(dir, { recursive: true, force: true });
+    server.close();
+    server.closeAllConnections();
+  }
+  const t = setTimeout(remove, ttlMs);
+  t.unref?.();
+  return { file, used, remove };
 }
 
 function untilSignal(): Promise<void> {
@@ -96,15 +137,11 @@ export async function cmdBoard(argv: string[], io: CliIO): Promise<number> {
     `${JSON.stringify({ port: handle.port, origin: handle.origin, pid: process.pid })}\n`,
   );
   io.out(`DNR board on ${handle.origin} (Ctrl-C to stop)\n`);
-  const launch = writeLaunchFile(handle.launchUrl);
+  const launch = await oneShotLaunch(handle.launchUrl);
   (io.openBrowser ?? defaultOpen)(launch.file);
-  // The browser reads the file within a moment; the nonce itself expires after 60 s and is single-use.
-  const timer = setTimeout(launch.remove, 15_000);
-  timer.unref?.();
   try {
     await (io.untilExit ?? untilSignal)();
   } finally {
-    clearTimeout(timer);
     launch.remove();
     await handle.close();
     await rm(boardFile, { force: true });

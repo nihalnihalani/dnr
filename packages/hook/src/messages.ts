@@ -77,3 +77,17 @@ export function ordersChangedReason(): string {
     'DNR: the DNR order set, config or hook files changed during this session outside a guarded `dnr` command. Do not edit DNR files. Tell the user exactly what changed.',
   );
 }
+
+/** Wave-3 N1: covered writes are blocked while the repository is unusable. */
+export function gitBrokenMessage(why: string, order: Order | null): string {
+  return cap(
+    `DNR: the git repository is unusable (${why}), so DNR cannot check this write against ${order ? `order ${order.id} (${order.reason})` : 'its orders'}. DNR blocks writes to protected code until the repository is repaired. Do not edit files under .git; tell the user.`,
+  );
+}
+
+/** Wave-3 N4: the order was violated by an agent commit; writes that still carry it block. */
+export function violatedMessage(order: Order, commit: string): string {
+  return cap(
+    `${reasonLine(order)}\nDNR order ${order.id} was violated: commit ${commit.slice(0, 10)} re-applied it during an agent session without a human's approval. It is still enforced. Revert that commit (for example \`git revert --no-edit ${commit.slice(0, 10)}\`) and tell the user; only a human can re-approve the order.`,
+  );
+}

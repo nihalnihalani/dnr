@@ -12,6 +12,7 @@ import {
   formatReplay,
   replayEvents,
   runStop,
+  stagedOrderWeakening,
   warnMessage,
 } from '@dnr/hook';
 import { parse, str } from '../args';
@@ -115,8 +116,18 @@ export async function cmdCheck(argv: string[], io: CliIO): Promise<number> {
     const r = await failOpen('pre-commit', '{}', { env: io.env, cwd: io.cwd }, async () => {
       const ctx = await repoContext(io, { ...(v.config ? { config: str(v.config) as string } : {}) });
       const n = printFindings(io, 'the staged changes', await checkStaged(ctx), !!v.json);
+      const weakened = await stagedOrderWeakening(ctx);
+      for (const id of weakened)
+        io.err(
+          `DNR: the staged changes remove or weaken order ${id} without a human-attested change (run the change through \`dnr orders …\`).\n`,
+        );
       const mode = ctx.config.mode;
-      code = n > 0 && (mode === 'enforce' || mode === 'commit-enforce') ? EXIT.FINDINGS : EXIT.OK;
+      // Weakening an order is refused in every mode except record (wave-3 N3).
+      code =
+        (n > 0 && (mode === 'enforce' || mode === 'commit-enforce')) ||
+        (weakened.length > 0 && mode !== 'record')
+          ? EXIT.FINDINGS
+          : EXIT.OK;
       if (n > 0 && code === EXIT.FINDINGS)
         io.err(
           'DNR: commit blocked. A human maintainer can approve the re-land with `dnr allow <id>` or `dnr board`.\n',

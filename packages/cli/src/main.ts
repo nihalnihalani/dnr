@@ -21,6 +21,7 @@ export const HELP = `dnr ${DNR_VERSION}: blocks agent writes that re-apply rever
   dnr explain <file> <qualname>
   dnr export-case <revert> [--orders] [--git-dir] [--out]
   dnr demo
+  dnr tamper show|accept
   dnr trial <subcommand>
 `;
 
@@ -44,6 +45,7 @@ const COMMANDS: Record<string, () => Promise<Cmd>> = {
   'export-case': async () => (await import('./commands/export-case')).cmdExportCase,
   demo: async () => (await import('./commands/demo')).cmdDemo,
   trial: async () => (await import('./commands/trial')).cmdTrial,
+  tamper: async () => (await import('./commands/tamper')).cmdTamper,
 };
 
 export async function runCli(argv: string[], io: CliIO): Promise<number> {

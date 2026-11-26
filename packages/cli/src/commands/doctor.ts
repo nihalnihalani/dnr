@@ -7,11 +7,13 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { isAbsolute, join } from 'node:path';
 import { findRepoRoot } from '@dnr/git';
-import { loadParser } from '@dnr/hook';
+import { installMismatch, loadParser } from '@dnr/hook';
 import { openStore } from '@dnr/store';
+import { parse } from 'shell-quote';
 import { EXIT } from '../errors';
 import { DNR_HOOKS, hookJson } from '../hooks';
 import type { CliIO } from '../io';
+import { BEGIN, END, permissionsFile } from '../permissions';
 
 interface Check {
   name: string;
@@ -79,8 +81,12 @@ export async function cmdDoctor(argv: string[], io: CliIO): Promise<number> {
           j.hooks?.[0]?.trigger === h.trigger &&
           (h.matcher ? j.hooks[0].matcher === h.matcher : !('matcher' in j.hooks[0])) &&
           cmd.endsWith(want.hooks[0]?.action.command.slice(3) ?? '');
-        const bin = cmd.split(/\s+/)[0] ?? '';
-        const resolved = which(bin, io.env);
+        const words = (parse(cmd) as unknown[]).filter((w): w is string => typeof w === 'string');
+        const bin = words[0] ?? '';
+        // Absolute `node cli.js` (wave-3 N2): both must exist; bare `dnr` must resolve on PATH.
+        const script = /(^|\/)node$/.test(bin) ? words[1] : undefined;
+        const resolved =
+          which(bin, io.env) && (!script || existsSync(script)) ? (script ?? which(bin, io.env)) : null;
         checks.push({
           name: `hook ${h.name}`,
           ok: shape && !!resolved,
@@ -111,6 +117,28 @@ export async function cmdDoctor(argv: string[], io: CliIO): Promise<number> {
     } catch (e) {
       checks.push({ name: 'config', ok: false, detail: String((e as Error).message) });
     }
+  }
+  if (root) {
+    // Wave-3 N2: the bundle recorded at init is unchanged; Kiro's own deny rules are installed.
+    const mismatch = installMismatch(root, openStore(root, { env: io.env }).paths.stateDir);
+    const recorded = existsSync(join(root, '.dnr', 'install.json'));
+    checks.push({
+      name: 'bundle integrity',
+      ok: recorded && !mismatch,
+      detail: !recorded
+        ? 'no .dnr/install.json: run dnr init'
+        : (mismatch ?? 'the bundle matches the sha256 recorded at dnr init'),
+    });
+    const pf = permissionsFile(io.env);
+    const text = existsSync(pf) ? readFileSync(pf, 'utf8') : null;
+    const ok = !!text && text.includes(BEGIN) && text.includes(END);
+    checks.push({
+      name: 'kiro permissions',
+      ok,
+      detail: ok
+        ? `DNR deny rules present in ${pf}`
+        : `DNR deny rules missing from ${pf}: run dnr init (spike S17 verifies matching)`,
+    });
   }
   try {
     const out = execFileSync('kiro-cli', ['--version'], {

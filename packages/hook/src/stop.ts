@@ -13,7 +13,9 @@
  */
 import { createHash } from 'node:crypto';
 import { scoreOrder } from '@dnr/core';
+import { headCommit, revList } from '@dnr/git';
 import type { EventRecord, Grant, Order, Session } from '@dnr/schemas';
+import { checkCommit } from './commit';
 import {
   appendEvents,
   baseDecision,
@@ -30,9 +32,12 @@ import {
 import { createState, filesOf, loadParser, UnitCache } from './engine';
 import { parseHookEvent } from './event';
 import { failOpen } from './failopen';
+import { installMismatch } from './install';
 import { stopReason, tamperReason } from './messages';
 import { loadEntries } from './orders';
 import { BlobReader, readWorktree } from './repo';
+import { readSessionOrders, readTamper } from './trusted';
+import { readViolations, recordViolation } from './violations';
 
 export interface TouchedMatch {
   order: Order;
@@ -87,11 +92,48 @@ export function tamperFindings(ctx: HookContext, s: Session, grants: Grant[]): s
       'The DNR order set, config or hook files changed during this session outside a guarded `dnr` command.',
     );
   for (const g of grants)
-    if (g.origin?.suspect)
+    if (g.origin?.suspect && !g.origin.confirmed_at)
       out.push(
-        `The grant for ${g.order_id} is suspect: it was made while an agent session was active (${g.origin.markers.join(', ') || 'agent markers'}), so DNR cannot tell whether a human or an agent made it. Confirm with the user before relying on it.`,
+        `The grant for ${g.order_id} is suspect (${g.origin.markers.join(', ') || 'agent markers'}): DNR cannot tell whether a human or an agent made it, so it does not apply until a human confirms it with \`dnr allow --confirm ${g.order_id}\`.`,
+      );
+  // Wave-3 N2: the bundle recorded at `dnr init` must be unchanged.
+  const mismatch = installMismatch(ctx.repoRoot, ctx.store.paths.stateDir);
+  if (mismatch) out.push(`DNR's installation was modified: ${mismatch}.`);
+  if (ctx.trusted.gitBroken)
+    out.push(
+      `The git repository is unusable (${ctx.trusted.gitBroken}); DNR blocks writes to protected code until it is repaired.`,
+    );
+  // Wave-3 N1/N3: the persistent tamper flag (open until a human runs `dnr tamper accept`).
+  for (const f of readTamper(ctx.store.paths.stateDir)?.findings ?? [])
+    out.push(
+      `Open tamper finding (${f.at}): ${f.what}; DNR keeps enforcing until a human runs \`dnr tamper accept\`.`,
+    );
+  // Wave-3 N4: violated orders are reported every session.
+  for (const [id, v] of Object.entries(readViolations(ctx.store.paths.stateDir)))
+    if (ctx.trusted.orders.get(id)?.status === 'approved')
+      out.push(
+        `Order ${id} is violated: commit ${v.commit.slice(0, 10)} re-applied it during an agent session without a human's approval. Revert it, and tell the user.`,
       );
   return out;
+}
+
+/** Commits made since the session started that cross an order without a grant are violations. */
+async function scanSessionCommits(ctx: HookContext, s: Session): Promise<void> {
+  try {
+    const start = readSessionOrders(ctx.store.paths.stateDir, s.session_key).head;
+    const head = await headCommit(ctx.repoRoot);
+    if (!start || !head || start === head) return;
+    const granted = new Set((await ctx.store.grants.applying(s, ctx.now())).map((g) => g.order_id));
+    for (const sha of (await revList(ctx.repoRoot, `${start}..${head}`)).slice(0, 50)) {
+      for (const f of await checkCommit(ctx, sha))
+        if (f.crossing && !granted.has(f.order_id))
+          recordViolation(ctx.store.paths.stateDir, f.order_id, {
+            commit: sha,
+            at: new Date(ctx.now()).toISOString(),
+            session_key: s.session_key,
+          });
+    }
+  } catch {}
 }
 
 export function runStop(
@@ -101,7 +143,7 @@ export function runStop(
   return failOpen('stop', stdin, opts, async () => {
     const env = opts.env ?? process.env;
     const ev = parseHookEvent(stdin, opts.cwd);
-    const ctx = await openContext(ev.cwd, env);
+    const ctx = await openContext(ev.cwd, env, keyOf(ev).key);
     if (!ctx) return { ...OK };
     const key = keyOf(ev);
     const mode = ctx.config.mode;
@@ -126,6 +168,9 @@ export function runStop(
         stdout: `${JSON.stringify({ decision: 'block', reason })}\n`,
         stderr: '',
       });
+
+      // Wave-3 N4: a re-application committed during this session without a grant violates the order.
+      await scanSessionCommits(ctx, s);
 
       // 1. Tamper check: every mode, once per distinct finding, outside the forced-turn cap.
       const grants = await ctx.store.grants.list().catch(() => [] as Grant[]);

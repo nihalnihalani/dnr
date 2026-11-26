@@ -17,8 +17,10 @@ import {
   loadParser,
   UnitCache,
 } from './engine';
+import { orderSetAt, weakenedBetween } from './order-history';
 import { decideConfig } from './prewrite';
 import { BlobReader, readWorktree } from './repo';
+import { openTamper } from './trusted';
 
 const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
 
@@ -201,4 +203,23 @@ export async function checkFile(
   });
   const order = orders.find((o) => o.id === r.decision.order_id) ?? null;
   return { decision: r.decision, order, qualnames: contributingQualnames(r, r.decision.order_id) };
+}
+
+/**
+ * Wave-3 N3: pre-commit refuses a commit that deletes or weakens an order (HEAD vs the index)
+ * unless the human-attested record holds the staged version. Returns the weakened ids.
+ */
+export async function stagedOrderWeakening(ctx: HookContext): Promise<string[]> {
+  const head = await headCommit(ctx.repoRoot);
+  if (!head) return [];
+  const headSet = await orderSetAt(ctx, head);
+  const weakened = weakenedBetween(ctx, headSet, await orderSetAt(ctx, ':'));
+  if (weakened.length)
+    openTamper(
+      ctx.store.paths.stateDir,
+      weakened.map((id) => `a commit tried to remove or weaken order ${id} without a human-attested change`),
+      new Date(ctx.now()).toISOString(),
+      weakened.map((id) => headSet.get(id)).filter((o): o is NonNullable<typeof o> => !!o),
+    );
+  return weakened;
 }

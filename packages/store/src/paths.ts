@@ -25,6 +25,8 @@ export interface DnrPaths {
   draftsDir: string;
   boardFile: string;
   candidatesFile: string;
+  /** Human-attested order record (wave-3 N3). */
+  attestedFile: string;
 }
 
 function abs(p: string, base: string): string {
@@ -56,5 +58,6 @@ export function resolvePaths(
     draftsDir: join(stateDir, 'drafts'),
     boardFile: join(stateDir, 'board.json'),
     candidatesFile: join(stateDir, 'candidates.json'),
+    attestedFile: join(stateDir, 'attested.json'),
   };
 }

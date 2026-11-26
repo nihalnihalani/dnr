@@ -25,7 +25,9 @@ const ROWS: Array<[cmd: string, layer: Layer]> = [
   ['git -c alias.pp=cherry-pick pp <O>', 'guard-shell'],
   ['X=<O>; git cherry-pick $X', 'guard-shell'],
   ['g=git; $g cherry-pick <O>', 'guard-shell'],
-  ['git cherry-pick $(git rev-parse <O7>)', 'post-shell'],
+  ['git cherry-pick $(git rev-parse <O7>)', 'guard-shell'],
+  ['git cherry-pick `git rev-parse --verify <O7>`', 'guard-shell'],
+  ["git cherry-pick ':/^Fixed'", 'guard-shell'],
   ["git cherry-pick ':/^Fixed #1'", 'guard-shell'],
   ['git show <O>:shop.py | tee shop.py', 'guard-shell'],
   ['git cat-file -p <O>:shop.py > shop.py', 'guard-shell'],
@@ -102,7 +104,7 @@ describe('guard-shell bypasses (wave-2 H3)', () => {
   it('H3: a cherry-pick commit (no pre-commit hook runs) is flagged by the post-commit check, once', async () => {
     fx = await revertFixture();
     const env = envFor(fx.repo);
-    const cmd = `git cherry-pick $(git rev-parse ${fx.C.slice(0, 8)})`;
+    const cmd = `python3 -c "import subprocess; subprocess.run(['git','cherry-pick','${fx.C}'], check=True)"`;
     await runGuardShell(ev(fx, cmd), { env });
     execFileSync('sh', ['-c', cmd], { cwd: fx.repo.dir, env: gitEnv(fx), stdio: 'pipe' });
     const a = await runShellAfter(ev(fx, cmd, 'PostToolUse'), { env });

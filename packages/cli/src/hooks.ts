@@ -67,6 +67,11 @@ export function hookText(h: HookFile, dnrPath?: string): string {
   return `${JSON.stringify(hookJson(h, dnrPath), null, 2)}\n`;
 }
 
+/** The pre-commit shim, calling DNR by the given command (absolute node + cli.js, wave-3 N2). */
+export function preCommitShim(dnrPath = 'dnr'): string {
+  return `#!/bin/sh\n# Installed by dnr init: block commits that re-apply a reverted change (DNR §6).\nexec ${dnrPath} check --staged\n`;
+}
+
 export const PRE_COMMIT_SHIM =
   '#!/bin/sh\n# Installed by dnr init: block commits that re-apply a reverted change (DNR §6).\nexec dnr check --staged\n';
 
@@ -83,14 +88,12 @@ export function crewWorkflow(crewRepo: string): string {
 name: dnr
 on:
   pull_request_target:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, edited]
   issue_comment:
     types: [created]
+# The dnr-bot App posts every check and comment; the caller's GITHUB_TOKEN only reads.
 permissions:
   contents: read
-  checks: write
-  pull-requests: write
-  issues: write
 jobs:
   dnr-scan:
     uses: ${crewRepo}/.github/workflows/dnr.yml@v1

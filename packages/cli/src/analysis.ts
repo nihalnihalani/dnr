@@ -3,12 +3,14 @@ import { extractUnits, UnitCache, unitHash } from '@dnr/core';
 import { headCommit } from '@dnr/git';
 import {
   BlobReader,
+  clearViolation,
   deriveStatus,
   type EffectiveStatus,
   effectiveStatus,
   filesOf,
   type HookContext,
   loadParser,
+  readViolations,
 } from '@dnr/hook';
 import type { Order } from '@dnr/schemas';
 
@@ -26,6 +28,7 @@ export async function effectiveStatuses(
   await reader.prefetch(
     approved.flatMap((o) => filesOf(o).flatMap((f) => [`${o.snapshot_sha}:${f}`, `HEAD:${f}`])),
   );
+  const violations = readViolations(ctx.store.paths.stateDir);
   for (const o of approved) {
     try {
       const d = deriveStatus(
@@ -36,7 +39,7 @@ export async function effectiveStatuses(
         ctx.config,
         ctx.store.paths.cacheDir,
       );
-      out.set(o.id, effectiveStatus(o, d));
+      out.set(o.id, effectiveStatus(o, d, !!violations[o.id]));
     } catch {
       out.set(o.id, o.status);
     }
@@ -57,6 +60,7 @@ export async function rebaseOnHead(ctx: HookContext, order: Order, by: string, a
       text === null ? [] : (extractUnits(parser, u.file, text)?.units.get(u.qualname)?.tokens ?? []);
     return { ...u, post_revert_hash: unitHash(tokens), post_revert_token_count: tokens.length };
   });
+  clearViolation(ctx.store.paths.stateDir, order.id); // a human re-approval clears a violation (N4)
   return {
     ...order,
     snapshot_sha: head,

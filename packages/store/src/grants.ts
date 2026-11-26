@@ -21,6 +21,8 @@ export function grantApplies(
   now = nowMs(),
 ): boolean {
   if (g.session_key !== session.session_key) return false;
+  // Wave-3 N5: a suspect grant does not apply until a human confirms it.
+  if (g.origin?.suspect && !g.origin.confirmed_at) return false;
   if (now < Date.parse(g.expires_at)) return true;
   return g.used.length > 0 && session.grants_used.includes(g.order_id);
 }
@@ -126,10 +128,30 @@ export class GrantStore {
     });
   }
 
+  /** Confirm suspect grants of an order (guarded `dnr allow --confirm`, the board). Returns them. */
+  async confirm(
+    orderId: string,
+    sessionKey: string | null | undefined,
+    by: string,
+    at = nowIso(),
+  ): Promise<Grant[]> {
+    const done: Grant[] = [];
+    for (const g of await this.list(orderId)) {
+      if (g.order_id !== orderId) continue;
+      if (sessionKey !== undefined && g.session_key !== sessionKey) continue;
+      if (!g.origin?.suspect || g.origin.confirmed_at) continue;
+      const next: Grant = { ...g, origin: { ...g.origin, confirmed_by: by, confirmed_at: at } };
+      await withLock(this.fileFor(g.order_id, g.session_key), () => this.put(next));
+      done.push(next);
+    }
+    return done;
+  }
+
   /** Pre-commit rule (§5.7): a used grant (any session) whose blobs cover every staged blob. */
   async commitGrant(orderId: string, staged: Grant['blobs']): Promise<Grant | null> {
     for (const g of await this.list(orderId)) {
       if (g.order_id !== orderId || g.used.length === 0) continue;
+      if (g.origin?.suspect && !g.origin.confirmed_at) continue;
       if (staged.every((s) => g.blobs.some((b) => b.file === s.file && b.sha256 === s.sha256))) return g;
     }
     return null;

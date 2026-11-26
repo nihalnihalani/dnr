@@ -7,7 +7,8 @@
  */
 import { readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { applyTool, isProtected, normalizePath, protectedGlobs } from '@dnr/core';
+import { applyTool, isProtected, matchState, normalizePath, overlayState, protectedGlobs } from '@dnr/core';
+import { gitDirs } from '@dnr/git';
 import type { Decision, EventRecord, Order } from '@dnr/schemas';
 import { ASK_PENDING_TTL_MS, sha256 } from '@dnr/store';
 import {
@@ -28,7 +29,8 @@ import {
 import { contributingQualnames, createState, decideWrite, filesOf, loadParser, UnitCache } from './engine';
 import { parseHookEvent } from './event';
 import { failOpen } from './failopen';
-import { blockText, protectMessage, warnMessage } from './messages';
+import { installGlobs } from './install';
+import { blockText, gitBrokenMessage, protectMessage, violatedMessage, warnMessage } from './messages';
 import { loadEntries } from './orders';
 import { BlobReader, readWorktree, realpathLoose, repoRelative } from './repo';
 import { coverageOf } from './trusted';
@@ -70,14 +72,16 @@ export function gitDirOf(repoRoot: string): string {
 export function protectRoots(ctx: HookContext, env: NodeJS.ProcessEnv): string[] {
   const p = ctx.store.paths;
   const hooks = gitHooksDirs(ctx.repoRoot).map((d) => `${realpathLoose(d)}/**`);
-  const gitDir = realpathLoose(gitDirOf(ctx.repoRoot));
+  const dirs = gitDirs(ctx.repoRoot);
   return [
     ...hooks,
-    // Additions beyond §5.4 (wave-2 H2): git config can disable hooks or alias commands, and the
-    // shipped steering tells the agent not to route around blocks.
-    `${gitDir}/config`,
-    `${gitDir}/config.worktree`,
+    // Additions beyond §5.4. Wave-3 N1: all of $GIT_DIR (HEAD, refs, objects, config) — a write tool
+    // never needs it, and a broken repository must not switch DNR off. Wave-2 H2: the shipped
+    // steering. Wave-3 N2: DNR's own installation, any `dnr` on PATH, and shell startup files.
+    `${realpathLoose(dirs.gitDir)}/**`,
+    `${realpathLoose(dirs.commonDir)}/**`,
     `${realpathLoose(ctx.repoRoot)}/.kiro/steering/dnr.md`,
+    ...installGlobs(env),
     ...protectedGlobs({
       repoRoot: realpathLoose(ctx.repoRoot),
       home: env.HOME ? realpathLoose(env.HOME) : null,
@@ -148,7 +152,7 @@ export async function preWrite(stdin: string, opts: HookOptions = {}): Promise<H
   const env = opts.env ?? process.env;
   const t0 = performance.now();
   const ev = parseHookEvent(stdin, opts.cwd);
-  const ctx = await openContext(ev.cwd, env);
+  const ctx = await openContext(ev.cwd, env, keyOf(ev).key);
   if (!ctx) return { ...OK }; // not in a git repo: nothing to protect
   const tool = ev.tool_name ?? '';
   const record = ctx.config.mode === 'record';
@@ -250,16 +254,56 @@ export async function preWrite(stdin: string, opts: HookOptions = {}): Promise<H
       return { ...OK };
     }
 
+    // Wave-3 N1: a broken repository is tampering. Fail closed for covered files.
+    if (ctx.trusted.gitBroken) {
+      const order = ctx.trusted.orders.get(covering[0] as string) ?? null;
+      const d = baseDecision({
+        outcome: 'block',
+        tier: 'protect',
+        order_id: order?.id ?? null,
+        reason_line: `DNR: the git repository is unusable (${ctx.trusted.gitBroken})`,
+        breakdown: [{ git_broken: ctx.trusted.gitBroken }],
+      });
+      const shown = finish(d, { proposed_text: effect.kind === 'write' ? effect.text : null });
+      return renderDecision(ctx, shown, order, gitBrokenMessage(ctx.trusted.gitBroken, order));
+    }
+
     const parser = await loadParser();
     const cache = new UnitCache(parser);
     const reader = new BlobReader(ctx.repoRoot);
-    const { entries, orders } = await loadEntries(ctx, covering, reader, cache);
+    const { entries, orders, violated } = await loadEntries(ctx, covering, reader, cache);
     const files = [...new Set(orders.flatMap(filesOf))];
     await reader.prefetch(files.map((f) => `${s.baseline_tree}:${f}`));
     const baseline = createState((f) => reader.get(s.baseline_tree, f), cache);
     const current = createState((f) => readWorktree(ctx.repoRoot, f), cache);
     const grants = await ctx.store.grants.applying(s, ctx.now());
     const granted = new Set(grants.map((g) => g.order_id));
+    // Wave-3 N4: a violated order keeps enforcing. Its re-application is already in the session
+    // baseline, so score against the order's post-revert snapshot: a write that still carries it blocks.
+    for (const [id, v] of violated) {
+      if (granted.has(id) || record) continue;
+      const order = orders.find((o) => o.id === id);
+      if (!order) continue;
+      const proposedState = overlayState(
+        current,
+        new Map([[rel, effect.kind === 'write' ? effect.text : current.text(rel)]]),
+        cache,
+      );
+      const snap = createState((f) => reader.get(order.snapshot_sha, f), cache);
+      const sc = matchState(order, snap, proposedState, { config: ctx.config });
+      if (!sc.matched) continue;
+      const d = baseDecision({
+        outcome: ctx.config.decision_format === 'ask' ? 'ask' : 'block',
+        tier: 'match',
+        order_id: id,
+        edit_score: sc.edit,
+        fired_by: 'edit',
+        reason_line: violatedMessage(order, v.commit).split('\n')[0] ?? null,
+        breakdown: [{ violated: v.commit }],
+      });
+      const shown = finish(d, { proposed_text: effect.kind === 'write' ? effect.text : null });
+      return renderDecision(ctx, shown, order, violatedMessage(order, v.commit));
+    }
     const r = decideWrite({
       target: rel,
       effect,

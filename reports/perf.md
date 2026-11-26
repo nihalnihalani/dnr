@@ -33,3 +33,17 @@ The C1 fix puts one `git ls-tree HEAD -- .dnr/orders .dnr/config.json` on every 
 | First write of a fresh Django session | — | 112–140 ms | < 2 s |
 
 The fast path is now at the edge of its budget. Other agents were running test suites during these runs (load average about 10), and under that load the fast-path p95 ranged from 79 to 122 ms. A Linux CI measurement on an idle runner is still owed. If the budget has to hold with margin, the next step is to read HEAD's tree for `.dnr/` straight from the object store, with no git process.
+
+## Re-measured after the wave-3 fixes (November 27, 2026)
+
+Wave 3 removed the per-invocation `git ls-tree` (N8). The hook now reads HEAD's commit id straight from `$GIT_DIR` (the HEAD file, loose refs, `packed-refs`) with no git process. It caches the committed `.dnr` entries by that commit id in `<state>/cache/committed-<sha>.json`. A forged cache can only change the HEAD source. The enforced order set is the union of the working copy, HEAD, the session-start set, the human-attested record and orders held by an open tamper flag (N3), so a forged cache cannot remove enforcement.
+
+Three runs of `node scripts/bench-hook.mjs --runs 50` on the Django demo checkout (Apple M4 Pro), with other agents running test suites (load average about 8):
+
+| Case | p50 | p95 (three runs) | Target |
+|---|---|---|---|
+| Match (block), `reapply-43933a1dca.json` | 156–162 ms | 169.2 / 178.3 / 161.9 ms | < 300 ms |
+| Fast path, `uncovered.json` | 64–67 ms | **70.9 / 75.6 / 66.6 ms** | < 80 ms |
+| First write of a fresh Django session | — | 153–168 ms | < 2 s |
+
+A Linux CI measurement on an idle runner is still owed.

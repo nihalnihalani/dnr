@@ -4,6 +4,7 @@ import type { Order } from '@dnr/schemas';
 import type { HookContext } from './context';
 import { deriveStatus, filesOf, type UnitCache } from './engine';
 import type { BlobReader } from './repo';
+import { readViolations, type Violation } from './violations';
 
 export async function loadEntries(
   ctx: HookContext,
@@ -11,7 +12,7 @@ export async function loadEntries(
   reader: BlobReader,
   cache: UnitCache,
   extraSpecs: readonly string[] = [],
-): Promise<{ entries: OrderEntry[]; orders: Order[] }> {
+): Promise<{ entries: OrderEntry[]; orders: Order[]; violated: Map<string, Violation> }> {
   const orders: Order[] = [];
   for (const id of ids) {
     const o = ctx.trusted.orders.get(id);
@@ -31,5 +32,15 @@ export async function loadEntries(
     );
     return { order, stale: d.stale, relanded: d.relanded };
   });
-  return { entries, orders };
+  // Wave-3 N4: a re-land committed by an agent without a grant is `violated` and keeps enforcing.
+  const violations = readViolations(ctx.store.paths.stateDir);
+  const violated = new Map<string, Violation>();
+  for (const e of entries) {
+    const v = violations[e.order.id];
+    if (v && e.relanded) {
+      violated.set(e.order.id, v);
+      e.relanded = false;
+    }
+  }
+  return { entries, orders, violated };
 }

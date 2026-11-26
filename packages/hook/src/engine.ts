@@ -35,7 +35,7 @@ export function filesOf(order: Order): string[] {
   return [...new Set(order.units.map((u) => u.file))].sort();
 }
 
-export type EffectiveStatus = 'draft' | 'approved' | 'retired' | 'stale' | 'relanded';
+export type EffectiveStatus = 'draft' | 'approved' | 'retired' | 'stale' | 'relanded' | 'violated';
 
 export interface Derived {
   stale: boolean;
@@ -85,9 +85,10 @@ export function deriveStatus(
   return { stale, relanded };
 }
 
-export function effectiveStatus(order: Order, d: Derived | null): EffectiveStatus {
+export function effectiveStatus(order: Order, d: Derived | null, violated = false): EffectiveStatus {
   if (order.status !== 'approved' || !d) return order.status;
   if (d.stale) return 'stale';
+  if (d.relanded && violated) return 'violated';
   if (d.relanded) return 'relanded';
   return 'approved';
 }

@@ -1,9 +1,12 @@
 /**
  * `dnr trial <sub>`: mine, tickets, assign and known-reverts delegate to the mining code in
- * @dnr/trial; every other trial subcommand belongs to a later wave and exits 69.
+ * @dnr/trial; falsealarm is a CLI command; the harness (prepare, run, envs, label, replay, score,
+ * rescore, report, probe, baseline, prereg) is `runHarness` in @dnr/trial.
  */
+import { createInterface } from 'node:readline/promises';
 import { EXIT } from '../errors';
 import type { CliIO } from '../io';
+import { renderSteering } from './steering';
 
 const MINING = new Set([
   'mine',
@@ -16,7 +19,7 @@ const MINING = new Set([
   'merge-reasons',
   'reproposals',
 ]);
-const LATER = new Set([
+const HARNESS = new Set([
   'envs',
   'probe',
   'baseline',
@@ -24,16 +27,27 @@ const LATER = new Set([
   'run',
   'label',
   'replay',
-  'falsealarm',
   'score',
   'rescore',
   'report',
+  'prereg',
 ]);
+
+/** Line prompt on the real terminal (labeling is interactive and human-only). */
+async function ask(question: string): Promise<string | null> {
+  if (!process.stdin.isTTY) return null;
+  const rl = createInterface({ input: process.stdin, output: process.stderr });
+  try {
+    return await rl.question(question);
+  } finally {
+    rl.close();
+  }
+}
 
 export async function cmdTrial(argv: string[], io: CliIO): Promise<number> {
   const [sub] = argv;
   if (!sub || sub === '--help' || sub === '-h') {
-    io.out(`dnr trial <${[...MINING, ...LATER].join('|')}> …\n`);
+    io.out(`dnr trial <${[...MINING, 'falsealarm', ...HARNESS].join('|')}> …\n`);
     return sub ? EXIT.OK : EXIT.USAGE;
   }
   if (sub === 'falsealarm') return (await import('./falsealarm')).cmdFalsealarm(argv, io);
@@ -52,9 +66,16 @@ export async function cmdTrial(argv: string[], io: CliIO): Promise<number> {
       return EXIT.USAGE;
     }
   }
-  if (LATER.has(sub)) {
-    io.err(`DNR: \`dnr trial ${sub}\` is not built yet (it belongs to a later build wave).\n`);
-    return EXIT.DEPENDENCY;
+  if (HARNESS.has(sub)) {
+    const { runHarness } = await import('@dnr/trial');
+    return runHarness(sub, argv.slice(1), {
+      env: io.env,
+      cwd: io.cwd,
+      out: (s) => io.out(s),
+      err: (s) => io.err(s),
+      ask,
+      deps: { renderSteering },
+    });
   }
   io.err(`DNR: unknown trial subcommand ${sub}\n`);
   return EXIT.USAGE;

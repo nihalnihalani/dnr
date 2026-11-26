@@ -19,6 +19,7 @@ export {
   SUBJECT_RE,
 } from './discovery';
 export { GitError, type GitOptions, type GitResult, git, runGit } from './exec';
+export { type GitDirs, gitDirs, type HeadState, hasObjects, readHead } from './headref';
 export { inversePatchId, type PatchIdIndex, patchId, patchIdIndex } from './patchid';
 export { changedPaths, isAncestor, mergeBase, parents, resolveCommit, revParse, treeOf } from './refs';
 export { type RevertReproduction, reproduceRevert, revertReproduces } from './revert-check';

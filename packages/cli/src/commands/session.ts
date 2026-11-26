@@ -10,7 +10,7 @@ import {
   sessionGc,
   sessionShow,
 } from '@dnr/hook';
-import { nowMs, parseTtl } from '@dnr/store';
+import { nowIso, nowMs, parseTtl } from '@dnr/store';
 import { parse, str } from '../args';
 import { repoContext, requireHuman } from '../context';
 import { CliError, EXIT, usage } from '../errors';
@@ -96,13 +96,14 @@ export async function cmdSession(argv: string[], io: CliIO): Promise<number> {
 
 export async function cmdAllow(argv: string[], io: CliIO): Promise<number> {
   const { values: v, positionals } = parse(argv, {
+    confirm: { type: 'boolean' },
     ttl: { type: 'string' },
     by: { type: 'string' },
     orders: { type: 'string' },
   });
   if (v.help) {
     io.out(
-      'dnr allow <order_id> [--ttl 1h]   allow-once grant for the current or next session (humans only)\n',
+      'dnr allow <order_id> [--ttl 1h]   allow-once grant for the current or next session (humans only)\ndnr allow --confirm <order_id>      confirm a suspect grant so it applies (humans only)\n',
     );
     return EXIT.OK;
   }
@@ -116,6 +117,21 @@ export async function cmdAllow(argv: string[], io: CliIO): Promise<number> {
     throw usage(String((e as Error).message));
   }
   const ctx = await repoContext(io, { ...(v.orders ? { orders: str(v.orders) as string } : {}) });
+  if (v.confirm) {
+    // Wave-3 N5: a human confirms a suspect grant so it applies.
+    const done = await ctx.store.grants.confirm(
+      id,
+      undefined,
+      str(v.by) ?? io.env.USER ?? 'human',
+      nowIso(io.env),
+    );
+    if (done.length === 0) throw new CliError(`DNR: no unconfirmed suspect grant for ${id}`, EXIT.FINDINGS);
+    for (const g of done)
+      io.out(
+        `DNR: confirmed the suspect grant for ${id} (${g.origin?.markers.join(', ')}); it now applies.\n`,
+      );
+    return EXIT.OK;
+  }
   const order = await ctx.store.orders.get(id);
   if (!order) throw new CliError(`DNR: no order ${id}`, EXIT.USAGE);
   const at = nowMs(io.env);
@@ -124,8 +140,8 @@ export async function cmdAllow(argv: string[], io: CliIO): Promise<number> {
     store: ctx.store,
     env: io.env,
     now: at,
-    sessionTtlMinutes: ctx.config.session_ttl_minutes,
     ...(io.processChain ? { chain: io.processChain() } : {}),
+    ...(io.isTTY ? { isTTY: io.isTTY() } : {}),
   });
   const g = await ctx.store.grants.create({
     order_id: id,
@@ -138,7 +154,7 @@ export async function cmdAllow(argv: string[], io: CliIO): Promise<number> {
   });
   if (origin.suspect)
     io.err(
-      `DNR: note: this grant is flagged suspect (${origin.markers.join(', ')}); Stop, \`dnr orders show\` and the board will say so.\n`,
+      `DNR: this grant is flagged suspect (${origin.markers.join(', ')}) and does not apply until a human confirms it: \`dnr allow --confirm ${id}\` from your own terminal, or Confirm on the board.\n`,
     );
   if (order.status !== 'approved')
     io.err(`DNR: note: ${id} is ${order.status}, so it does not block anyway.\n`);

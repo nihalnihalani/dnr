@@ -2,6 +2,7 @@
  * @dnr/store: orders, grants, sessions, events.jsonl, hook.log and config, with atomic
  * temp+rename writes and O_EXCL locks. See packages/store/README.md.
  */
+export { type AttestedRecord, orderHash, readAttested, writeAttested } from './attested';
 export { nowIso, nowMs, parseTtl } from './clock';
 export { ConfigError, type ConfigSource, type LoadedConfig, loadConfig } from './config';
 export { appendEvent, newEventId, readEvents } from './events';

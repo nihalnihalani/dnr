@@ -4,7 +4,7 @@
  */
 import { relative } from 'node:path';
 import { catBlobs } from '@dnr/git';
-import { type EffectiveStatus, grantOrigin, type HookContext } from '@dnr/hook';
+import { type EffectiveStatus, grantOrigin, type HookContext, readViolations } from '@dnr/hook';
 import { Order } from '@dnr/schemas';
 import {
   nowIso,
@@ -36,10 +36,18 @@ export function createBoardStore(ctx: HookContext, errors: BoardErrors) {
   async function rows(orders: Order[]) {
     const eff = await effectiveStatuses(ctx, orders);
     const git = await committed(orders.map((o) => o.id));
+    const violations = readViolations(store.paths.stateDir);
     return orders.map((order) => {
       const g = git.get(order.id);
       const drift = g !== undefined && g !== null && JSON.stringify(JSON.parse(g)) !== JSON.stringify(order);
-      return { order, effective: (eff.get(order.id) ?? order.status) as EffectiveStatus, drift };
+      const effective = (eff.get(order.id) ?? order.status) as EffectiveStatus;
+      const v = violations[order.id];
+      return {
+        order,
+        effective,
+        drift,
+        ...(effective === 'violated' && v ? { violation: { commit: v.commit, at: v.at } } : {}),
+      };
     });
   }
 
@@ -83,7 +91,7 @@ export function createBoardStore(ctx: HookContext, errors: BoardErrors) {
     reapprove: (id: string, by: string) =>
       wrap(async () => {
         const row = await requireRow(id);
-        if (row.effective !== 'stale' && row.effective !== 'relanded')
+        if (row.effective !== 'stale' && row.effective !== 'relanded' && row.effective !== 'violated')
           throw new errors.TransitionError(
             `DNR: ${id} is ${row.effective}; only stale or re-landed orders are re-approved`,
           );
@@ -110,6 +118,21 @@ export function createBoardStore(ctx: HookContext, errors: BoardErrors) {
           at,
           origin,
         });
+      }),
+    /** Wave-3 N5: confirm a suspect grant (the board's Confirm action; guarded at board launch). */
+    confirmGrant: (orderId: string, sessionKey: string | null, by: string) =>
+      wrap(async () => {
+        const grants = (await store.grants.list(orderId)).filter(
+          (g) => g.order_id === orderId && g.session_key === sessionKey,
+        );
+        if (grants.length === 0)
+          throw new errors.NotFoundError(`DNR: no grant for ${orderId} and that session`);
+        const [done] = await store.grants.confirm(orderId, sessionKey, by, nowIso(ctx.env));
+        if (!done)
+          throw new errors.TransitionError(
+            `DNR: that grant for ${orderId} is not suspect or is already confirmed`,
+          );
+        return done;
       }),
     listGrants: (orderId?: string) => store.grants.list(orderId),
     listEvents: (filter: { order?: string }) => store.readEvents(filter.order ? { order: filter.order } : {}),

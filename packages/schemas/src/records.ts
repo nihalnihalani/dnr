@@ -25,6 +25,14 @@ export const OrderUnit = z.object({
 });
 export type OrderUnit = z.infer<typeof OrderUnit>;
 
+/**
+ * Derived order status (§5.9, amended by lead decisions N4/N5). Computed when an order loads and
+ * never stored on the order (`Order.status` stays draft | approved | retired). `violated` means a
+ * re-application was committed during an agent session without a grant; it keeps enforcing.
+ */
+export const EffectiveStatus = z.enum(['draft', 'approved', 'retired', 'stale', 'relanded', 'violated']);
+export type EffectiveStatus = z.infer<typeof EffectiveStatus>;
+
 export const Order = z.object({
   schema: z.literal('dnr.order/v1'),
   id: z.string().regex(/^dnr-[0-9a-f]{10}$/),
@@ -71,6 +79,9 @@ export const Grant = z.object({
       via: z.enum(['cli', 'board', 'ask']),
       suspect: z.boolean(), // created while an agent session was active, or with agent markers seen
       markers: z.array(z.string()), // e.g. 'env:KIRO_SESSION_ID', 'ancestor:kiro-cli', 'no-tty', 'active-session:<key8>'
+      // A suspect grant applies only once a human confirms it (`dnr allow --confirm` or the board's confirm action).
+      confirmed_by: z.string().optional(),
+      confirmed_at: Iso.optional(),
     })
     .optional(),
 });

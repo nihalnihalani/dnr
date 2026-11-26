@@ -1,6 +1,6 @@
 # Threat model and known limits
 
-DNR stops an AI agent from re-applying a change the repository already reverted. It is a guard rail for a cooperative but forgetful agent, not a sandbox against a hostile process. This page lists what it defends, how, and what it does not cover (plan §5.13, §10, §14).
+DNR stops an AI agent from re-applying a change the repository already reverted. It is a guard rail for a cooperative but forgetful agent, not a sandbox against a hostile process. A hostile process running as the same OS user can always defeat a same-user hook; DNR's goal is that a careless or misled agent cannot re-apply a reverted change without a visible, recorded human decision. In the same spirit, the human-only guard is a speed bump against a careless agent, not a security boundary against a hostile same-user process; DNR detects and flags such approvals. This page lists what it defends, how, and what it does not cover (plan §5.13, §10, §14).
 
 ## Assets
 
@@ -33,12 +33,18 @@ DNR stops an AI agent from re-applying a change the repository already reverted.
 | Skipping or removing the pre-commit hook | the protect tier denies writes under the git hooks directory (`.git/hooks/**`, with the gitdir resolved for worktrees, and the `core.hooksPath` target read from `.git/config`), so a write tool cannot edit or delete the pre-commit shim; guard-shell R1 covers the same paths. Guard-shell rule R8 denies `git commit --no-verify` and `-n` (including clusters such as `-nm`), `--no-verify` on merge, am and rebase, `git config core.hooksPath <value>` and `--unset` (reads are allowed), `git -c core.hooksPath=…`, and the git config environment variables `GIT_CONFIG_PARAMETERS`, `GIT_CONFIG_COUNT`, `GIT_CONFIG_KEY_n`/`VALUE_n`, `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_SYSTEM` | §5.4, §5.10 (R8 extends the plan, review M3) |
 | Self-approval through a human's terminal | guard-shell R8 also denies `osascript`, `open -a Terminal`/`iTerm`/…, `tmux send-keys`, `screen … stuff` and `open` on `*.command`, `.app`, `.tool` or `.scpt` files, which could type an approval command into a human terminal | §5.10 (R8) |
 | Self-approval | every enforcement-changing `dnr` subcommand refuses without a TTY, under a `kiro-cli` or Kiro agent-host ancestor, or with Kiro-only environment variables (provisional until spike S8). Every grant records `origin: {via: cli\|board\|ask, suspect, markers[]}`, and is flagged suspect when an agent session was active at creation or an agent marker was seen (Kiro variable, `kiro-cli` ancestor, no TTY). `dnr orders show`, the board and the Stop tamper report show suspect grants; the trial flags grants created during a run. In short, the human-only guard is a speed bump against a careless agent, not a security boundary against a hostile same-user process; DNR detects and flags such approvals. A double fork plus a new pty escapes the ancestry check from one shell command (review C3); the resulting grant is flagged suspect | §5.10 |
-| Board CSRF and DNS rebinding | single-use 60 s launch nonce, never printed and in no argv: `dnr board` writes the launch URL into a 0600 HTML file in a 0700 temp directory, opens that file (which redirects), and deletes it after 15 s or on exit; per-launch `dnr-<rand>.localhost` host; `Host` check (421); `HttpOnly; SameSite=Strict` cookie on every `/api/*` route; exact `Origin` and `X-DNR-CSRF: 1` on mutations (403) | §10 (review H4) |
+| Board CSRF and DNS rebinding | single-use 60 s launch nonce, never printed and in no argv or file: `dnr board` opens a 0600 file in a 0700 temp directory that holds only a one-shot loopback URL served by the CLI; the first request redirects to the launch URL, then the file is deleted and the URL stops working (N7); per-launch `dnr-<rand>.localhost` host; `Host` check (421); `HttpOnly; SameSite=Strict` cookie on every `/api/*` route; exact `Origin` and `X-DNR-CSRF: 1` on mutations (403) | §10 (review H4, N7) |
 | Prompt injection into the drafter | `<revert>` and `<ticket>` tags marked untrusted, no tools, Zod-validated one-sentence output, human approval of every reason | §12.3 |
 | `ask` auto-approved | `deny` is the default; `ask` is opt-in and never combined with `--trust-all-tools` (spike S5) | §6 |
 | Fake Crew check or override | checks posted only by the `dnr-bot` App and required by `app_id`; the scan job is named `dnr-scan`; App and HMAC secrets are environment secrets of the protected-branch-only `dnr-grants` environment; overrides need write access and ignore App-posted comments; PRs touching `.dnr/**` or `.github/**` fail | §12.5 |
 | Undoing an approved re-land | grant use is recorded with blob hashes and honored at Stop and pre-commit (P13) | §5.7 |
 | Wiping a human's edits | the baseline includes the human's uncommitted and untracked files; Stop scores only files the agent touched and never suggests a checkout | §5.7, §5.11 |
+| Writing into git's own state | every path under `.git/**` (gitdir and commondir) is denied to write tools. A broken repository (unreadable or malformed HEAD, a missing ref with objects present, unreadable committed objects) counts as tampering: covered writes block, the tamper flag opens, and Stop reports it | §5.4 extended (wave 3, N1) |
+| Replacing or shadowing the `dnr` binary | the installed bundle's package directory, any `dnr`/`dnr-guard` on PATH, the shell startup files (`~/.zshenv`, `.zprofile`, `.zshrc`, `.zlogin`, `.bash_profile`, `.bashrc`, `.bash_login`, `.profile`), `~/.config/fish/**` and `~/.config/dnr/**` are protected. `dnr init` writes absolute `node cli.js` paths into every hook and the pre-commit shim and records the bundle's sha256 in `.dnr/install.json`; Stop and `dnr doctor` report a mismatch. `dnr init` also offers Kiro deny rules for `~/.kiro/settings/permissions.yaml` (marked block, diff shown, y/N at the TTY, `--no-permissions` skips), pending spike S17 | §6, §8 extended (wave 3, N2) |
+| Deleting or weakening an order | the enforced set is the union of the working copy, HEAD, the session-start set, `.dnr/attested.json` (rewritten on every guarded store change) and orders held by an open tamper flag. Removing or weakening an order without an attested record opens a persistent tamper flag that keeps the approved version enforced across sessions until the human-only `dnr tamper accept`. Pre-commit refuses staged order deletions or weakenings; post-shell catches order-weakening commits and HEAD moving to a non-descendant (`reset --hard`, `update-ref`, amend) | §5.11 extended (wave 3, N3) |
+| Committing a re-application in an agent session | a commit that re-applies an order without a grant, made in an agent session, records a violation (post-shell, and Stop scanning the session's commits). The order derives `violated`: it keeps blocking writes that still carry the re-application and is reported every session until a human re-approves it. A human re-land outside an agent session stays `re-landed` | §5.9 extended (wave 3, N4) |
+| Agent-made grants | a suspect grant does not apply until a human confirms it (`dnr allow --confirm <id>` or the board's Confirm). Suspicion comes from how the creating process was launched (Kiro variables, a `kiro-cli` ancestor, no TTY, a cleared environment, or an interactive shell whose parent is not a known terminal host, such as launchd after a double fork), not from whether a session is open | §5.10 extended (wave 3, N5) |
+| Hiding an order commit behind command substitution | guard-shell inlines `$(git rev-parse X)` and backtick forms and resolves `:/regex` against every matching commit | §5.10 (wave 3, N6) |
 
 ## Review findings fixed
 
@@ -53,6 +59,18 @@ From the wave-2 devil's advocate review (`docs/review-wave2.md`). Each fix lands
 | H3: guard-shell cannot see what interpreter code writes | post-shell scores touched files and checks commits made by the call | a `python -c` re-application and a shell `cherry-pick` are told to undo |
 | H4: the board launch nonce was visible in `open`'s argv | the launcher opens a 0600 temp HTML file instead | the launcher's argv carries no nonce |
 
+## Wave-3 regression tests
+
+| ID | Tests |
+|---|---|
+| N1 | `packages/hook/test/wave3.test.ts`: `N1: every path under .git is protected from write tools`, `N1: a broken repository fails closed …`, `N1: missing objects … count as a broken repository` |
+| N2 | `wave3.test.ts`: `N2: the installed bundle, a dnr shim on PATH and shell rc files are protected`; `packages/cli/test/cli.test.ts`: `N2: init writes absolute node + cli.js paths … records the bundle sha256`, `N2: init offers Kiro deny rules … needs a y at the TTY` |
+| N3 | the `N3:` cases in `wave3.test.ts` (shell retire, `git commit -am`, `reset --hard` and `update-ref`, pre-commit refusal) and `N3: dnr tamper accept (human-only) …` in `cli.test.ts` |
+| N4 | the `N4:` cases in `wave3.test.ts` |
+| N5 | the `N5:` cases in `cli.test.ts` |
+| N6 | the command-substitution and `:/regex` rows in `packages/hook/test/bypass.test.ts` |
+| N7 | `N7: board keeps the nonce out of argv and out of the launch file …` |
+
 ## Known limits
 
 - Order files (`.dnr/orders/*.json`) are committed and readable, so an agent can read every order's A and R tokens and tune a paraphrase to land under τ. The MCP tools' hiding of A and R does not protect them. The mitigations are proximity (§5.6) and measured held-out recall (gate check 2), not secrecy.
@@ -66,7 +84,8 @@ From the wave-2 devil's advocate review (`docs/review-wave2.md`). Each fix lands
 - Processes outside Kiro can edit anything.
 - Fail-open lets writes through when DNR itself hits an internal error or timeout (by design: a DNR bug never stops an agent). Invalid or tampered DNR state does not fail open (R7 as amended; review C1).
 - Under `--trust-all-tools`, an `ask` may be auto-approved (spike S5).
-- A non-browser process running as the same user can read the board's cookie jar, or the 0600 launch file during its 15-second life.
+- A non-browser process running as the same user can read the board's cookie jar. It can also read the 0600 launch file and request its one-shot URL before the browser does; it then gets the nonce, and the browser shows an expired launch.
+- The Kiro permission deny rules that `dnr init` offers depend on Kiro's glob resolution and shell capability name, which spike S17 has not verified yet.
 - The human-only guard is a speed bump against a careless agent, not a security boundary against a hostile same-user process; DNR detects and flags such approvals. Known escapes: interpreter code that talks to the board on a computed port (guard-shell R7 matches only literal ports), `osascript` run from inside Python, and a renamed copy of the `dnr` binary. The ancestry guard refuses that copy unless it is double-forked, and the grant it then creates is flagged suspect.
 - On the `127.0.0.1` board fallback (Safari, `--host 127.0.0.1`), the cookie is shared with other loopback ports.
 - MCP tools that write files bypass pre-write: Kiro's `write` category covers only built-in file write tools, and Stop's `touched` set does not include MCP writes. A follow-up `@mcp` PreToolUse hook that sends path-bearing calls to the warn tier is an open option (`hook-contracts.md`).

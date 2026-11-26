@@ -29,7 +29,7 @@ export function runSessionStart(stdin: string, opts: HookOptions = {}): Promise<
   return failOpen('session-start', stdin, opts, async () => {
     const env = opts.env ?? process.env;
     const ev = parseHookEvent(stdin, opts.cwd);
-    const ctx = await openContext(ev.cwd, env);
+    const ctx = await openContext(ev.cwd, env, keyOf(ev).key);
     if (!ctx) return { ...OK };
     const key = keyOf(ev);
     const events: EventRecord[] = [];
@@ -60,7 +60,7 @@ export function runSessionConfirm(stdin: string, opts: HookOptions = {}): Promis
   return failOpen('post-write', stdin, opts, async () => {
     const env = opts.env ?? process.env;
     const ev = parseHookEvent(stdin, opts.cwd);
-    const ctx = await openContext(ev.cwd, env);
+    const ctx = await openContext(ev.cwd, env, keyOf(ev).key);
     if (!ctx) return { ...OK };
     const key = keyOf(ev);
     const effect = applyTool(ev.tool_name ?? '', ev.tool_input, () => null);
@@ -127,7 +127,7 @@ export function runShellAfter(stdin: string, opts: HookOptions = {}): Promise<Ho
   return failOpen('post-shell', stdin, opts, async () => {
     const env = opts.env ?? process.env;
     const ev = parseHookEvent(stdin, opts.cwd);
-    const ctx = await openContext(ev.cwd, env);
+    const ctx = await openContext(ev.cwd, env, keyOf(ev).key);
     if (!ctx) return { ...OK };
     const key = keyOf(ev);
     const events: EventRecord[] = [];

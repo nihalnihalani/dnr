@@ -1,6 +1,8 @@
 /** One handle over every store of a repo: paths, config, orders, sessions, grants, events. */
 import { join } from 'node:path';
 import type { EventRecord } from '@dnr/schemas';
+import { writeAttested } from './attested';
+import { nowIso } from './clock';
 import { type LoadedConfig, loadConfig } from './config';
 import { appendEvent, readEvents } from './events';
 import { GrantStore } from './grants';
@@ -34,9 +36,11 @@ export function openStore(
       configFile: paths.configFile,
       hooksDir: join(repoRoot, '.kiro', 'hooks'),
     });
-  const orders = new OrderStore(paths.ordersDir, paths.cacheDir, () =>
-    sessions.refreshOrdersHash(ordersHash()),
-  );
+  const orders: OrderStore = new OrderStore(paths.ordersDir, null, async () => {
+    // Every mutation through the store is a human decision (guarded CLI, board): attest it.
+    writeAttested(paths.attestedFile, await orders.list(), env.USER ?? 'human', nowIso(env));
+    await sessions.refreshOrdersHash(ordersHash());
+  });
   return {
     paths,
     orders,

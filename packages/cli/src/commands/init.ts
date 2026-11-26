@@ -3,18 +3,21 @@
  * Idempotent: a second run changes nothing. Existing files that differ are kept unless --force,
  * and an existing pre-commit hook is never replaced.
  */
-import { chmodSync, existsSync, readFileSync } from 'node:fs';
+import { chmodSync, existsSync, readFileSync, realpathSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { findRepoRoot, gitPath } from '@dnr/git';
+import { bundleSha256 } from '@dnr/hook';
 import { DnrConfig } from '@dnr/schemas';
 import { openStore } from '@dnr/store';
+import { createTwoFilesPatch } from 'diff';
 import { parse, str } from '../args';
 import { packagePath } from '../assets';
 import { requireHuman } from '../context';
 import { CliError, EXIT, invalidData, usage } from '../errors';
-import { crewWorkflow, DNR_HOOKS, GITIGNORE_LINES, hookText, PRE_COMMIT_SHIM } from '../hooks';
+import { crewWorkflow, DNR_HOOKS, GITIGNORE_LINES, hookText, preCommitShim } from '../hooks';
 import type { CliIO } from '../io';
+import { dnrRules, mergePermissions, permissionsFile } from '../permissions';
 
 /** Paths npx / pnpm dlx / bunx run packages from; hooks pointing there would silently fail open later. */
 export function isEphemeralInstall(p: string): boolean {
@@ -33,7 +36,7 @@ export async function cmdInit(argv: string[], io: CliIO): Promise<number> {
     crew: { type: 'boolean' },
     'crew-repo': { type: 'string' },
     force: { type: 'boolean' },
-    'absolute-paths': { type: 'boolean' },
+    'no-permissions': { type: 'boolean' },
   });
   if (v.help) {
     io.out(
@@ -83,7 +86,10 @@ export async function cmdInit(argv: string[], io: CliIO): Promise<number> {
   };
 
   // Hooks (§6).
-  const dnrPath = v['absolute-paths'] ? resolveDnrOnPath(io) : 'dnr';
+  // Wave-3 N2: hooks and the pre-commit shim call DNR by absolute node + cli.js paths, so a `dnr`
+  // shim earlier on PATH or a shell function cannot replace it; the bundle's sha256 is recorded.
+  const cli = realOr(io.scriptPath);
+  const dnrPath = `${shq(process.execPath)} ${shq(cli)}`;
   for (const h of DNR_HOOKS) {
     if (hooksSel === 'pre-write' && h.name !== 'dnr-pre-write') continue;
     await put(`.kiro/hooks/${h.name}.json`, hookText(h, dnrPath));
@@ -124,10 +130,10 @@ export async function cmdInit(argv: string[], io: CliIO): Promise<number> {
     const hooksDir = await gitPath(root, 'hooks');
     const pc = join(hooksDir, 'pre-commit');
     if (existsSync(pc)) {
-      record('pre-commit hook', readFileSync(pc, 'utf8') === PRE_COMMIT_SHIM ? 'unchanged' : 'kept');
+      record('pre-commit hook', readFileSync(pc, 'utf8') === preCommitShim(dnrPath) ? 'unchanged' : 'kept');
     } else {
       await mkdir(hooksDir, { recursive: true });
-      await writeFile(pc, PRE_COMMIT_SHIM);
+      await writeFile(pc, preCommitShim(dnrPath));
       chmodSync(pc, 0o755);
       record('pre-commit hook', 'created');
     }
@@ -153,6 +159,25 @@ export async function cmdInit(argv: string[], io: CliIO): Promise<number> {
       );
   }
 
+  // Wave-3 N2: record the bundle's sha256; Stop and `dnr doctor` verify it.
+  const sha = bundleSha256(cli);
+  const install = { node: process.execPath, cli, sha256: sha };
+  const installRel = '.dnr/install.json';
+  const prevInstall = existsSync(join(root, installRel))
+    ? readFileSync(join(root, installRel), 'utf8')
+    : null;
+  const installText = `${JSON.stringify(install, null, 2)}\n`;
+  if (prevInstall !== installText) {
+    await mkdir(join(root, '.dnr'), { recursive: true });
+    await writeFile(join(root, installRel), installText);
+    record(installRel, prevInstall === null ? 'created' : 'updated');
+  } else record(installRel, 'unchanged');
+  if (!sha)
+    io.err(`DNR: cannot read ${cli}; the bundle hash is not recorded, and \`dnr doctor\` will flag it.\n`);
+
+  // Kiro's own deny rules (user level), shown as a diff and confirmed at the TTY.
+  if (hooksSel === 'all' && !v['no-permissions']) await installPermissions(io, cli, record);
+
   // A guarded init is an allowed change of the enforcement set (§5.11).
   const store = openStore(root, { env: io.env });
   await store.sessions.refreshOrdersHash(store.ordersHash());
@@ -164,10 +189,48 @@ export async function cmdInit(argv: string[], io: CliIO): Promise<number> {
   return EXIT.OK;
 }
 
-function resolveDnrOnPath(io: CliIO): string {
-  for (const dir of (io.env.PATH ?? '').split(':')) {
-    const p = join(dir, 'dnr');
-    if (dir && existsSync(p)) return p;
+function realOr(p: string): string {
+  try {
+    return realpathSync.native(p);
+  } catch {
+    return p;
   }
-  return io.scriptPath;
+}
+
+/** Single-quote for the shell (hook commands run through a shell). */
+export function shq(s: string): string {
+  return /^[A-Za-z0-9_./:@%+=-]+$/.test(s) ? s : `'${s.replaceAll("'", "'\\''")}'`;
+}
+
+async function installPermissions(
+  io: CliIO,
+  cli: string,
+  record: (rel: string, s: Status) => Status,
+): Promise<void> {
+  const file = permissionsFile(io.env);
+  const installDir = dirname(dirname(cli));
+  const shims: string[] = [];
+  for (const dir of (io.env.PATH ?? '').split(':'))
+    if (dir && existsSync(join(dir, 'dnr'))) shims.push(join(dir, 'dnr'));
+  const block = dnrRules([`${installDir}/**`, ...shims]);
+  const cur = existsSync(file) ? readFileSync(file, 'utf8') : null;
+  const next = mergePermissions(cur, block);
+  if (cur === next) {
+    record('~/.kiro/settings/permissions.yaml', 'unchanged');
+    return;
+  }
+  io.out(
+    `DNR would add Kiro deny rules to ${file} (they apply to every workspace):\n${createTwoFilesPatch(file, file, cur ?? '', next, 'current', 'with DNR rules')}`,
+  );
+  const answer = io.prompt ? (await io.prompt('Install these rules? [y/N] ')).trim().toLowerCase() : '';
+  if (answer !== 'y' && answer !== 'yes') {
+    io.out(
+      'DNR: skipped the Kiro permission rules (run `dnr init` again to install them; `dnr doctor` reports them missing).\n',
+    );
+    record('~/.kiro/settings/permissions.yaml', 'kept');
+    return;
+  }
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, next);
+  record('~/.kiro/settings/permissions.yaml', cur === null ? 'created' : 'updated');
 }

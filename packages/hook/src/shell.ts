@@ -11,7 +11,7 @@
 import { existsSync, globSync, readFileSync } from 'node:fs';
 import { isAbsolute, join, resolve } from 'node:path';
 import { overlayState, scoreOrder } from '@dnr/core';
-import { headCommit, revList, snapshotTree, tryResolve } from '@dnr/git';
+import { headCommit, revList, runGit, snapshotTree, tryResolve } from '@dnr/git';
 import type { EventRecord, Order, Session } from '@dnr/schemas';
 import { writeJsonAtomic } from '@dnr/store';
 import { applyPatch, parsePatch } from 'diff';
@@ -68,6 +68,8 @@ export interface ShellEnv {
   /** Resolve a revision to a full SHA (null when it does not resolve). */
   resolve(rev: string): Promise<string | null>;
   revList(range: string): Promise<string[]>;
+  /** Every commit whose message matches a `:/<regex>` revision (wave-3 N6). */
+  grepCommits?(regex: string): Promise<string[]>;
   /** Board ports: config board_port plus the live port in board.json. */
   boardPorts: number[];
   ordersDir: string;
@@ -82,6 +84,7 @@ export function r6Subcommand(args: readonly string[], ordersDir: string, cwd: st
   const [sub, sub2] = pos;
   if (!sub) return null;
   if (['allow', 'board', 'init', 'draft'].includes(sub)) return sub;
+  if (sub === 'tamper' && sub2 === 'accept') return 'tamper accept';
   if (sub === 'orders' && sub2 && ['approve', 'retire', 'unretire', 'edit', 'reapprove'].includes(sub2))
     return `orders ${sub2}`;
   if (sub === 'orders' && sub2 === 'build') {
@@ -175,6 +178,12 @@ function gitSub(argv: string[]): { sub: string; args: string[]; configs: string[
 }
 
 async function resolvesTo(env: ShellEnv, rev: string, shas: Set<string>): Promise<string | null> {
+  // `:/<regex>` names the youngest matching commit; deny when any matching commit is protected (N6).
+  if (rev.startsWith(':/') && env.grepCommits) {
+    const hits = await env.grepCommits(rev.slice(2).replace(/^!-?/, ''));
+    const hit = hits.find((h) => shas.has(h));
+    if (hit) return hit;
+  }
   const clean = rev.replace(/\^\{commit\}$/, '');
   if (/^[0-9a-f]{7,40}$/.test(clean)) {
     for (const s of shas) if (s.startsWith(clean)) return s;
@@ -216,8 +225,15 @@ function expandPath(env: ShellEnv, token: string): string[] {
 }
 
 /** Evaluate every rule over one command string. */
+/** Inline simple `$(git rev-parse X)` / backtick substitutions as `X` (wave-3 N6). */
+export function inlineRevParse(command: string): string {
+  const re =
+    /\$\(\s*git\s+rev-parse(?:\s+--(?:verify|quiet|short(?:=\d+)?)|\s+-q)*\s+([^\s()`$;|&]+)\s*\)|`\s*git\s+rev-parse(?:\s+--(?:verify|quiet|short(?:=\d+)?)|\s+-q)*\s+([^\s()`$;|&]+)\s*`/g;
+  return command.replace(re, (_m, a, b) => (a ?? b) as string);
+}
+
 export async function evaluateShell(command: string, env: ShellEnv): Promise<ShellFinding[]> {
-  const cmds = parseCommands(command, { HOME: env.home ?? undefined });
+  const cmds = parseCommands(inlineRevParse(command), { HOME: env.home ?? undefined });
   const findings: ShellFinding[] = [];
   const reverts = new Map(env.orders.filter((o) => o.revert_sha).map((o) => [o.revert_sha as string, o.id]));
   const originals = new Map(env.orders.map((o) => [o.original_sha, o.id]));
@@ -518,6 +534,13 @@ async function shellEnvFor(
     orders,
     resolve: (rev) => tryResolve(ctx.repoRoot, rev),
     revList: (range) => revList(ctx.repoRoot, range),
+    grepCommits: async (regex) => {
+      const r = await runGit(['rev-list', '--all', `--grep=${regex}`], {
+        cwd: ctx.repoRoot,
+        okCodes: [0, 128],
+      });
+      return r.code === 0 ? r.stdout.split('\n').filter(Boolean) : [];
+    },
     boardPorts: boardPorts(ctx),
     ordersDir: ctx.store.paths.ordersDir,
     readFile: (p) => {
@@ -573,7 +596,7 @@ export function runGuardShell(stdin: string, opts: HookOptions = {}): Promise<Ho
   return failOpen('guard-shell', stdin, opts, async () => {
     const env = opts.env ?? process.env;
     const ev = parseHookEvent(stdin, opts.cwd);
-    const ctx = await openContext(ev.cwd, env);
+    const ctx = await openContext(ev.cwd, env, keyOf(ev).key);
     if (!ctx) return { ...OK };
     const command = shellCommandOf(ev) ?? '';
     const key = keyOf(ev);

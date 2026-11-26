@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG, DnrConfig } from './config';
 import { Pins } from './fixtures';
 import { Iso, RepoPath, Sha40 } from './primitives';
-import { Decision, Grant, Order } from './records';
+import { Decision, EffectiveStatus, Grant, Order } from './records';
 
 const sha = 'a'.repeat(40);
 const order = {
@@ -123,6 +123,41 @@ describe('Grant.origin (optional, wave-2 C3/H4)', () => {
     const origin = { via: 'cli', suspect: true, markers: ['env:KIRO_SESSION_ID', 'ancestor:kiro-cli'] };
     expect(Grant.parse({ ...grant, origin }).origin).toEqual(origin);
     expect(Grant.safeParse({ ...grant, origin: { via: 'shell', suspect: false, markers: [] } }).success).toBe(
+      false,
+    );
+  });
+});
+
+describe('wave-3 N4/N5 additions', () => {
+  it('EffectiveStatus lists the derived statuses, and Order.status still rejects them', () => {
+    expect(EffectiveStatus.options).toEqual([
+      'draft',
+      'approved',
+      'retired',
+      'stale',
+      'relanded',
+      'violated',
+    ]);
+    for (const derived of ['stale', 'relanded', 'violated']) {
+      expect(Order.safeParse({ ...order, status: derived }).success).toBe(false);
+    }
+  });
+  it('Grant.origin confirmation fields are optional and validated', () => {
+    const base = {
+      order_id: 'dnr-0123456789',
+      session_key: null,
+      kind: 'allow_once',
+      granted_by: 'human',
+      granted_at: '2026-11-26T00:00:00Z',
+      expires_at: '2026-11-26T01:00:00Z',
+      used: [],
+      blobs: [],
+    };
+    const origin = { via: 'cli', suspect: true, markers: ['no-tty'] };
+    expect(Grant.safeParse({ ...base, origin }).success).toBe(true);
+    const confirmed = { ...origin, confirmed_by: 'maintainer', confirmed_at: '2026-11-26T00:05:00Z' };
+    expect(Grant.parse({ ...base, origin: confirmed }).origin).toEqual(confirmed);
+    expect(Grant.safeParse({ ...base, origin: { ...origin, confirmed_at: 'yesterday' } }).success).toBe(
       false,
     );
   });

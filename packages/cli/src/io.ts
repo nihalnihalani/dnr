@@ -16,6 +16,10 @@ export interface CliIO {
   err(s: string): void;
   /** The R6 human-only guard (process ancestry, TTY, Kiro variables). */
   guard(): GuardResult;
+  /** Ask the human a question at the TTY (absent: not interactive, the answer is no). */
+  prompt?: (question: string) => Promise<string>;
+  /** Whether stdin/stdout are a TTY, for grant provenance (tests inject it). */
+  isTTY?: () => boolean;
   /** Process ancestry for grant provenance (tests inject it; default: `ps`). */
   processChain?: () => import('@dnr/hook').Proc[];
   /** The path of the running CLI script (init refuses npx cache paths). */

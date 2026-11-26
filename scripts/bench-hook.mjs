@@ -14,16 +14,29 @@ import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const { values: v } = parseArgs({
-  options: {
-    cwd: { type: 'string' },
-    runs: { type: 'string', default: '30' },
-    out: { type: 'string', default: 'perf.json' },
-    cli: { type: 'string' },
-  },
-});
+const USAGE =
+  'usage: node scripts/bench-hook.mjs --cwd <demo checkout> [--runs 30] [--out perf.json] [--cli <path>]';
+let v;
+try {
+  ({ values: v } = parseArgs({
+    options: {
+      cwd: { type: 'string' },
+      runs: { type: 'string', default: '30' },
+      out: { type: 'string', default: 'perf.json' },
+      cli: { type: 'string' },
+      help: { type: 'boolean', short: 'h' },
+    },
+  }));
+} catch (e) {
+  console.error(`${e.message}\n${USAGE}`);
+  process.exit(64);
+}
+if (v.help) {
+  console.log(USAGE);
+  process.exit(0);
+}
 if (!v.cwd) {
-  console.error('usage: node scripts/bench-hook.mjs --cwd <demo checkout> [--runs 30] [--out perf.json]');
+  console.error(USAGE);
   process.exit(64);
 }
 const cli = v.cli ?? join(root, 'packages/cli/dist/cli.js');
