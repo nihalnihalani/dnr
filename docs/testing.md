@@ -34,13 +34,13 @@ dnr doctor
 
 Every check is green: node, git, the grammar ABI, the hook JSON, `dnr` on the PATH hooks see, the kiro-cli version, and the board port.
 
-## 4. Offline terminal replay
+## 4. Offline run of the real hook
 
 ```bash
-dnr demo        # after publishing: npx <package> demo
+dnr demo --live
 ```
 
-Replays the recorded demo block from bundled fixtures. Needs no Kiro, no network and no Django.
+Runs the real hook offline on the real Django case (`dnr-43933a1dca`). The input event is labeled provisional until spike S2 captures a real one. Plain `dnr demo` exits 69 and says no recorded Kiro session exists yet. It becomes a replay of a real captured `demo/L` run once Phase 10 records one.
 
 ## 5. Your own repository
 

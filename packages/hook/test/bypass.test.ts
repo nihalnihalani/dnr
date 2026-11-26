@@ -148,3 +148,19 @@ describe('guard-shell bypasses (wave-2 H3)', () => {
     writeFileSync('/dev/null', '');
   });
 });
+
+describe('wave-3 N6', () => {
+  for (const tpl of [
+    'git cherry-pick $(git rev-parse <O7>)',
+    'git cherry-pick `git rev-parse --verify <O7>`',
+    "git cherry-pick ':/^Fixed'",
+  ]) {
+    it(`N6: guard-shell resolves \`${tpl}\` to the original and denies it`, async () => {
+      fx = await revertFixture();
+      const cmd = tpl.replaceAll('<O7>', fx.C.slice(0, 7));
+      const io = await runGuardShell(ev(fx, cmd), { env: envFor(fx.repo) });
+      expect(io.exitCode).toBe(2);
+      expect(io.stderr).toContain('DNR guard-shell (R3)');
+    });
+  }
+});

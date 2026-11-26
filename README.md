@@ -41,7 +41,7 @@ A human recovers with `dnr board --open <order_id>` or `dnr allow <order_id>`, f
    `cd ../django-demo && kiro-cli chat "$(cat "$OLDPWD/scripts/demo/prompts/write.txt")"`.
    `direct.txt` and `cleanup.txt` are alternates.
 3. Open the Codespaces devcontainer and run `dnr doctor`.
-4. Run `dnr demo` for the offline terminal replay (`npx <package> demo` once the npm package is published).
+4. Run `dnr demo --live` to run the real hook offline on the real Django case (its input event is labeled provisional until spike S2). `dnr demo` without `--live` exits 69, because no recorded Kiro session exists yet.
 5. Try it on your own repo: `dnr init && dnr scan && dnr orders build && dnr draft --all`, then review and approve in `dnr board`.
 
 Details and expected output for each step: [docs/testing.md](docs/testing.md).

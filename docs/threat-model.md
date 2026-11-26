@@ -68,7 +68,7 @@ From the wave-2 devil's advocate review (`docs/review-wave2.md`). Each fix lands
 | N3 | the `N3:` cases in `wave3.test.ts` (shell retire, `git commit -am`, `reset --hard` and `update-ref`, pre-commit refusal) and `N3: dnr tamper accept (human-only) …` in `cli.test.ts` |
 | N4 | the `N4:` cases in `wave3.test.ts` |
 | N5 | the `N5:` cases in `cli.test.ts` |
-| N6 | the command-substitution and `:/regex` rows in `packages/hook/test/bypass.test.ts` |
+| N6 | `packages/hook/test/bypass.test.ts`, describe `wave-3 N6`: three `N6: guard-shell resolves `<cmd>` to the original and denies it` tests, for `$(git rev-parse …)`, the backtick `rev-parse` form and `':/^Fixed'` |
 | N7 | `N7: board keeps the nonce out of argv and out of the launch file …` |
 
 ## Known limits
