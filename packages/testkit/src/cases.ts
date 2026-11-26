@@ -77,6 +77,7 @@ export function buildCase(
   const before = texts(files, []);
   const after = texts(files, ids);
   const r = buildOrder({
+    reason: 'Revert of a synthetic test change (test data, not a real revert)',
     provider,
     original_sha: SHA_C,
     revert_sha: SHA_R,

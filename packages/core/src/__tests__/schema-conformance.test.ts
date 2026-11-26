@@ -14,6 +14,7 @@ beforeAll(async () => {
 const FILE = 'synthetic/sql/query.py';
 const build = () =>
   buildOrder({
+    reason: 'Revert of a synthetic test change (test data, not a real revert)',
     provider: P,
     original_sha: SHA_C,
     revert_sha: SHA_R,

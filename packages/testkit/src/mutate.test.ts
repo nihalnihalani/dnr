@@ -21,6 +21,7 @@ beforeAll(async () => {
 
 function orderFor(fx: MutationFixture) {
   const r = buildOrder({
+    reason: 'Revert of a synthetic test change (test data, not a real revert)',
     provider: P,
     original_sha: SHA_C,
     revert_sha: SHA_R,
@@ -60,6 +61,7 @@ describe('M4: no silent mutant shortfall', () => {
     const before = 'def f(a):\n    return a\n';
     const after = 'def f(a):\n    b = a * 2\n    return b\n';
     const r = buildOrder({
+      reason: 'Revert of a synthetic test change (test data, not a real revert)',
       provider: P,
       original_sha: SHA_C,
       revert_sha: SHA_R,

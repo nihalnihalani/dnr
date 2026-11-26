@@ -123,7 +123,12 @@ export interface BuildOrderInput {
   files: readonly BuildOrderFile[];
   links: Order['links'];
   tickets?: Order['tickets'];
-  reason?: string;
+  /**
+   * The order's reason. Never invented (AGENTS.md): pass the revert's real subject for a new order
+   * (the plan's placeholder rule for unassigned orders, §9.3) or a human/drafter reason.
+   */
+  reason: string;
+  /** Defaults to `placeholder` (the reason is the revert subject until drafted or edited). */
   reason_source?: Order['reason_source'];
   status?: Order['status'];
   /** ISO time for created_at/updated_at/history. */
@@ -179,6 +184,8 @@ export function buildOrder(input: BuildOrderInput): BuildOrderResult {
     }
   }
   if (units.length === 0) return { ok: false, skip_reason: 'no-unit-change' };
+  if (!input.reason.trim())
+    throw new Error('buildOrder: reason must be the revert subject or a real reason, never empty');
   const source = input.source ?? (input.revert_sha ? 'revert' : 'manual');
   const id = orderId(source === 'manual' ? null : input.revert_sha, input.original_sha);
   const order: Order = {
@@ -191,10 +198,8 @@ export function buildOrder(input: BuildOrderInput): BuildOrderResult {
     snapshot_sha: input.snapshot_sha,
     tickets: input.tickets ?? [],
     links: input.links,
-    reason:
-      input.reason ??
-      `Placeholder: ${input.original_sha.slice(0, 10)} was reverted${input.revert_sha ? ` in ${input.revert_sha.slice(0, 10)}` : ''}; reason not yet drafted.`,
-    reason_source: input.reason_source ?? (input.reason ? 'human' : 'placeholder'),
+    reason: input.reason.trim().slice(0, 280),
+    reason_source: input.reason_source ?? 'placeholder',
     units,
     history: [{ at: input.at, by: input.by ?? 'dnr', action: 'created' }],
     created_at: input.at,

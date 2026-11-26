@@ -48,7 +48,7 @@ const { decision, effects } = decide({
 - `multiset(xs)`, `intersectionWeight(x, y, grammar)` (w(X∩Y), counted with repeats), `jaccard(x, y)` (weighted multiset Jaccard), `shingles3(tokens, grammar)` (S3 over weight-1 tokens).
 
 ### Building orders (§5.3)
-- `buildOrder(input: BuildOrderInput): { ok: true; order; material; changes } | { ok: false; skip_reason: 'no-unit-change' }`. The input is `{ provider, original_sha, revert_sha, snapshot_sha, files: {path, before, after, post_revert}[], links, tickets?, reason?, reason_source?, status? ('draft'), at, by? }`. The output is deterministic: files are sorted by path.
+- `buildOrder(input: BuildOrderInput): { ok: true; order; material; changes } | { ok: false; skip_reason: 'no-unit-change' }`. The input is `{ provider, original_sha, revert_sha, snapshot_sha, files: {path, before, after, post_revert}[], links, tickets?, reason, reason_source? ('placeholder'), status? ('draft'), at, by? }`. `reason` is required and never invented: pass the revert's real subject (§9.3 placeholder rule) or a real reason. The output is deterministic: files are sorted by path.
 - `extractUnitChanges(provider, {path, before, after}): UnitChange[]` returns the changed units of one file (`{ file, qualname, grammar, kind, A, R, before, after }`), with formatting-only units skipped. Mining's rule E5 uses it.
 - `changedLines(before, after): { old: number[]; new: number[] }` gives the `git diff -U0` line sets.
 - Test paths are never order units. `buildOrder({ testGlobs })` and `extractUnitChanges(p, f, { testGlobs })` default to `DEFAULT_TEST_GLOBS` (config `test_globs`). Use `isTestPath(path, globs)` and `matchesGlob(path, glob)` to check a path yourself.

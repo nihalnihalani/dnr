@@ -34,6 +34,8 @@ beforeAll(async () => {
   T.ta = read('tests.after.py');
   // The revert restores both files byte for byte, so post_revert = before.
   const r = buildOrder({
+    reason:
+      'Reverted "Fixed #26434 -- Removed faulty clearing of ordering field when missing from explicit grouping."',
     provider: P,
     original_sha: C,
     revert_sha: R,

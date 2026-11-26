@@ -53,6 +53,7 @@ def added_helper(value, factor):
 
 function mk(files: Array<[string, string, string]>, status: Order['status'] = 'approved'): OrderEntry {
   const r = buildOrder({
+    reason: 'Revert of a synthetic test change (test data, not a real revert)',
     provider: P,
     original_sha: SHA_C,
     revert_sha: SHA_R,

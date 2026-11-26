@@ -15,6 +15,7 @@ beforeAll(async () => {
   P = await grammars();
   cache = new UnitCache(P);
   const r = buildOrder({
+    reason: 'Revert of a synthetic test change (test data, not a real revert)',
     provider: P,
     original_sha: SHA_C,
     revert_sha: SHA_R,
@@ -53,7 +54,7 @@ describe('synthetic query-builder fixture (invented, not Django)', () => {
     expect(d.decision.outcome).toBe('block');
     expect(d.decision.tier).toBe('match');
     expect(d.decision.reason_line).toMatch(
-      /^DNR: Placeholder: .* https:\/\/example\.test\/synthetic\/commit\/a1b2$/,
+      /^DNR: Revert of a synthetic test change \(test data, not a real revert\) https:\/\/example\.test\/synthetic\/commit\/a1b2$/,
     );
   });
   it('an exact re-application in a different format still scores 1.0', () => {
@@ -75,6 +76,7 @@ describe('synthetic query-builder fixture (invented, not Django)', () => {
   });
   it('a formatting-only commit produces no order', () => {
     const r = buildOrder({
+      reason: 'Revert of a synthetic test change (test data, not a real revert)',
       provider: P,
       original_sha: SHA_C,
       revert_sha: SHA_R,
