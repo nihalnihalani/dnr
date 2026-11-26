@@ -181,8 +181,11 @@ export class OrderStore {
     source: Order['reason_source'] = 'human',
     at = nowIso(),
   ): Promise<Order> {
+    const trimmed = reason.trim();
+    if (trimmed.length < 1 || trimmed.length > 280)
+      throw new Error('DNR: reason must be 1–280 characters after trimming');
     return this.update(id, (o) => {
-      o.reason = reason;
+      o.reason = trimmed;
       o.reason_source = source;
       o.history.push({ at, by, action: 'edited_reason' });
       o.updated_at = at;
