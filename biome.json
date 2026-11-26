@@ -11,7 +11,11 @@
       "!work",
       "!**/*.md",
       "!**/*.yml",
-      "!**/*.yaml"
+      "!**/*.yaml",
+      "!apps/playground/test-results",
+      "!apps/playground/playwright-report",
+      "!apps/playground/public/data",
+      "!apps/playground/public/cases"
     ]
   },
   "formatter": {

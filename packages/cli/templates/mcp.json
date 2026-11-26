@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "dnr": {
+      "command": "dnr",
+      "args": ["mcp"],
+      "env": {},
+      "disabled": false,
+      "autoApprove": ["explain_function", "list_orders_for_file"]
+    }
+  }
+}

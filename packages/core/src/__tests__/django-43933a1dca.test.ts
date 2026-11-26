@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { buildOrder } from '../build-order';
 import { decide, type OrderEntry } from '../decide';
+import * as core from '../index';
 import { scoreOrder } from '../score';
 import { createState, UnitCache } from '../state';
 import type { ParserProvider } from '../syntax';
@@ -69,6 +70,9 @@ describe('H3: real Django order dnr-43933a1dca', () => {
     // ui's earlier "w(A)=31" was A.length: it counted the weight-0 tokens
     expect(unitWeights(u)).toEqual({ wA: 16, wR: 0 });
     expect(orderWeight(entry.order)).toBe(16);
+    // exported from the public API, so consumers need no local copy
+    expect(core.orderWeight(entry.order)).toBe(16);
+    expect(core.unitWeights(u)).toEqual({ wA: 16, wR: 0 });
     expect(u.A.filter((t) => weightOf([t], 'python') === 1)).toEqual([
       'or',
       'isinstance',

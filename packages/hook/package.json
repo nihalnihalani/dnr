@@ -5,7 +5,10 @@
   "type": "module",
   "description": "Kiro hook entry points: pre-write, post-write, guard-shell, post-shell, stop backstop, session start",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./version": "./src/version.ts",
+    "./ancestry": "./src/ancestry.ts",
+    "./messages": "./src/messages.ts"
   },
   "dependencies": {
     "shell-quote": "1.12.0",
@@ -13,7 +16,8 @@
     "@dnr/grammar": "workspace:*",
     "@dnr/git": "workspace:*",
     "@dnr/store": "workspace:*",
-    "@dnr/schemas": "workspace:*"
+    "@dnr/schemas": "workspace:*",
+    "diff": "9.0.0"
   },
   "scripts": {
     "test": "vitest run --root ../.. --project unit packages/hook"

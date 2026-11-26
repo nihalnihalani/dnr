@@ -1,23 +1,53 @@
 {
-  "name": "@dnr/cli",
-  "version": "0.0.0",
-  "private": true,
+  "name": "dnr-guard",
+  "version": "0.1.0",
+  "description": "DNR (Do Not Resurrect): blocks AI-agent writes that re-apply reverted changes, with the revert reason and links",
+  "license": "MIT",
   "type": "module",
-  "description": "The dnr command",
-  "exports": {
-    ".": "./src/index.ts"
+  "bin": {
+    "dnr": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "vendor/grammars",
+    "templates"
+  ],
+  "engines": {
+    "node": ">=24 <27"
+  },
+  "keywords": [
+    "revert",
+    "regression",
+    "kiro",
+    "hooks",
+    "git"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
+    "@hono/node-server": "2.1.11",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "diff": "9.0.0",
+    "hono": "4.13.22",
+    "shell-quote": "1.12.0",
+    "ulid": "3.0.2",
+    "web-tree-sitter": "0.27.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@dnr/board": "workspace:*",
     "@dnr/core": "workspace:*",
-    "@dnr/grammar": "workspace:*",
     "@dnr/git": "workspace:*",
-    "@dnr/store": "workspace:*",
+    "@dnr/grammar": "workspace:*",
     "@dnr/hook": "workspace:*",
     "@dnr/mcp": "workspace:*",
-    "@dnr/trial": "workspace:*",
-    "@dnr/schemas": "workspace:*"
+    "@dnr/schemas": "workspace:*",
+    "@dnr/store": "workspace:*",
+    "@dnr/trial": "workspace:*"
   },
   "scripts": {
+    "build": "tsup && node scripts-copy-assets.mjs",
     "test": "vitest run --root ../.. --project unit packages/cli"
   }
 }

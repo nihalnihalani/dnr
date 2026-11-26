@@ -1,0 +1,14 @@
+{
+  "hook_event_name": "PreToolUse",
+  "cwd": ".",
+  "session_id": "demo-session-1",
+  "tool_name": "fs_append",
+  "tool_input": {
+    "path": "django/utils/text.py",
+    "content": "\n\ndef shout(x):\n    return str(x).upper()\n"
+  },
+  "_fixture": {
+    "provisional": "Kiro stdin field names are provisional until spike S2 freezes them (01-research.md: hook_event_name, cwd, session_id, tool_name, tool_input). cwd '.' resolves against the hook's working directory (the demo checkout).",
+    "expect": "allow (fast path): appends to an uncovered file"
+  }
+}

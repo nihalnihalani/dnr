@@ -1,0 +1,15 @@
+{
+  "hook_event_name": "PreToolUse",
+  "cwd": ".",
+  "session_id": "demo-session-1",
+  "tool_name": "str_replace",
+  "tool_input": {
+    "path": "django/db/models/sql/query.py",
+    "old_str": "    def clear_ordering(self, force=False, clear_default=True):\n",
+    "new_str": "    def clear_ordering(self, force: bool = False, clear_default: bool = True) -> None:\n"
+  },
+  "_fixture": {
+    "provisional": "Kiro stdin field names are provisional until spike S2 freezes them (01-research.md: hook_event_name, cwd, session_id, tool_name, tool_input). cwd '.' resolves against the hook's working directory (the demo checkout).",
+    "expect": "warn_block then warn_pass: adds type hints to Query.clear_ordering; changes a covered unit, does not re-apply the order"
+  }
+}

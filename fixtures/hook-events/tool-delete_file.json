@@ -1,0 +1,13 @@
+{
+  "hook_event_name": "PreToolUse",
+  "cwd": ".",
+  "session_id": "demo-session-1",
+  "tool_name": "delete_file",
+  "tool_input": {
+    "path": "django/db/models/sql/query.py"
+  },
+  "_fixture": {
+    "provisional": "Kiro stdin field names are provisional until spike S2 freezes them (01-research.md: hook_event_name, cwd, session_id, tool_name, tool_input). cwd '.' resolves against the hook's working directory (the demo checkout).",
+    "expect": "warn_block: deleting the file empties every covered unit (kind=modified units fall to warn)"
+  }
+}

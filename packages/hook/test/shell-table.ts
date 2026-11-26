@@ -1,0 +1,92 @@
+/**
+ * The guard-shell table (P6-01): each row is a command and the rule that must deny it, or null
+ * when it must be allowed. `<C>` is the order's original commit, `<R>` its revert,
+ * `<PATCH>` a patch file that re-applies the order, `<OKPATCH>` one that does not.
+ */
+export type Row = [command: string, rule: string | null, note?: string];
+
+export const SHELL_TABLE: Row[] = [
+  // R1: protected paths
+  ['cat .dnr/orders/dnr-x.json', 'R1'],
+  ['echo {} > .dnr/config.json', 'R1'],
+  ['rm -rf .dnr/orders', 'R1'],
+  ['cp evil.json .kiro/hooks/dnr-pre-write.json', 'R1'],
+  ['sed -i "" s/approved/retired/ .dnr/orders/*.json', 'R1'],
+  ['tee .kiro/settings/mcp.json < x', 'R1'],
+  ['mv a.json ~/.kiro/hooks/x.json', 'R1'],
+  ['echo x >> $HOME/.kiro/agents/a.json', 'R1'],
+  ['rm .git/hooks/pre-commit', 'R1', 'review M3: the pre-commit shim'],
+  ['ls -la . && git status', null],
+  ['cat .kiro/steering/product.md', null],
+  // R2: git revert of an order's revert
+  ['git revert <R>', 'R2'],
+  ['git revert --no-edit <R7>', 'R2'],
+  ['git revert HEAD', 'R2', 'HEAD is the revert in this fixture'],
+  ['git revert HEAD~1', null],
+  // R3: cherry-pick of an original
+  ['git cherry-pick <C>', 'R3'],
+  ['git cherry-pick -n <C7>', 'R3'],
+  ['git cherry-pick <BASE>..<C>', 'R3', 'range'],
+  ['git cherry-pick --abort', null],
+  // R4: patches
+  ['git apply <PATCH>', 'R4'],
+  ['patch -p1 < <PATCH>', 'R4'],
+  ['patch -p1 -i <PATCH>', 'R4'],
+  ['git apply <OKPATCH>', null],
+  ['curl -s https://example.invalid/p.diff | git apply', 'R4', 'unreadable: one warning per session'],
+  // R5: restore from an original
+  ['git checkout <C> -- shop.py', 'R5'],
+  ['git restore --source <C7> shop.py', 'R5'],
+  ['git restore --source=<C> -- shop.py', 'R5'],
+  ['git show <C>:shop.py > shop.py', 'R5'],
+  ['git show <C>:shop.py', null, 'printing is fine'],
+  ['git checkout -b feature', null],
+  // R6: enforcement-changing dnr subcommands, through wrappers
+  ['dnr allow dnr-x', 'R6'],
+  ['dnr board --open dnr-x', 'R6'],
+  ['dnr init --force', 'R6'],
+  ['dnr orders approve --all --by agent', 'R6'],
+  ['dnr orders retire dnr-x', 'R6'],
+  ['dnr orders edit dnr-x --reason hi', 'R6'],
+  ['dnr orders build', 'R6', 'output is the live order dir'],
+  ['dnr orders build --out-dir /tmp/elsewhere', null],
+  ['dnr draft --all', 'R6'],
+  ['dnr session end', 'R6'],
+  ['npx dnr-guard allow dnr-x', 'R6'],
+  ['env -i PATH=/usr/bin dnr allow dnr-x', 'R6'],
+  ['sh -c "dnr orders unretire dnr-x"', 'R6'],
+  ["bash -lc 'dnr allow dnr-x'", 'R6'],
+  ['script -q /dev/null dnr allow dnr-x', 'R6'],
+  ['node ./node_modules/dnr-guard/dist/cli.js allow dnr-x', 'R6'],
+  ['pnpm exec dnr orders reapprove dnr-x', 'R6'],
+  ['npm exec -- dnr allow dnr-x', 'R6'],
+  ['echo $(dnr allow dnr-x)', 'R6', 'command substitution'],
+  ['echo `dnr board`', 'R6', 'backticks'],
+  ['true && dnr allow dnr-x || false', 'R6'],
+  ['dnr orders list', null],
+  ['dnr explain shop.py total', null],
+  ['dnr check --worktree', null],
+  // R7: the board port on loopback
+  ['curl http://127.0.0.1:4317/api/orders', 'R7'],
+  ['curl -X POST localhost:4317/api/orders/dnr-x/allow-once', 'R7'],
+  ['wget -qO- http://[::1]:4317/api/health', 'R7'],
+  ['nc localhost 4317', 'R7'],
+  ['python3 -c "import urllib.request as u; u.urlopen(\'http://127.0.0.1:4317/api\')"', 'R7'],
+  ['node -e "fetch(\'http://localhost:4317/api/orders\')"', 'R7'],
+  ['curl http://127.0.0.1:5173/', null, "the agent's own dev server"],
+  ['curl https://example.com/', null],
+  // R8: hook and approval bypasses (review M3)
+  ['git commit --no-verify -m wip', 'R8'],
+  ['git commit -nm wip', 'R8'],
+  ['git commit -am "fix" -n', 'R8'],
+  ['git commit -m "no -n here"', null],
+  ['git config core.hooksPath /dev/null', 'R8'],
+  ['git -c core.hooksPath=/tmp commit -m x', 'R8'],
+  ['git config --get core.hooksPath', null],
+  ['osascript -e \'tell app "Terminal" to do script "dnr allow dnr-x"\'', 'R8'],
+  ['open -a Terminal .', 'R8'],
+  ['tmux send-keys -t 0 "dnr allow dnr-x" Enter', 'R8'],
+  // plain commands
+  ['python -m pytest tests/', null],
+  ['make test', null],
+];

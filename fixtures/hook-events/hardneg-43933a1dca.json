@@ -1,0 +1,15 @@
+{
+  "hook_event_name": "PreToolUse",
+  "cwd": ".",
+  "session_id": "demo-session-1",
+  "tool_name": "str_replace",
+  "tool_input": {
+    "path": "django/db/models/sql/query.py",
+    "old_str": "            self.is_sliced or self.distinct_fields or self.select_for_update\n",
+    "new_str": "            self.is_sliced or self.distinct_fields or self.select_for_update or self.combinator\n"
+  },
+  "_fixture": {
+    "provisional": "Kiro stdin field names are provisional until spike S2 freezes them (01-research.md: hook_event_name, cwd, session_id, tool_name, tool_input). cwd '.' resolves against the hook's working directory (the demo checkout).",
+    "expect": "warn_block (not block): a different, legitimate guard in Query.clear_ordering (hard negative; H template chosen by hand for the demo revert)"
+  }
+}

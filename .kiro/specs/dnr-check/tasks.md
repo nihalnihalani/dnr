@@ -74,9 +74,9 @@ Tasks follow the build phases in plan §13.1, in dependency order. Run them one 
   - [ ] 3.2 `stale` and re-landed derivation
     - _Requirements: R10_
     - commit:
-  - [ ] 3.3 `dnr orders build` (keeps status, reason, history on rebuild) and `dnr orders show [--tokens]`; build is deterministic
+  - [x] 3.3 `dnr orders build` (keeps status, reason, history on rebuild) and `dnr orders show [--tokens]`; build is deterministic
     - _Requirements: DC4_
-    - commit:
+    - commit: pending
   - [ ] 3.4 `testkit/mutate.ts` with six AST operators and the seed ranges (tune 1000–1004, held-out 2000–2004, split 3000–3004, move-to-file 3100–3104 and 3105–3109)
     - _Properties: P3, P11, P15, P16_
     - commit:
@@ -85,68 +85,68 @@ Tasks follow the build phases in plan §13.1, in dependency order. Run them one 
     - commit:
 
 - [ ] 4. Phase 5: Hook path
-  - [ ] 4.1 Store with atomic writes and locks; sessions with the temp-index baseline
+  - [x] 4.1 Store with atomic writes and locks; sessions with the temp-index baseline
     - _Requirements: R4, DC8_
-    - commit:
-  - [ ] 4.2 Tool adapters from the S2 captures
+    - commit: pending
+  - [x] 4.2 Tool adapters from the S2 captures
     - _Requirements: DC9, R11_
-    - commit:
-  - [ ] 4.3 Tiers (protect, match, warn, allow), grants, both output formats, the §6 stderr text with the 1,200-character cap
+    - commit: pending
+  - [x] 4.3 Tiers (protect, match, warn, allow), grants, both output formats, the §6 stderr text with the 1,200-character cap
     - _Requirements: R1, R2, R3, R6, R9, R12, DC1_
-    - commit:
+    - commit: pending
   - [ ] 4.4 Fast path and blob-SHA cache; tsup bundle linked globally
     - _Requirements: R8_
     - commit:
-  - [ ] 4.5 Fail-open wrapper and `hook.log` for every entry point
+  - [x] 4.5 Fail-open wrapper and `hook.log` for every entry point
     - _Requirements: R7_
-    - commit:
-  - [ ] 4.6 Record mode (`DNR_MODE=record` and config `mode`) with `proposed_text` and `session_patch`
+    - commit: pending
+  - [x] 4.6 Record mode (`DNR_MODE=record` and config `mode`) with `proposed_text` and `session_patch`
     - _Requirements: DC12_
-    - commit:
-  - [ ] 4.7 `dnr check --commit`, `dnr check --file`, `dnr check --replay [--canonical]`, `dnr allow <id>`, `dnr session start|confirm|show|end|gc`
+    - commit: pending
+  - [x] 4.7 `dnr check --commit`, `dnr check --file`, `dnr check --replay [--canonical]`, `dnr allow <id>`, `dnr session start|confirm|show|end|gc`
     - _Requirements: DC6, R9_
-    - commit:
-  - [ ] 4.8 Minimal `dnr init --hooks pre-write` (for gate check 1b)
+    - commit: pending
+  - [x] 4.8 Minimal `dnr init --hooks pre-write` (for gate check 1b)
     - _Requirements: DC16_
-    - commit:
+    - commit: pending
   - [ ] 4.9 Golden fixtures from S2 (`reapply-43933a1dca.json`, `hardneg-typehints.json`, `uncovered.json`, one per tool), `two-file-order.json`, the five gate hard negatives and both demo hard negatives
     - _Requirements: R1, R2_
     - commit:
-  - [ ] 4.10 Golden, warn-once, P3 accumulation, P10 grant scope, record mode and fail-open tests pass
+  - [x] 4.10 Golden, warn-once, P3 accumulation, P10 grant scope, record mode and fail-open tests pass
     - _Properties: P3, P10_
-    - commit:
-  - [ ] 4.11 Latency: hyperfine + `scripts/p95.mjs`; match p95 < 300 ms, fast path < 80 ms, first Django write < 2 s; results in `reports/perf.md`
+    - commit: pending
+  - [x] 4.11 Latency: hyperfine + `scripts/p95.mjs`; match p95 < 300 ms, fast path < 80 ms, first Django write < 2 s; results in `reports/perf.md`
     - _Requirements: R8_
-    - commit:
+    - commit: pending
 
 - [ ] 5. Phase 6: Shell, Stop, post-write, init
-  - [ ] 5.1 guard-shell GS-R1 … GS-R7 with the PreToolUse tree snapshot; table of 40 or more commands passes
+  - [x] 5.1 guard-shell GS-R1 … GS-R7 with the PreToolUse tree snapshot; table of 40 or more commands passes
     - _Requirements: DC10_
-    - commit:
-  - [ ] 5.2 Process-ancestry and Kiro-variable check in every GS-R6 subcommand
+    - commit: pending
+  - [x] 5.2 Process-ancestry and Kiro-variable check in every GS-R6 subcommand
     - _Requirements: DC10, DC17_
-    - commit:
-  - [ ] 5.3 `dnr session shell-after` (post-shell) adding changed files to `touched`
+    - commit: pending
+  - [x] 5.3 `dnr session shell-after` (post-shell) adding changed files to `touched`
     - _Requirements: DC10, DC11_
-    - commit:
-  - [ ] 5.4 Stop backstop: touched files only, grants honored, at most 2 forced turns, order-set hash, exit 0 on crash
+    - commit: pending
+  - [x] 5.4 Stop backstop: touched files only, grants honored, at most 2 forced turns, order-set hash, exit 0 on crash
     - _Requirements: DC11, R7, R13_
-    - commit:
-  - [ ] 5.5 `dnr session confirm` turning an approved `ask` into a grant
+    - commit: pending
+  - [x] 5.5 `dnr session confirm` turning an approved `ask` into a grant
     - _Requirements: R13_
-    - commit:
-  - [ ] 5.6 Pre-commit `dnr check --staged` with the crossing rule and blob-matched grants
+    - commit: pending
+  - [x] 5.6 Pre-commit `dnr check --staged` with the crossing rule and blob-matched grants
     - _Requirements: DC6_
-    - commit:
-  - [ ] 5.7 `warn-only` and `commit-enforce` modes and `dnr init --mode`; each mode writes a Zod-valid `EventRecord`
+    - commit: pending
+  - [x] 5.7 `warn-only` and `commit-enforce` modes and `dnr init --mode`; each mode writes a Zod-valid `EventRecord`
     - _Requirements: DC12_
-    - commit:
+    - commit: pending
   - [ ] 5.8 Full idempotent `dnr init`, `dnr doctor`, `dnr orders verify`; re-run `make-demo-checkout.sh`, `dnr doctor` green in `../django-demo`
     - _Requirements: DC15, DC16_
     - commit:
-  - [ ] 5.9 P12, P13, P15 and P10's pre-commit blob clause pass
+  - [x] 5.9 P12, P13, P15 and P10's pre-commit blob clause pass
     - _Properties: P10, P12, P13, P15_
-    - commit:
+    - commit: pending
   - [ ] 5.10 Live checks: headless cherry-pick denied; `sed` re-application undone by a forced turn with human edits intact; `python -c` write caught; interactive `ask` confirmed
     - _Requirements: DC10, DC11, R13_
     - commit:
@@ -172,9 +172,9 @@ Tasks follow the build phases in plan §13.1, in dependency order. Run them one 
   - [ ] 7.1 `dnr draft` with Zod validation, two retries and caching; injection fixture yields a plain sentence
     - _Requirements: DC20_
     - commit:
-  - [ ] 7.2 `dnr steering generate`; template checked with `--out /tmp/check.md`
+  - [x] 7.2 `dnr steering generate`; template checked with `--out /tmp/check.md`
     - _Requirements: DC21_
-    - commit:
+    - commit: pending
   - [ ] 7.3 Copy drafted, approved demo orders into `fixtures/demo-orders/`; re-run `make-demo-checkout.sh`; both show `approved` with `reason_source: drafter`
     - _Requirements: DC20_
     - commit:
@@ -225,9 +225,9 @@ Tasks follow the build phases in plan §13.1, in dependency order. Run them one 
   - [ ] 10.4 npm release: manual `0.0.0`, trusted publishing, `release.yml` with provenance, `v0.1.0`; `.dist.attestations` present
     - _Requirements: DC16_
     - commit:
-  - [ ] 10.5 `dnr init` refuses npx cache paths; `dnr doctor` confirms the hook command resolves
+  - [x] 10.5 `dnr init` refuses npx cache paths; `dnr doctor` confirms the hook command resolves
     - _Requirements: DC16_
-    - commit:
+    - commit: pending
   - [ ] 10.6 Board deep links (four cases) and every empty state in Playwright on three engines
     - _Requirements: DC17, DC18_
     - commit:

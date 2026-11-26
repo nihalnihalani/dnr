@@ -1,0 +1,15 @@
+{
+  "hook_event_name": "PreToolUse",
+  "cwd": ".",
+  "session_id": "demo-session-1",
+  "tool_name": "fs_write",
+  "tool_input": {
+    "command": "create",
+    "path": "django/utils/new_helper.py",
+    "file_text": "def helper():\n    return 1\n"
+  },
+  "_fixture": {
+    "provisional": "Kiro stdin field names are provisional until spike S2 freezes them (01-research.md: hook_event_name, cwd, session_id, tool_name, tool_input). cwd '.' resolves against the hook's working directory (the demo checkout).",
+    "expect": "allow (fast path): creates a new uncovered file"
+  }
+}

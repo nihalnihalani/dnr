@@ -1,0 +1,161 @@
+{
+  "_fixture": {
+    "provisional": "Hand-written two-file order (Phase 5) for the Phase 9 session_patch dry run. Stdin field names are provisional until spike S2.",
+    "expect": "events[0] (pricing.py half) does not block (warn_block or allow); events[1] (cart.py half) blocks: the whole-order score crosses τ only when both halves are in the session state."
+  },
+  "order": {
+    "schema": "dnr.order/v1",
+    "id": "dnr-2222222222",
+    "status": "approved",
+    "source": "revert",
+    "original_sha": "1111111111111111111111111111111111111111",
+    "revert_sha": "2222222222222222222222222222222222222222",
+    "snapshot_sha": "2222222222222222222222222222222222222222",
+    "tickets": [],
+    "links": [
+      {
+        "rel": "revert",
+        "url": "https://example.invalid/shop/commit/2222222222222222222222222222222222222222"
+      },
+      {
+        "rel": "original",
+        "url": "https://example.invalid/shop/commit/1111111111111111111111111111111111111111"
+      }
+    ],
+    "reason": "Discounts were applied twice when a coupon was also present, so carts undercharged.",
+    "reason_source": "human",
+    "units": [
+      {
+        "file": "shop/cart.py",
+        "qualname": "Cart.total",
+        "kind": "modified",
+        "tokenizer": {
+          "grammar": "python",
+          "normalizer": 1
+        },
+        "A": [
+          "subtotal",
+          "=",
+          "if",
+          "self",
+          ".",
+          "coupon",
+          "is",
+          "not",
+          "None",
+          ":",
+          "subtotal",
+          "=",
+          "self",
+          ".",
+          "coupon",
+          ".",
+          "apply",
+          "(",
+          "subtotal",
+          ")",
+          "return",
+          "max",
+          "(",
+          "subtotal",
+          ",",
+          "0",
+          ")"
+        ],
+        "R": [
+          "return"
+        ],
+        "c_state_ref": {
+          "sha": "1111111111111111111111111111111111111111",
+          "file": "shop/cart.py",
+          "qualname": "Cart.total"
+        },
+        "post_revert_hash": "74f527b3de676a8079f4d1a991c07a5dff1f56fe7f60d840e7ee21c0e3c32dde",
+        "post_revert_token_count": 24
+      },
+      {
+        "file": "shop/pricing.py",
+        "qualname": "price",
+        "kind": "modified",
+        "tokenizer": {
+          "grammar": "python",
+          "normalizer": 1
+        },
+        "A": [
+          "total",
+          "=",
+          "if",
+          "item",
+          ".",
+          "discount_rate",
+          ":",
+          "total",
+          "-=",
+          "total",
+          "*",
+          "item",
+          ".",
+          "discount_rate",
+          "return",
+          "round",
+          "(",
+          "total",
+          ",",
+          "2",
+          ")"
+        ],
+        "R": [
+          "return"
+        ],
+        "c_state_ref": {
+          "sha": "1111111111111111111111111111111111111111",
+          "file": "shop/pricing.py",
+          "qualname": "price"
+        },
+        "post_revert_hash": "067034756115d19312673e52d392b87c8d18c9487305555bd9938c3bf088e035",
+        "post_revert_token_count": 14
+      }
+    ],
+    "history": [
+      {
+        "at": "2026-11-26T00:00:00.000Z",
+        "by": "dnr",
+        "action": "created"
+      }
+    ],
+    "created_at": "2026-11-26T00:00:00.000Z",
+    "updated_at": "2026-11-26T00:00:00.000Z"
+  },
+  "files": [
+    {
+      "path": "shop/pricing.py",
+      "baseline_text": "def price(item, qty):\n    return item.unit_price * qty\n"
+    },
+    {
+      "path": "shop/cart.py",
+      "baseline_text": "class Cart:\n    def total(self):\n        return sum(price(i, q) for i, q in self.lines)\n"
+    }
+  ],
+  "events": [
+    {
+      "hook_event_name": "PreToolUse",
+      "cwd": ".",
+      "session_id": "two-file-session",
+      "tool_name": "fs_write",
+      "tool_input": {
+        "path": "shop/pricing.py",
+        "content": "def price(item, qty):\n    total = item.unit_price * qty\n    if item.discount_rate:\n        total -= total * item.discount_rate\n    return round(total, 2)\n"
+      }
+    },
+    {
+      "hook_event_name": "PreToolUse",
+      "cwd": ".",
+      "session_id": "two-file-session",
+      "tool_name": "fs_write",
+      "tool_input": {
+        "path": "shop/cart.py",
+        "content": "class Cart:\n    def total(self):\n        subtotal = sum(price(i, q) for i, q in self.lines)\n        if self.coupon is not None:\n            subtotal = self.coupon.apply(subtotal)\n        return max(subtotal, 0)\n"
+      }
+    }
+  ]
+}

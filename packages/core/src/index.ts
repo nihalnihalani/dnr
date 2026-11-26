@@ -83,9 +83,11 @@ export {
 } from './units';
 export {
   NORMALIZER_VERSION,
+  orderWeight,
   TYPE_ARG_CLOSE,
   TYPE_ARG_OPEN,
   tokenWeight,
+  unitWeights,
   weightOf,
   weightSet,
 } from './weights';

@@ -1,0 +1,9 @@
+{
+  "hook_event_name": "Stop",
+  "cwd": ".",
+  "session_id": "demo-session-1",
+  "_fixture": {
+    "provisional": "Kiro stdin field names are provisional until spike S2 freezes them (01-research.md: hook_event_name, cwd, session_id, tool_name, tool_input). cwd '.' resolves against the hook's working directory (the demo checkout).",
+    "expect": "Stop backstop: exit 0 always; {\"decision\":\"block\",\u2026} on stdout when touched files re-apply an order"
+  }
+}

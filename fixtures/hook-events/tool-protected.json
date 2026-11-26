@@ -1,0 +1,14 @@
+{
+  "hook_event_name": "PreToolUse",
+  "cwd": ".",
+  "session_id": "demo-session-1",
+  "tool_name": "fs_write",
+  "tool_input": {
+    "path": ".dnr/orders/dnr-43933a1dca.json",
+    "content": "{}"
+  },
+  "_fixture": {
+    "provisional": "Kiro stdin field names are provisional until spike S2 freezes them (01-research.md: hook_event_name, cwd, session_id, tool_name, tool_input). cwd '.' resolves against the hook's working directory (the demo checkout).",
+    "expect": "deny_protected (exit 2 in deny format, permissionDecision deny in ask format)"
+  }
+}

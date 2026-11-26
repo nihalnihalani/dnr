@@ -1,0 +1,18 @@
+{
+  "hook_event_name": "PostToolUse",
+  "cwd": ".",
+  "session_id": "demo-session-1",
+  "tool_name": "str_replace",
+  "tool_input": {
+    "path": "django/db/models/sql/query.py",
+    "old_str": "            self.is_sliced or self.distinct_fields or self.select_for_update\n",
+    "new_str": "            self.is_sliced\n            or self.distinct_fields\n            or self.select_for_update\n            or (\n                isinstance(self.group_by, tuple)\n                and not {*self.order_by, *self.extra_order_by}.issubset(self.group_by)\n            )\n"
+  },
+  "tool_response": {
+    "success": true
+  },
+  "_fixture": {
+    "provisional": "Kiro stdin field names are provisional until spike S2 freezes them (01-research.md: hook_event_name, cwd, session_id, tool_name, tool_input). cwd '.' resolves against the hook's working directory (the demo checkout).",
+    "expect": "session confirm: ask_approved when an ask is pending for this file and the file now matches"
+  }
+}

@@ -11,3 +11,4 @@ work/
 playwright-report/
 test-results/
 .DS_Store
+packages/cli/vendor/

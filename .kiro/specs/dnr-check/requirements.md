@@ -215,6 +215,7 @@ _Plan: §12.5._
 1. `dnr guard-shell --stdin` SHALL parse the command with shell-quote, split on `; && || | $( )` and backticks, and deny when any of GS-R1 … GS-R7 (§5.10) matches.
 2. Every GS-R6 subcommand (`allow`, `board`, `init`, `orders build` into the live directory, `orders approve|retire|unretire|edit|reapprove`, `draft`, `session end|gc`) SHALL refuse without a TTY, when any ancestor process is `kiro-cli` or the Kiro agent host, or when a Kiro-specific variable frozen by S8 is set.
 3. guard-shell SHALL take a temp-index tree snapshot at PreToolUse (`shell_snapshot`), and `dnr session shell-after` SHALL add every file that changed across the call to `Session.touched`. _§5.10, §5.11._
+4. guard-shell SHALL also apply GS-R8 (an extension of §5.10 from review M3): deny `git commit --no-verify`/`-n`, `--no-verify` on merge, am and rebase, `core.hooksPath` changes through `git config` or `git -c`, and human-terminal automation (`osascript`, `open -a <terminal>`, `tmux send-keys`, `screen … stuff`). The protect tier SHALL also cover the git hooks directory and the `core.hooksPath` target.
 
 ### Requirement DC11: Stop backstop
 

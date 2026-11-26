@@ -28,8 +28,10 @@ DNR stops an AI agent from re-applying a change the repository already reverted.
 | Splitting across sessions | the crossing rule at pre-commit and in Crew (P15) | §5.5 |
 | Paraphrase | proximity, enabled only by the pre-registered rule | §5.6 |
 | Moving code to another file | the fingerprint index (P16) | §5.16 |
-| Shell writes | guard-shell rules R1–R7 (protected paths, `git revert`/`cherry-pick`/`apply`/`checkout --source` of order commits, `dnr` subcommands, board port); post-shell records changed files; the Stop backstop forces an undo turn | §5.10, §5.11 |
+| Shell writes | guard-shell rules R1–R8 (protected paths, `git revert`/`cherry-pick`/`apply`/`checkout --source` of order commits, `dnr` subcommands, board port); post-shell records changed files; the Stop backstop forces an undo turn | §5.10, §5.11 |
 | Editing orders or hooks | protected globs in every format; an order-set hash checked at Stop | §5.4, §5.11 |
+| Skipping or removing the pre-commit hook | the protect tier denies writes under the git hooks directory (`.git/hooks/**`, with the gitdir resolved for worktrees, and the `core.hooksPath` target read from `.git/config`), so a write tool cannot edit or delete the pre-commit shim; guard-shell R1 covers the same paths. Guard-shell rule R8 denies `git commit --no-verify` and `-n` (including clusters such as `-nm`), `--no-verify` on merge, am and rebase, `git config core.hooksPath <value>` and `--unset` (reads are allowed), and `git -c core.hooksPath=…` | §5.4, §5.10 (R8 extends the plan, review M3) |
+| Self-approval through a human's terminal | guard-shell R8 also denies `osascript`, `open -a Terminal`/`iTerm`/…, `tmux send-keys` and `screen … stuff`, which could type an approval command into a human terminal | §5.10 (R8) |
 | Self-approval | every enforcement-changing `dnr` subcommand refuses without a TTY, under a `kiro-cli` or Kiro agent-host ancestor, or with Kiro-only environment variables (frozen by spike S8); the block text is addressed to the human; the trial flags grants created during a run | §5.10 |
 | Board CSRF and DNS rebinding | single-use 60 s launch nonce never printed; per-launch `dnr-<rand>.localhost` host; `Host` check (421); `HttpOnly; SameSite=Strict` cookie on every `/api/*` route; exact `Origin` and `X-DNR-CSRF: 1` on mutations (403) | §10 |
 | Prompt injection into the drafter | `<revert>` and `<ticket>` tags marked untrusted, no tools, Zod-validated one-sentence output, human approval of every reason | §12.3 |
@@ -41,7 +43,10 @@ DNR stops an AI agent from re-applying a change the repository already reverted.
 ## Known limits
 
 - A rename or move that the fingerprint index cannot match, below its similarity floor, falls to the warn tier.
-- guard-shell is partial. The Stop backstop narrows the shell route but does not close it.
+- guard-shell is partial: it is a parser, not a sandbox. The Stop backstop narrows the shell route but does not close it.
+- An agent can still skip the pre-commit hook through paths guard-shell does not parse: environment tricks for other hook managers (`HUSKY=0`-style), a script file that runs `git commit --no-verify`, `python -c "subprocess…"`, or setting `core.hooksPath` with an editor tool in a git config outside `.git/config` (for example `~/.gitconfig`, which is outside the protected globs).
+- Under `commit-enforce`, pre-commit is the only local enforcement. The server-side Crew check is the backstop.
+- The Kiro-variable list used by the R6 self-approval check is provisional until spike S8 (`packages/hook/src/ancestry.ts`, `KIRO_AGENT_VARS`). The check also refuses any wrapper between `dnr` and the nearest interactive shell, so `npx <package> allow` is refused too; humans need a global install.
 - A human's mid-session edits to a file the agent also touched are scored together with the agent's.
 - Trial agents run as the same OS user as the harness; isolation is by path, a per-run HOME and `chmod` lockdown, not by OS account.
 - Processes outside Kiro can edit anything.

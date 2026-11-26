@@ -238,7 +238,7 @@ describe('tiers', () => {
   });
   it('L1: an over-long message is shortened from the reason and details, never the guard line', () => {
     const e = mk([['a.py', A_PY, A_PY_C]]);
-    const long = 'https://example.test/' + 'x'.repeat(300);
+    const long = `https://example.test/${'x'.repeat(300)}`;
     const order = {
       ...e.order,
       reason: 'R'.repeat(280),

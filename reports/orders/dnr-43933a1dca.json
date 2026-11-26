@@ -1,0 +1,93 @@
+{
+  "schema": "dnr.order/v1",
+  "id": "dnr-43933a1dca",
+  "status": "draft",
+  "source": "revert",
+  "original_sha": "ea3a71c2d09f8281d8a50ed20e40e1fb13db5cd9",
+  "revert_sha": "43933a1dca07047e95ec990d9289d0212668009e",
+  "snapshot_sha": "43933a1dca07047e95ec990d9289d0212668009e",
+  "tickets": [
+    {
+      "system": "trac",
+      "id": "26434",
+      "url": "https://code.djangoproject.com/ticket/26434"
+    }
+  ],
+  "links": [
+    {
+      "rel": "revert",
+      "url": "https://github.com/django/django/commit/43933a1dca07047e95ec990d9289d0212668009e"
+    },
+    {
+      "rel": "original",
+      "url": "https://github.com/django/django/commit/ea3a71c2d09f8281d8a50ed20e40e1fb13db5cd9"
+    },
+    {
+      "rel": "ticket",
+      "url": "https://code.djangoproject.com/ticket/26434"
+    }
+  ],
+  "reason": "Reverted \"Fixed #26434 -- Removed faulty clearing of ordering field when missing from explicit grouping.\"",
+  "reason_source": "placeholder",
+  "units": [
+    {
+      "file": "django/db/models/sql/query.py",
+      "qualname": "Query.clear_ordering",
+      "kind": "modified",
+      "tokenizer": {
+        "grammar": "python",
+        "normalizer": 1
+      },
+      "A": [
+        "or",
+        "(",
+        "isinstance",
+        "(",
+        "self",
+        ".",
+        "group_by",
+        ",",
+        "tuple",
+        "and",
+        "not",
+        "{",
+        "*",
+        "self",
+        ".",
+        "order_by",
+        ",",
+        "*",
+        "self",
+        ".",
+        "extra_order_by",
+        "}",
+        ".",
+        "issubset",
+        "(",
+        "self",
+        ".",
+        "group_by",
+        ")",
+        ")",
+        ")"
+      ],
+      "R": [],
+      "c_state_ref": {
+        "sha": "ea3a71c2d09f8281d8a50ed20e40e1fb13db5cd9",
+        "file": "django/db/models/sql/query.py",
+        "qualname": "Query.clear_ordering"
+      },
+      "post_revert_hash": "855b47d9b5493d7bd33db9878d95bd41bc04cf16ca0e51a9a65a264dc92671a3",
+      "post_revert_token_count": 54
+    }
+  ],
+  "history": [
+    {
+      "at": "2025-10-28T15:40:01.000Z",
+      "by": "dnr",
+      "action": "created"
+    }
+  ],
+  "created_at": "2025-10-28T15:40:01.000Z",
+  "updated_at": "2025-10-28T15:40:01.000Z"
+}
