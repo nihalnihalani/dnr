@@ -10,7 +10,8 @@
     "preview": "vite preview --strictPort --port 4173",
     "cases": "tsx scripts/build-cases.ts",
     "test": "playwright test",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "capture": "tsx scripts/capture-cli.ts"
   },
   "dependencies": {
     "@dnr/core": "workspace:*",

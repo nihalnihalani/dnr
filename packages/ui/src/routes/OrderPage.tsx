@@ -7,7 +7,7 @@ import { Headstone } from '../components/Headstone';
 import { StateActions } from '../components/StateActions';
 import { TokenChips } from '../components/TokenChips';
 import { STATE_INFO } from '../model/states';
-import type { OrderDetail } from '../model/types';
+import { grantOrigin, type OrderDetail } from '../model/types';
 
 type Probe = { state: 'idle' } | { state: 'probing' } | { state: 'down'; why: string };
 
@@ -168,7 +168,14 @@ function OrderBody({
             <TokenChips A={u.A} R={u.R} />
           </div>
         ))}
-        <AuditPanel order={o} grants={detail.grants} crew={crew} events={events} />
+        <AuditPanel
+          order={o}
+          grants={detail.grants}
+          crew={crew}
+          events={events}
+          readOnly={readOnly}
+          onChange={onChange}
+        />
       </div>
     </div>
   );
@@ -183,12 +190,27 @@ function AuditPanel({
   grants,
   crew,
   events,
+  readOnly,
+  onChange,
 }: {
   order: Order;
   grants: Grant[];
   crew: Grant[];
   events: EventRecord[];
+  readOnly: boolean;
+  onChange: (m: string) => void;
 }) {
+  const cfg = useConfig();
+  const [error, setError] = useState<unknown>(null);
+  const confirm = async (g: Grant) => {
+    setError(null);
+    try {
+      await cfg.adapter.confirmGrant(order.id, g.session_key);
+      onChange(`Grant for ${order.id} confirmed${cfg.adapter.simulated ? ' (simulated)' : ''}`);
+    } catch (e) {
+      setError(e);
+    }
+  };
   return (
     <section aria-labelledby="audit-h">
       <h2 id="audit-h">History and audit</h2>
@@ -230,6 +252,7 @@ function AuditPanel({
                 <th scope="col">Expires</th>
                 <th scope="col">Session</th>
                 <th scope="col">Uses</th>
+                <th scope="col">Origin</th>
               </tr>
             </thead>
             <tbody>
@@ -244,12 +267,21 @@ function AuditPanel({
                     {g.used.length}
                     {g.used.length > 0 && ` (${g.used.map((u) => u.kind).join(', ')})`}
                   </td>
+                  <td data-testid="grant-origin">
+                    <GrantOriginCell
+                      g={g}
+                      readOnly={readOnly}
+                      onConfirm={() => confirm(g)}
+                      simulated={cfg.adapter.simulated}
+                    />
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+      {error !== null && <ErrorBanner error={error} />}
       <h3>Crew overrides</h3>
       {crew.length === 0 ? (
         <p>No Crew overrides recorded.</p>
@@ -285,5 +317,40 @@ function AuditPanel({
         </div>
       )}
     </section>
+  );
+}
+
+function GrantOriginCell({
+  g,
+  readOnly,
+  onConfirm,
+  simulated,
+}: {
+  g: Grant;
+  readOnly: boolean;
+  onConfirm: () => void;
+  simulated: boolean;
+}) {
+  const o = grantOrigin(g);
+  if (!o) return <>not recorded</>;
+  const markers = o.markers.length ? ` (${o.markers.join(', ')})` : '';
+  if (!o.suspect) return <>{o.via}</>;
+  if (o.confirmed_by)
+    return (
+      <>
+        {o.via} · suspect{markers} · confirmed by {o.confirmed_by}
+        {o.confirmed_at ? ` at ${o.confirmed_at}` : ''}
+      </>
+    );
+  return (
+    <>
+      <strong>Suspect, not applied until confirmed</strong>: made via {o.via}
+      {markers}.{' '}
+      {!readOnly && (
+        <button type="button" className="btn" onClick={onConfirm} data-action="confirm-grant">
+          Confirm grant {simulated && <span className="sim">simulated</span>}
+        </button>
+      )}
+    </>
   );
 }

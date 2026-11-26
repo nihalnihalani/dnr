@@ -9,10 +9,13 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, resolve, sep } from 'node:path';
 import type { ApiErrorBody, Health } from '@dnr/ui/model';
+import { checkTransition } from '@dnr/ui/model';
 import { type Context, Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { z } from 'zod';
 import { type BoardStorePort, NotFoundError, TransitionError } from './store-port';
+
+const ENFORCED = new Set(['approved', 'stale', 'relanded', 'violated']);
 
 export const NONCE_TTL_MS = 60_000;
 export const TICKET_TTL_MS = 60_000;
@@ -134,6 +137,7 @@ const PatchSchema = z
   })
   .refine((b) => b.status !== undefined || b.reason !== undefined, { message: 'empty patch' });
 const AllowOnceSchema = z.strictObject({ ttl: z.number().int().min(60).max(86_400).default(3600) });
+const ConfirmGrantSchema = z.strictObject({ session_key: z.string().min(1).nullable() });
 
 class BadRequest extends Error {}
 
@@ -247,13 +251,42 @@ export function createBoardApp(ctx: BoardContext): BoardApp {
     if (!row) throw new NotFoundError(`No order ${id}`);
     return c.json({ ...row, grants: await ctx.store.listGrants(id) });
   });
+  // The board applies the §10 state table itself, whatever store sits behind it: an invalid
+  // transition (including a no-op such as draft → draft) and an allow-once on an order that is
+  // not enforced are 409 before the store is touched.
+  const rowOr404 = async (id: string) => {
+    const row = await ctx.store.getOrder(id);
+    if (!row) throw new NotFoundError(`No order ${id}`);
+    return row;
+  };
   app.patch('/api/orders/:id', async (c) => {
+    const id = c.req.param('id');
     const body = parse(PatchSchema, await readJson(c));
-    return c.json(await ctx.store.patchOrder(c.req.param('id'), body, by));
+    if (body.reason !== undefined) {
+      body.reason = body.reason.trim();
+      if (body.reason.length < 1 || body.reason.length > 280)
+        throw new BadRequest('reason must be 1–280 characters');
+    }
+    const row = await rowOr404(id);
+    if (body.status !== undefined) {
+      const t = checkTransition(row.order.status, body.status);
+      if (!t.ok) throw new TransitionError(t.message);
+    }
+    return c.json(await ctx.store.patchOrder(id, body, by));
   });
   app.post('/api/orders/:id/allow-once', async (c) => {
+    const id = c.req.param('id');
     const { ttl } = parse(AllowOnceSchema, await readJson(c));
-    return c.json(await ctx.store.allowOnce(c.req.param('id'), ttl, by));
+    const row = await rowOr404(id);
+    if (!ENFORCED.has(row.effective))
+      throw new TransitionError(`Allow once needs an enforced order; ${id} is ${row.effective}`);
+    return c.json(await ctx.store.allowOnce(id, ttl, by));
+  });
+  // N5: a human confirms a suspect grant. Mutating, so the Origin and X-DNR-CSRF checks apply.
+  app.post('/api/orders/:id/grants/confirm', async (c) => {
+    const { session_key } = parse(ConfirmGrantSchema, await readJson(c));
+    if (!ctx.store.confirmGrant) throw new NotFoundError('This store cannot confirm grants');
+    return c.json(await ctx.store.confirmGrant(c.req.param('id'), session_key, by));
   });
   app.post('/api/orders/:id/reapprove', async (c) =>
     c.json(await ctx.store.reapprove(c.req.param('id'), by)),

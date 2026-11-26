@@ -1024,25 +1024,28 @@ textarea.code {
   content: "⊘ ";
 }
 
-.fake-zone {
-  background: #17140b;
-  border: 2px dashed #6c5717;
-  border-radius: var(--radius);
-  padding: 4px 16px 16px;
-  margin-top: 16px;
+/* violated (N4): a disturbed grave — the stone knocked askew, fresh earth, and a text line naming the commit. */
+.stone.disturbed {
+  transform: rotate(-4deg);
+  border: 3px solid #b8513f;
+  background:
+    radial-gradient(120px 80px at 30% 20%, rgba(255, 255, 255, 0.18), transparent 70%),
+    linear-gradient(160deg, #d6cfc0, #c2bbac 45%, #a9a293);
 }
-.fake-num {
-  white-space: nowrap;
+.plot:has(.stone.disturbed) .mound {
+  background: #4a3424;
+  height: 18px;
 }
-.fake-tag {
-  margin-left: 4px;
-  font-family: var(--sans);
-  font-size: 0.65rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  color: #111;
-  background: var(--warn);
-  border-radius: 3px;
-  padding: 0 4px;
-  text-decoration: none;
+.violation {
+  font-size: 0.75rem;
+  font-weight: 700;
+  background: #5c1a0f;
+  color: #fff;
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+.hero.solo {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 820px;
 }

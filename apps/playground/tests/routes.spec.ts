@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, type Page, test } from '@playwright/test';
-import { DEMO, DEMO_ORDER, expectNoAxeViolations, openPlay, runPreset } from './helpers';
+import { approveSim, DEMO, DEMO_ORDER, expectNoAxeViolations, openPlay, runPreset } from './helpers';
 
 const demoBundle = JSON.parse(
   readFileSync(fileURLToPath(new URL(`../public/cases/${DEMO}.json`, import.meta.url)), 'utf8'),
@@ -10,14 +10,18 @@ const demoBundle = JSON.parse(
 const stone = (page: Page, state: string) => page.locator(`article.stone[data-state="${state}"]`).first();
 const plotOf = (page: Page, state: string) => page.locator('li.plot', { has: stone(page, state) }).first();
 
-test('ROUTE-01: home has the pitch, the CLI loop and the three buttons', {
+test('ROUTE-01: home has the pitch and the three buttons; no CLI output unless a real capture exists', {
   tag: ['@ROUTE-01', '@P7-routes'],
 }, async ({ page }) => {
   await page.goto('./');
-  await expect(page.locator('.terminal')).toBeVisible();
-  await expect(page.locator('.terminal')).toContainText('Placeholder');
   for (const name of ['Try a revert', 'See the trial', 'How Kiro built it'])
     await expect(page.getByRole('link', { name })).toBeVisible();
+  // No capture of `dnr check` on an approved demo checkout exists yet (it needs a human
+  // approval), so nothing is shown in its place.
+  const capture = await page.request.get('data/cli-capture.json');
+  const hasCapture = capture.ok() && (capture.headers()['content-type'] ?? '').includes('json');
+  await expect(page.getByTestId('cli-capture')).toHaveCount(hasCapture ? 1 : 0);
+  await expect(page.locator('.terminal')).toHaveCount(hasCapture ? 1 : 0);
   await page.getByRole('link', { name: 'Try a revert' }).click();
   await expect(page).toHaveURL(new RegExp(`/play/${DEMO}$`));
 });
@@ -26,7 +30,7 @@ test('ROUTE-05: headstones carry epitaph, birth, death and links, each with a te
   tag: ['@ROUTE-05', '@P7-routes'],
 }, async ({ page }) => {
   await page.goto('graveyard');
-  const s = page.locator(`article.stone`, { hasText: DEMO_ORDER });
+  const s = page.locator('article.stone', { hasText: DEMO_ORDER });
   await expect(s).toContainText('Epitaph (reason)');
   await expect(s).toContainText('Born (commit): ea3a71c2d0');
   await expect(s).toContainText('Died (revert): 43933a1dca');
@@ -38,112 +42,58 @@ test('ROUTE-05: headstones carry epitaph, birth, death and links, each with a te
     'href',
     /code\.djangoproject\.com\/ticket\/26434/,
   );
-  await expect(s.getByTestId('state-label')).toHaveText('Approved: enforced');
+  // The real stored status, as `dnr orders list` computed it.
+  await expect(s.getByTestId('state-label')).toHaveText('Draft: not enforced');
 });
 
-test('STATE-01: draft is outlined, labeled, with Approve / Edit / Retire', { tag: ['@STATE-01'] }, async ({
-  page,
-}) => {
+test('STATE-01: the real demo orders are drafts: outlined, labeled, Approve / Edit / Retire; drafts-only banner', {
+  tag: ['@STATE-01', '@STATE-07'],
+}, async ({ page }) => {
   await page.goto('graveyard');
+  await expect(page.locator('article.stone')).toHaveCount(2);
   await expect(stone(page, 'draft')).toHaveClass(/outlined/);
   await expect(stone(page, 'draft').getByTestId('state-label')).toHaveText('Draft: not enforced');
   const plot = plotOf(page, 'draft');
   for (const a of ['approve', 'edit', 'retire'])
     await expect(plot.locator(`[data-action="${a}"]`)).toBeVisible();
-  // Approve (simulated) → it becomes enforced.
-  const id = await stone(page, 'draft').getAttribute('aria-label');
-  await plot.locator('[data-action="approve"]').click();
-  await expect(page.getByRole('status').filter({ hasText: 'approved (simulated)' })).toBeAttached();
-  expect(id).toContain('Draft');
+  await expect(page.getByTestId('banner-drafts-only')).toContainText('2 drafts, 0 enforced');
+  await expectNoAxeViolations(page);
 });
 
-test('STATE-02: approved is solid with Allow once / Edit / Retire', { tag: ['@STATE-02'] }, async ({
-  page,
-}) => {
-  await page.goto('graveyard');
-  await expect(stone(page, 'approved')).toHaveClass(/solid/);
-  const plot = plotOf(page, 'approved');
-  for (const a of ['allow-once', 'edit', 'retire'])
-    await expect(plot.locator(`[data-action="${a}"]`)).toBeVisible();
-  await plot.locator('[data-action="edit"]').click();
-  const box = plot.getByLabel('Reason (1–280 characters)');
-  await box.fill('It broke query grouping: self.group_by holds Cols, not aliases.');
-  await plot.getByRole('button', { name: /Save reason/ }).click();
-  await expect(plot).toContainText('It broke query grouping');
-});
-
-test('STATE-03: retired is faded with Unretire', { tag: ['@STATE-03'] }, async ({ page }) => {
-  await page.goto('graveyard');
-  await expect(stone(page, 'retired')).toHaveClass(/faded/);
-  await expect(stone(page, 'retired').getByTestId('state-label')).toHaveText('Retired');
-  const plot = plotOf(page, 'retired');
-  await expect(plot.locator('[data-action="unretire"]')).toBeVisible();
-  await plot.locator('[data-action="unretire"]').click();
-  await expect(page.getByRole('status').filter({ hasText: 'unretired to draft' })).toBeAttached();
-});
-
-test('STATE-04: stale is cracked; Re-approve returns it to approved', { tag: ['@STATE-04'] }, async ({
-  page,
-}) => {
-  await page.goto('graveyard');
-  const s = stone(page, 'stale');
-  await expect(s).toHaveClass(/cracked/);
-  await expect(s.getByTestId('state-label')).toHaveText('Stale: code changed, warn only');
-  await expect(s).toContainText('illustrative state');
-  const label = (await s.getAttribute('aria-label')) ?? '';
-  const id = label.match(/dnr-[0-9a-f]{10}/)?.[0] as string;
-  const plot = plotOf(page, 'stale');
-  await expect(plot.locator('[data-action="retire"]')).toBeVisible();
-  await plot.locator('[data-action="reapprove"]').click();
-  await expect(page.locator(`article.stone[aria-label^="Order ${id}"]`)).toHaveAttribute(
-    'data-state',
-    'approved',
-  );
-  await page.goto(`orders/${id}`);
-  await expect(page.locator('table').first()).toContainText('reapproved');
-});
-
-test('STATE-05: re-landed shows a lit candle and its label', { tag: ['@STATE-05'] }, async ({ page }) => {
-  await page.goto('graveyard');
-  const s = stone(page, 'relanded');
-  await expect(s.locator('svg.candle-svg')).toBeVisible();
-  await expect(s.getByTestId('state-label')).toHaveText('Re-landed: warn only until re-approved');
-  await expect(plotOf(page, 'relanded').locator('[data-action="reapprove"]')).toBeVisible();
-});
-
-test('STATE-06: drift has a red border, a label, View diff and Restore from git', {
-  tag: ['@STATE-06'],
+test('STATE-02: approved (simulated in this browser) is solid with Allow once / Edit / Retire', {
+  tag: ['@STATE-02'],
 }, async ({ page }) => {
   await page.goto('graveyard');
-  const s = page.locator('article.stone[data-drift="true"]').first();
-  await expect(s).toHaveClass(/drift/);
-  await expect(s.getByTestId('drift-label')).toHaveText('Differs from git');
-  const plot = page.locator('li.plot', { has: s });
-  await plot.locator('[data-action="view-diff"]').click();
-  await expect(plot.getByRole('region', { name: 'Diff against git' })).toBeVisible();
-  await expect(plot.locator('[data-action="restore"]')).toBeVisible();
+  const plot = plotOf(page, 'draft');
+  await plot.locator('[data-action="approve"]').click();
+  await expect(page.getByRole('status').filter({ hasText: 'approved (simulated)' })).toBeAttached();
+  await expect(stone(page, 'approved')).toHaveClass(/solid/);
+  const ap = plotOf(page, 'approved');
+  for (const a of ['allow-once', 'edit', 'retire'])
+    await expect(ap.locator(`[data-action="${a}"]`)).toBeVisible();
+  await ap.locator('[data-action="edit"]').click();
+  await ap
+    .getByLabel('Reason (1–280 characters)')
+    .fill('It broke query grouping: self.group_by holds Cols, not aliases.');
+  await ap.getByRole('button', { name: /Save reason/ }).click();
+  await expect(ap).toContainText('It broke query grouping');
 });
 
-test('STATE-07: the three empty states', { tag: ['@STATE-07', '@empty-states'] }, async ({ page }) => {
-  await page.goto('graveyard?empty=none');
-  await expect(page.getByTestId('empty-no-orders')).toContainText('No orders yet');
-  await expect(page.getByTestId('empty-no-orders')).toContainText('dnr scan');
-  await expectNoAxeViolations(page);
-  await page.goto('graveyard?empty=reverts');
-  await expect(page.getByTestId('empty-no-reverts')).toContainText('No reverts found in this history');
-  await expect(page.getByTestId('empty-no-reverts')).toContainText('dnr orders add');
-  await expectNoAxeViolations(page);
-  await page.goto('graveyard?empty=drafts');
-  await expect(page.getByTestId('banner-drafts-only')).toContainText('3 drafts, 0 enforced');
-  await expectNoAxeViolations(page);
+test('STATE-03: retired (simulated) is faded with Unretire, which returns it to draft', {
+  tag: ['@STATE-03'],
+}, async ({ page }) => {
+  await page.goto('graveyard');
+  await plotOf(page, 'draft').locator('[data-action="retire"]').click();
+  await expect(stone(page, 'retired')).toHaveClass(/faded/);
+  await expect(stone(page, 'retired').getByTestId('state-label')).toHaveText('Retired');
+  await plotOf(page, 'retired').locator('[data-action="unretire"]').click();
+  await expect(page.getByRole('status').filter({ hasText: 'unretired to draft' })).toBeAttached();
+  await expect(page.locator('article.stone[data-state="draft"]')).toHaveCount(2);
 });
 
-test('empty-states: all retired, board down, no trial data', { tag: ['@empty-states'] }, async ({ page }) => {
-  await page.goto('graveyard?empty=retired');
-  await expect(page.getByTestId('banner-all-retired')).toBeVisible();
+test('empty-states: board down, no trial data', { tag: ['@empty-states'] }, async ({ page }) => {
   await page.goto(`orders/${DEMO_ORDER}?board=1`);
   await expect(page.getByTestId('banner-board-down')).toBeVisible();
-  await page.route(/\/data\/trial(\.sample)?\.json$/, (r) => r.fulfill({ status: 404, body: 'not found' }));
   await page.goto('trial');
   await expect(page.getByTestId('empty-trial')).toContainText('has not run yet');
   await expectNoAxeViolations(page);
@@ -157,6 +107,8 @@ test('ROUTE-06: order page has the history and audit panel', { tag: ['@ROUTE-06'
   await expect(page.getByRole('heading', { name: 'Grants (allow-once and ask)' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Crew overrides' })).toBeVisible();
   await expect(page.locator('table').first()).toContainText('created');
+  // The real order is a draft; approve it (simulated) to reach Allow once.
+  await page.locator('[data-action="approve"]').click();
   await page.locator('[data-action="allow-once"]').click();
   await expect(page.getByTestId('grants')).toContainText('allow_once');
   await expect(page.getByTestId('grants')).toContainText('pending (next session)');
@@ -199,7 +151,7 @@ test('ROUTE-04: /orders/view renders a raw GitHub order; Zod-invalid and foreign
   await expect(page.getByTestId('view-error-missing')).toBeVisible();
 });
 
-test('ROUTE-07: before the trial runs, /trial shows the empty state and no numbers', {
+test('ROUTE-07: until a real reports/trial.json exists, /trial shows the empty state and no numbers', {
   tag: ['@ROUTE-07', '@ROUTE-trial', '@empty-states'],
 }, async ({ page }) => {
   await page.goto('trial');
@@ -207,49 +159,33 @@ test('ROUTE-07: before the trial runs, /trial shows the empty state and no numbe
   await expect(empty).toContainText('The pre-registered trial has not run yet');
   await expect(empty).toContainText('Recompute in browser');
   await expect(page.getByTestId('prereg')).toContainText('prereg-v1');
-  await expect(page.getByTestId('fake-toggle')).not.toBeChecked();
-  await expect(page.getByTestId('fake-preview')).toHaveCount(0);
+  await expect(page.getByLabel(/fake/i)).toHaveCount(0);
+  await expect(page.getByTestId('trial-real')).toHaveCount(0);
   // No figure from the sample file is on the page.
   await expect(page.locator('main')).not.toContainText(/\d+ of \d+/);
-  await expectNoAxeViolations(page);
-});
-
-test('ROUTE-07: the fake-numbers preview is opt-in and stamps every figure FAKE', {
-  tag: ['@ROUTE-07', '@ROUTE-trial'],
-}, async ({ page }) => {
-  await page.goto('trial');
-  await page.getByLabel('Preview the layout with fake numbers').check();
-  const preview = page.getByTestId('fake-preview');
-  await expect(preview).toBeVisible();
-  await expect(page.getByTestId('banner-sample')).toContainText('FAKE numbers');
-  await expect(page.getByRole('heading', { name: 'Headline (FAKE preview)' })).toBeVisible();
-  for (const line of await preview.locator('.stat-line .num').all()) await expect(line).toContainText('FAKE');
-  await page.getByTestId('recompute').click();
-  await expect(page.getByTestId('recompute-table')).not.toContainText('differs');
-  await expect(page.getByTestId('recompute-table').getByText('✓ matches')).toHaveCount(4);
-  // Turning it off removes every fake figure.
-  const toggle = page.getByLabel('Preview the layout with fake numbers');
-  await toggle.uncheck();
-  await expect(preview).toHaveCount(0);
-  await toggle.check();
-  await expect(preview).toBeVisible();
-  // axe last: in Playwright's Firefox, unmounting a large subtree after an axe run crashes the
-  // page (no crash without axe, toggling on and off repeatedly).
   await expectNoAxeViolations(page);
 });
 
 test('ROUTE-08: /replay decides a pasted PreToolUse event', { tag: ['@ROUTE-08', '@ROUTE-replay'] }, async ({
   page,
 }) => {
-  await page.goto('replay');
-  await expect(page.getByTestId('replay-run')).toBeEnabled();
-  await page.getByLabel('Example event').selectOption('original-change');
-  await expect(page.getByLabel('PreToolUse stdin')).toHaveValue(/"command": "str_replace"/);
-  await page.getByTestId('replay-run').click();
-  await expect(page.getByTestId('replay-result').getByTestId('verdict')).toHaveAttribute(
-    'data-verdict',
-    'BLOCK',
-  );
+  const decide = async () => {
+    await page.goto('replay');
+    await expect(page.getByTestId('replay-run')).toBeEnabled();
+    await page.getByLabel('Example event').selectOption('original-change');
+    await expect(page.getByLabel('PreToolUse stdin')).toHaveValue(/"command": "str_replace"/);
+    await page.getByTestId('replay-run').click();
+    return page.getByTestId('replay-result');
+  };
+  // The real order is a draft: the hook allows the write, and the page says why.
+  const draft = await decide();
+  await expect(draft.getByTestId('verdict')).toHaveAttribute('data-verdict', 'ALLOW');
+  await expect(draft).toContainText('not enforced');
+  // Approved in this browser (simulated), the same event is blocked.
+  await openPlay(page);
+  await approveSim(page);
+  const approved = await decide();
+  await expect(approved.getByTestId('verdict')).toHaveAttribute('data-verdict', 'BLOCK');
   await page.getByLabel('PreToolUse stdin').fill('{"tool_name":"fs_read","tool_input":{}}');
   await page.getByTestId('replay-run').click();
   await expect(page.getByTestId('replay-note')).toBeVisible();
@@ -289,20 +225,16 @@ for (const r of ROUTES) {
 
 test('A11Y-01: axe on /play after a BLOCK decision', { tag: ['@axe', '@A11Y-01'] }, async ({ page }) => {
   await openPlay(page);
+  await approveSim(page);
   await runPreset(page, 'original');
+  await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'BLOCK');
   await expectNoAxeViolations(page);
 });
 
-test('A11Y-01: reduced motion stops the mist, candle and terminal animations', { tag: ['@A11Y-01'] }, async ({
-  page,
-}) => {
+test('A11Y-01: reduced motion stops the mist animation', { tag: ['@A11Y-01'] }, async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('graveyard');
   const anim = await page.locator('.mist').evaluate((el) => getComputedStyle(el).animationName);
   expect(anim).toBe('none');
-  const flame = await page
-    .locator('.flame')
-    .first()
-    .evaluate((el) => getComputedStyle(el).animationName);
-  expect(flame).toBe('none');
+  // The candle's flame (re-landed orders) is checked on the board, where a real re-land exists.
 });

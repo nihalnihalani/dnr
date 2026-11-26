@@ -13,7 +13,7 @@ import { CaseBundle } from '@dnr/schemas';
 import { CaseEngine, initialState, newSession, type SimState } from '@dnr/ui/engine';
 import { expect, test } from '@playwright/test';
 import { CaseRepo } from './cli-reference';
-import { isRemote, openPlay, results, runPreset } from './helpers';
+import { approveSim, isRemote, openPlay, results, runPreset } from './helpers';
 
 const casesDir = fileURLToPath(new URL('../public/cases/', import.meta.url));
 const index = JSON.parse(readFileSync(`${casesDir}index.json`, 'utf8')) as { cases: Array<{ id: string }> };
@@ -64,8 +64,11 @@ for (const { id } of index.cases) {
   }) => {
     test.skip(isRemote, 'needs the built CLI and the local case files');
     test.setTimeout(180_000);
-    // Open the page first: the node-side setup below blocks this worker for a while.
+    // Open the page first: the node-side setup below blocks this worker for a while. The hook's
+    // temp repo carries the order approved (the test is the maintainer); the browser gets the same
+    // approval through its simulated action.
     await openPlay(page, id);
+    await approveSim(page);
     const bundle = CaseBundle.parse(JSON.parse(readFileSync(`${casesDir}${id}.json`, 'utf8')));
     const engine = new CaseEngine(await loadGrammarsNode(), bundle);
     const repo = CaseRepo.create(bundle);

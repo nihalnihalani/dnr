@@ -1,6 +1,6 @@
 /**
  * The store contract the board needs (plan §10). `dnr board` passes an implementation backed by
- * `@dnr/store` (orders, grants, events, history); tests use `MemoryStore`.
+ * `@dnr/store` (orders, grants, events, history); tests use the same adapter over a real git repository (real-repo.ts).
  *
  * Every method may throw `TransitionError` (→ 409) or `NotFoundError` (→ 404).
  */
@@ -28,6 +28,11 @@ export interface BoardStorePort {
   listGrants(orderId?: string): Promise<Grant[]>;
   listEvents(filter: { order?: string }): Promise<EventRecord[]>;
   diff(id: string): Promise<OrderDiff>;
+  /**
+   * N5: confirm a suspect grant (sets origin.confirmed_by / confirmed_at). Optional: a store
+   * without it answers 404 on POST /api/orders/:id/grants/confirm.
+   */
+  confirmGrant?(orderId: string, sessionKey: string | null, by: string): Promise<Grant>;
 }
 
 export type { EventRecord, Grant, Order };

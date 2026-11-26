@@ -73,15 +73,16 @@ describe('P7-01: localStorage adapter', () => {
     await expect(a.patchOrder(draft.order.id, { status: 'draft' })).rejects.toMatchObject({ status: 409 });
     await expect(a.reapprove('dnr-43933a1dca')).rejects.toBeInstanceOf(AdapterError);
   });
-  it('P7-01: stale → re-approve returns to approved with history', async () => {
+  it('P7-01: re-approve is only for stale, re-landed or violated orders (409 otherwise)', async () => {
     const { a } = make();
-    const stale = (await a.listOrders()).find((r) => r.effective === 'stale') as OrderRow;
-    const r = await a.reapprove(stale.order.id);
-    expect(r.effective).toBe('approved');
-    expect(r.order.history.at(-1)?.action).toBe('reapproved');
+    await expect(a.reapprove('dnr-43933a1dca')).rejects.toMatchObject({ status: 409 }); // draft
+    await a.patchOrder('dnr-43933a1dca', { status: 'approved' });
+    await expect(a.reapprove('dnr-43933a1dca')).rejects.toMatchObject({ status: 409 }); // approved
   });
-  it('P7-01: allow-once creates a pending one-hour grant', async () => {
+  it('P7-01: allow-once needs an enforced order and creates a pending one-hour grant', async () => {
     const { a } = make();
+    await expect(a.allowOnce('dnr-43933a1dca', 3600)).rejects.toMatchObject({ status: 409 }); // draft
+    await a.patchOrder('dnr-43933a1dca', { status: 'approved' });
     const g = await a.allowOnce('dnr-43933a1dca', 3600);
     expect(Date.parse(g.expires_at) - Date.parse(g.granted_at)).toBe(3_600_000);
     expect((await a.getOrder('dnr-43933a1dca'))?.grants).toHaveLength(1);
@@ -90,11 +91,20 @@ describe('P7-01: localStorage adapter', () => {
 
 describe('P9 (node side): session simulator on the real demo case', async () => {
   const engine = new CaseEngine(await loadGrammarsNode(), bundle);
+  // The real order is a draft; these checks are for the order once a maintainer approves it.
+  const approved = { ...bundle.order, status: 'approved' as const };
+  it('P9: as stored (draft), the order is not enforced: the original change is allowed', () => {
+    const writes = bundle.presets.find((p) => p.kind === 'original-change')?.writes ?? [];
+    const r = engine.sendAll(initialState(bundle), bundle.order, writes);
+    expect(bundle.order.status).toBe('draft');
+    expect(r.results[0]?.decision.outcome).toBe('allow');
+    expect(r.results[0]?.output.exitCode).toBe(0);
+  });
   it('P9: the original change blocks at 1.0 with the §6 stderr; the hard negative only warns', () => {
     const s = initialState(bundle);
     const orig = engine.sendAll(
       s,
-      bundle.order,
+      approved,
       bundle.presets.find((p) => p.kind === 'original-change')?.writes ?? [],
     );
     const h = headline(orig.results);
@@ -105,14 +115,14 @@ describe('P9 (node side): session simulator on the real demo case', async () => 
     expect(h?.applied).toBe(false);
     const hn = engine.sendAll(
       newSession(bundle, s),
-      bundle.order,
+      approved,
       bundle.presets.find((p) => p.kind === 'hard-negative')?.writes ?? [],
     );
     expect(hn.results[0]?.decision.outcome).toBe('warn_block');
     // Retrying in the same session passes as warn_pass (warned once per order per session).
     const retry = engine.sendAll(
       hn.next,
-      bundle.order,
+      approved,
       bundle.presets.find((p) => p.kind === 'hard-negative')?.writes ?? [],
     );
     expect(retry.results[0]?.decision.outcome).toBe('warn_pass');
@@ -121,13 +131,13 @@ describe('P9 (node side): session simulator on the real demo case', async () => 
     const writes = bundle.presets.find((p) => p.kind === 'original-change')?.writes ?? [];
     const s = {
       ...initialState(bundle),
-      grants: [{ order_id: bundle.order.id, granted_at: 0, expires_at: Date.parse('2026-11-26T13:00:00Z') }],
+      grants: [{ order_id: approved.id, granted_at: 0, expires_at: Date.parse('2026-11-26T13:00:00Z') }],
     };
-    const used = engine.sendAll(s, bundle.order, writes);
+    const used = engine.sendAll(s, approved, writes);
     expect(used.results[0]?.decision.outcome).toBe('allow_grant');
     const later = { ...used.next, now: Date.parse('2026-11-26T14:00:00Z') };
-    expect(engine.grantApplies(later, bundle.order.id)).toBe(true);
-    expect(engine.grantApplies(newSession(bundle, later), bundle.order.id)).toBe(false);
+    expect(engine.grantApplies(later, approved.id)).toBe(true);
+    expect(engine.grantApplies(newSession(bundle, later), approved.id)).toBe(false);
   });
 });
 

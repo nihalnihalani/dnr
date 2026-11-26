@@ -1,12 +1,20 @@
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
-import { DEMO, DEMO_ORDER, openPlay, results, runPreset, TS_CASE } from './helpers';
+import { approveSim, DEMO, DEMO_ORDER, openPlay, results, runPreset } from './helpers';
 
-test('smoke: the demo case loads the WASM engine and blocks the original change', {
+test('smoke: the demo case loads the WASM engine; draft allows, approved (simulated) blocks the original change', {
   tag: ['@smoke'],
 }, async ({ page }) => {
   await page.goto('./');
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Some changes should stay dead');
   await openPlay(page);
+  // The order as built from Django is a draft: not enforced.
+  await expect(page.getByTestId('banner-draft')).toContainText('Draft: not enforced');
+  await runPreset(page, 'original');
+  await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'ALLOW');
+  await approveSim(page);
+  await page.locator('[data-preset="reset"]').click();
   await runPreset(page, 'original');
   await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'BLOCK');
   await expect(page.getByTestId('exit-code')).toHaveText('2');
@@ -36,6 +44,7 @@ test('ROUTE-03: decision panel shows verdict, exit code, exact stderr, JSON, sco
   tag: ['@ROUTE-03'],
 }, async ({ page }) => {
   await openPlay(page);
+  await approveSim(page);
   await runPreset(page, 'original');
   const stderr = page.getByTestId('stderr');
   await expect(stderr).toContainText(
@@ -78,6 +87,7 @@ test('ROUTE-03: simulated Allow once lets the re-land through, Advance 1 h expir
   tag: ['@ROUTE-03', '@board-flow-sim'],
 }, async ({ page }) => {
   await openPlay(page);
+  await approveSim(page);
   await runPreset(page, 'original');
   await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'BLOCK');
   await page.locator('.sim-actions [data-action="allow-once"]').click();
@@ -100,6 +110,7 @@ test('ROUTE-03: simulated Retire stops enforcement; the ask format exits 0 with 
   tag: ['@ROUTE-03'],
 }, async ({ page }) => {
   await openPlay(page);
+  await approveSim(page);
   await page.getByLabel('Decision format ask').check();
   await runPreset(page, 'original');
   await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'ASK');
@@ -113,29 +124,42 @@ test('ROUTE-03: simulated Retire stops enforcement; the ask format exits 0 with 
   await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'ALLOW');
 });
 
-test('ts-case: the TypeScript case blocks its original change', { tag: ['@ts-case'] }, async ({ page }) => {
-  await openPlay(page, TS_CASE);
-  await expect(page.getByText('Synthetic case')).toBeVisible();
-  await runPreset(page, 'original');
-  await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'BLOCK');
+test('ts-case: no TypeScript case until a real TS revert is chosen; /play says it is pending', {
+  tag: ['@ts-case'],
+}, async ({ page }) => {
+  await page.goto('play');
+  await expect(page.getByTestId('pending-case')).toContainText('TypeScript case: pending');
+  await expect(page.getByTestId('pending-case')).toContainText('ts_demo');
 });
 
 test('STATE-08: a parse-degraded unit shows its banner', { tag: ['@STATE-08'] }, async ({ page }) => {
-  // Text is pasted through /replay (a textarea), so the editor's auto-closing brackets cannot change it.
+  const bundle = JSON.parse(
+    readFileSync(fileURLToPath(new URL(`../public/cases/${DEMO}.json`, import.meta.url)), 'utf8'),
+  ) as { files: Array<{ path: string; baseline_text: string }> };
+  const f = bundle.files[0] as { path: string; baseline_text: string };
+  // Query.clear_ordering still parses as a method, but most of its tokens sit under ERROR nodes.
+  const start = f.baseline_text.indexOf('    def clear_ordering(');
+  const end = f.baseline_text.indexOf('    def set_group_by(', start);
+  const body = [
+    '        if not force and ((( self.is_sliced ]]] or {{{ self.distinct_fields )) or ?? self.select_for_update',
+    '        ))) return :: @@ ##',
+    '        self.order_by = ((( ]]]',
+  ].join('\n');
+  const broken = `${f.baseline_text.slice(0, start)}    def clear_ordering(self, force=False, clear_default=True):\n${body}\n\n${f.baseline_text.slice(end)}`;
+  await openPlay(page);
+  await approveSim(page);
+  // Pasted through /replay (a textarea), so the editor's auto-closing brackets cannot change it.
   await page.goto('replay');
-  await page.getByLabel('Case (baseline and order)').selectOption(TS_CASE);
   await expect(page.getByTestId('replay-run')).toBeEnabled();
-  // subtotal() still parses as a function, but most of its tokens sit under ERROR nodes.
-  const broken =
-    'export function subtotal(items: Item[], limit: number): number {\n  @@ ## $$ %% ^^ && ** (( )) [[ ]] ;; :: ?? !! ~~ `` \n  @@ ## $$ %% ^^ && ** (( )) [[ ]]\n  return total;\n}\n';
   await page.getByLabel('PreToolUse stdin').fill(
     JSON.stringify({
       tool_name: 'fs_write',
       cwd: '/w',
-      tool_input: { command: 'create', path: '/w/src/pricing.ts', file_text: broken },
+      tool_input: { command: 'create', path: `/w/${f.path}`, file_text: broken },
     }),
   );
   await page.getByTestId('replay-run').click();
+  await expect(page.getByTestId('replay-result')).toContainText('approved');
   await expect(page.getByTestId('banner-degraded')).toBeVisible();
 });
 
@@ -147,6 +171,16 @@ test('A11Y-01: keyboard only: reach a preset, run it, hear the decision', {
     'WebKit does not Tab to buttons by default (macOS full keyboard access setting)',
   );
   await openPlay(page, DEMO);
+  // Approve (simulated) by keyboard too.
+  const approve = page.locator('.sim-actions [data-action="approve"]');
+  for (let i = 0; i < 120; i++) {
+    await page.keyboard.press('Tab');
+    if (await approve.evaluate((el) => el === document.activeElement)) break;
+  }
+  await expect(approve).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('.sim-actions')).toContainText('Approved: enforced');
+  await page.locator('#main').focus();
   const original = page.locator('[data-preset-kind="original-change"]');
   for (let i = 0; i < 60; i++) {
     await page.keyboard.press('Tab');

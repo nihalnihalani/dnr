@@ -108,9 +108,9 @@
       "file": ".kiro/specs/dnr-check/requirements.md",
       "what": "Requirements Document: dnr-check",
       "history": [
+        "b3f4301 Close wave-2 security findings in the hook path",
         "bd3ebb2 Make spec ticks truthful, amend R7, update threat model and README",
-        "b6f3a09 Add order store, Kiro hooks, dnr CLI and MCP server (wave 2)",
-        "59f5040 Add engine, schemas, grammars, testkit and Kiro artifacts (wave 1)"
+        "b6f3a09 Add order store, Kiro hooks, dnr CLI and MCP server (wave 2)"
       ]
     },
     {

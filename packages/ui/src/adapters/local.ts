@@ -96,7 +96,9 @@ export class LocalAdapter implements DataAdapter {
       const order = this.mem.orders[r.order.id] ?? r.order;
       const forced = this.mem.effective[r.order.id];
       const effective = forced
-        ? effectiveStatus(order, { stale: forced === 'stale', relanded: forced === 'relanded' })
+        ? order.status === 'approved'
+          ? forced
+          : order.status
         : r.order.status === order.status
           ? r.effective
           : effectiveStatus(order, {});
@@ -135,7 +137,7 @@ export class LocalAdapter implements DataAdapter {
       throw e;
     }
     this.mem.orders[id] = next;
-    // A status change resets an illustrative derived state.
+    // A simulated status change resets any derived state recorded for this order.
     if (body.status !== undefined) this.mem.effective[id] = effectiveStatus(next, {});
     this.save();
     return this.row(id);
@@ -197,6 +199,20 @@ export class LocalAdapter implements DataAdapter {
 
   async events(): Promise<EventRecord[]> {
     return [];
+  }
+
+  async confirmGrant(id: string, sessionKey: string | null): Promise<Grant> {
+    const g = this.mem.grants.find((x) => x.order_id === id && x.session_key === sessionKey);
+    if (!g) throw new AdapterError(404, 'not_found', `No grant for ${id}`);
+    const o = g.origin as
+      | (NonNullable<Grant['origin']> & { confirmed_by?: string; confirmed_at?: string })
+      | undefined;
+    if (!o?.suspect || o.confirmed_by)
+      throw new AdapterError(409, 'invalid_transition', 'This grant does not need confirmation');
+    o.confirmed_by = this.user;
+    o.confirmed_at = new Date(this.clock()).toISOString();
+    this.save();
+    return g;
   }
 
   /** Record a grant use from a simulated /play write (shown in the audit panel). */

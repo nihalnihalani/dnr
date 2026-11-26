@@ -77,6 +77,5 @@ export async function startBoard(opts: StartBoardOptions): Promise<BoardHandle> 
   };
 }
 
-export { MemoryStore, type MemoryStoreInit } from './memory-store';
 export { type BoardApp, type BoardAuth, type BoardContext, createBoardApp } from './server';
 export * from './store-port';

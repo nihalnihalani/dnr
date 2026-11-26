@@ -5,7 +5,8 @@
 import type { EventRecord, Grant, Order } from '@dnr/schemas';
 
 /** Stored status plus the two derived ones (§5.9). `stale` and `relanded` are never stored. */
-export type EffectiveStatus = 'draft' | 'approved' | 'retired' | 'stale' | 'relanded';
+/** `violated` (N4): the re-application was committed in an agent session without a grant; still enforced. */
+export type EffectiveStatus = 'draft' | 'approved' | 'retired' | 'stale' | 'relanded' | 'violated';
 export type StoredStatus = Order['status'];
 
 export interface OrderRow {
@@ -13,11 +14,8 @@ export interface OrderRow {
   effective: EffectiveStatus;
   /** The order file differs from the committed copy in git (STATE-06). */
   drift: boolean;
-  /**
-   * Playground only: this row's derived state (stale, relanded, drift) is illustrative, not
-   * computed from a repository. Always false on the board.
-   */
-  illustrative?: boolean;
+  /** For `violated`: the commit that re-applied the change, and when. */
+  violation?: { commit: string; at: string };
   /** Playground only: the /play case that exercises this order. */
   case_id?: string;
 }
@@ -71,4 +69,19 @@ export interface DataAdapter {
   reapprove(id: string): Promise<OrderRow>;
   diff(id: string): Promise<OrderDiff>;
   events(orderId?: string): Promise<EventRecord[]>;
+  /** N5: a human confirms a suspect grant (made while an agent session looked active). */
+  confirmGrant(orderId: string, sessionKey: string | null): Promise<Grant>;
+}
+
+/** Grant origin with the N5 confirmation fields (optional until @dnr/schemas carries them). */
+export type GrantOrigin = NonNullable<Grant['origin']> & { confirmed_by?: string; confirmed_at?: string };
+
+export function grantOrigin(g: Grant): GrantOrigin | null {
+  return (g.origin as GrantOrigin | undefined) ?? null;
+}
+
+/** A suspect grant applies only once a human has confirmed it. */
+export function needsConfirmation(g: Grant): boolean {
+  const o = grantOrigin(g);
+  return !!o?.suspect && !o.confirmed_by;
 }

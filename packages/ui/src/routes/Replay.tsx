@@ -33,7 +33,7 @@ export function Replay() {
   const ids = useId();
   const idx = useAsync(() => cfg.loadCaseIndex(), []);
   const [caseId, setCaseId] = useState<string>('');
-  const cid = caseId || idx.data?.find((c) => !c.synthetic)?.id || idx.data?.[0]?.id || '';
+  const cid = caseId || idx.data?.[0]?.id || '';
   const eng = useAsync(async () => {
     if (!cid) return null;
     const bundle = await cfg.loadCase(cid);
@@ -47,8 +47,9 @@ export function Replay() {
   const [text, setText] = useState('');
   const [result, setResult] = useState<WriteResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
 
-  const run = () => {
+  const run = async () => {
     setError(null);
     setResult(null);
     if (!eng.data) return;
@@ -71,7 +72,9 @@ export function Replay() {
     if (effect.kind === 'unknown')
       return setError('Unknown write-tagged tool: the hook can only warn (warn tier).');
     const path = rel(effect.path);
-    const order = bundle.order;
+    // The order as this browser has it: a simulated approval in /play applies here too.
+    const order = (await cfg.sim.orderFor(bundle.order.id)) ?? bundle.order;
+    setStatus(order.status);
     setResult(engine.send(s, order, { path, proposed_text: effect.text ?? '' }).result);
   };
 
@@ -140,6 +143,12 @@ export function Replay() {
         )}
         {result && (
           <div data-testid="replay-result">
+            <p>
+              Order <code>{eng.data?.bundle.order.id}</code> in this browser: <strong>{status}</strong>
+              {status === 'draft'
+                ? ' (not enforced: approve it in /play, simulated, to see enforcement)'
+                : ''}
+            </p>
             <Verdict r={result} />
             <DecisionDetail results={[result]} top={result} />
           </div>

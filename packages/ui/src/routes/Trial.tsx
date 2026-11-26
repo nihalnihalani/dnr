@@ -18,8 +18,6 @@ interface TrialRun {
   diff?: string;
 }
 export interface TrialData {
-  sample?: boolean;
-  note?: string;
   result: TrialResult;
   runs: TrialRun[];
   timeline?: Array<{ at: string; what: string }>;
@@ -70,16 +68,14 @@ async function loadTrial(url: string | null): Promise<TrialData | null> {
 export function Trial() {
   useTitle('Trial');
   const cfg = useConfig();
-  const [preview, setPreview] = useState(false);
   const real = useAsync(() => loadTrial(cfg.trialUrl), []);
   const prereg = useAsync(() => getJson<{ tag: string; sha: string }>(cfg.preregUrl), []);
-  const sample = useAsync(() => (preview ? loadTrial(cfg.trialSampleUrl) : Promise.resolve(null)), [preview]);
   return (
     <>
       <h1 id="page-title">Trial Explorer</h1>
       {real.loading && <Loading what="trial data" />}
       {real.error !== undefined && <ErrorBanner error={real.error} />}
-      {real.data && <TrialBody d={{ ...real.data, sample: false }} />}
+      {real.data && <TrialBody d={real.data} />}
       {!real.loading && !real.data && real.error === undefined && (
         <>
           <div className="card" data-testid="empty-trial">
@@ -111,34 +107,10 @@ export function Trial() {
               )}
               .
             </p>
-            {cfg.trialSampleUrl && (
-              <label style={{ display: 'inline-flex', gap: 8, alignItems: 'center', color: 'var(--text)' }}>
-                <input
-                  type="checkbox"
-                  checked={preview}
-                  onChange={(e) => setPreview(e.target.checked)}
-                  data-testid="fake-toggle"
-                />
-                Preview the layout with fake numbers
-              </label>
-            )}
           </div>
-          {preview && sample.loading && <Loading what="the layout preview" />}
-          {preview && sample.data && <TrialBody d={{ ...sample.data, sample: true }} />}
         </>
       )}
     </>
-  );
-}
-
-/** A figure; in the layout preview every one is stamped FAKE. */
-function N({ fake, children }: { fake: boolean; children: React.ReactNode }) {
-  if (!fake) return <>{children}</>;
-  return (
-    <span className="fake-num">
-      {children}
-      <span className="fake-tag">FAKE</span>
-    </span>
   );
 }
 
@@ -146,68 +118,56 @@ function TrialBody({ d }: { d: TrialData }) {
   const r = d.result;
   const [check, setCheck] = useState<ReturnType<typeof recompute> | null>(null);
   const [run, setRun] = useState<string>('');
-  const fake = !!d.sample;
-  const S = fake ? ' (FAKE preview)' : '';
   const arms = [...new Set(d.runs.map((x) => x.arm))];
   const selected = d.runs.find((x) => x.run_id === run);
   return (
-    <div className={fake ? 'fake-zone' : undefined} data-testid={fake ? 'fake-preview' : 'trial-real'}>
-      {fake && (
-        <Banner kind="sample" title="FAKE numbers: layout preview only" testId="banner-sample">
-          {d.note ?? 'These numbers are invented to show the layout. No trial has run.'}
-        </Banner>
-      )}
+    <div data-testid="trial-real">
       <section aria-labelledby="headline-h">
-        <h2 id="headline-h">Headline{S}</h2>
-        <p>
-          Re-applications that landed, over K_eff = <N fake={fake}>{r.K_eff}</N> reverts. Lower is better.
-        </p>
+        <h2 id="headline-h">Headline</h2>
+        <p>Re-applications that landed, over K_eff = {r.K_eff} reverts. Lower is better.</p>
         <div className="stat-lines">
           <p className="stat-line">
             <span className="num">
-              <N fake={fake}>{r.X_eff}</N> of <N fake={fake}>{r.K_eff}</N>
+              {r.X_eff} of {r.K_eff}
             </span>
-            No DNR landed{S}
+            No DNR landed
           </p>
           <p className="stat-line">
             <span className="num">
-              <N fake={fake}>{r.S_eff}</N> of <N fake={fake}>{r.K_eff}</N>
+              {r.S_eff} of {r.K_eff}
             </span>
-            Steering file from history landed{S}
+            Steering file from history landed
           </p>
           <p className="stat-line">
             <span className="num">
-              <N fake={fake}>{r.W_L}</N> of <N fake={fake}>{r.K_eff}</N>
+              {r.W_L} of {r.K_eff}
             </span>
-            DNR live landed{S}
+            DNR live landed
           </p>
         </div>
         <dl className="kv">
           <dt>Decision row</dt>
           <dd>
-            <N fake={fake}>{r.row}</N>
-            {r.via_d6 ? ' (via D6)' : ''} · mode <N fake={fake}>{r.mode ?? 'n/a'}</N>
+            {r.row}
+            {r.via_d6 ? ' (via D6)' : ''} · mode {r.mode ?? 'n/a'}
           </dd>
           <dt>X / K</dt>
           <dd>
-            <N fake={fake}>{r.X}</N> / <N fake={fake}>{r.K}</N>
+            {r.X} / {r.K}
           </dd>
           <dt>Caught by existing tests</dt>
           <dd>
-            Y <N fake={fake}>{r.Y}</N> of X <N fake={fake}>{r.X}</N>
+            Y {r.Y} of X {r.X}
           </dd>
           <dt>κ</dt>
           <dd>
-            builder vs outside <N fake={fake}>{r.kappa.builder_vs_outside ?? 'n/a'}</N> · binary{' '}
-            <N fake={fake}>{r.kappa.binary ?? 'n/a'}</N>
+            builder vs outside {r.kappa.builder_vs_outside ?? 'n/a'} · binary {r.kappa.binary ?? 'n/a'}
           </dd>
           <dt>Held-out recall</dt>
-          <dd>
-            <N fake={fake}>{r.held_out_recall ?? 'n/a'}</N>
-          </dd>
+          <dd>{r.held_out_recall ?? 'n/a'}</dd>
           <dt>Pre-registration</dt>
           <dd>
-            <code>prereg-v1</code> <N fake={fake}>{r.prereg_sha}</N>
+            <code>prereg-v1</code> {r.prereg_sha}
           </dd>
         </dl>
         <button
@@ -237,12 +197,8 @@ function TrialBody({ d }: { d: TrialData }) {
                   return (
                     <tr key={k}>
                       <td>{k}</td>
-                      <td>
-                        <N fake={fake}>{r[k]}</N>
-                      </td>
-                      <td>
-                        <N fake={fake}>{check[k]}</N>
-                      </td>
+                      <td>{r[k]}</td>
+                      <td>{check[k]}</td>
                       <td>{k === 'K_eff' ? '' : wilson(check[k], check.K_eff).join(' – ')}</td>
                       <td className={same ? 'ok' : 'bad'}>{same ? '✓ matches' : '✗ differs'}</td>
                     </tr>
@@ -254,7 +210,7 @@ function TrialBody({ d }: { d: TrialData }) {
         )}
       </section>
       <section aria-labelledby="arms-h">
-        <h2 id="arms-h">Runs per arm{S}</h2>
+        <h2 id="arms-h">Runs per arm</h2>
         {arms.map((arm) => (
           <div className="table-wrap" key={arm}>
             <table>
@@ -307,7 +263,7 @@ function TrialBody({ d }: { d: TrialData }) {
         )}
       </section>
       <section aria-labelledby="tl-h">
-        <h2 id="tl-h">Timeline{S}</h2>
+        <h2 id="tl-h">Timeline</h2>
         <ol>
           {(d.timeline ?? []).map((t) => (
             <li key={t.at}>
@@ -315,7 +271,7 @@ function TrialBody({ d }: { d: TrialData }) {
             </li>
           ))}
         </ol>
-        <h2>False alarms{S}</h2>
+        <h2>False alarms</h2>
         {(d.false_alarms ?? []).length === 0 ? (
           <p>None.</p>
         ) : (
@@ -327,7 +283,7 @@ function TrialBody({ d }: { d: TrialData }) {
             ))}
           </ul>
         )}
-        <h2>Pins{S}</h2>
+        <h2>Pins</h2>
         <dl className="kv">
           {Object.entries(d.pins ?? {}).map(([k, v]) => (
             <Fragment key={k}>

@@ -9,10 +9,8 @@ export interface CaseIndexEntry {
   title: string;
   order_id: string;
   grammars: string[];
-  synthetic: boolean;
-  source: { repo: string; license: string };
+  source: { repo: string; license: string; from?: string };
   notes: string[];
-  demo: { path: string; edit: number | null; stderr: string } | null;
   /** Presets this case cannot offer, and why. */
   omitted?: Array<{ kind: string; reason: string }>;
 }
@@ -29,15 +27,17 @@ export interface AppConfig {
   loadCase(id: string): Promise<CaseBundle>;
   /** Zod-validate a case (null when valid); the page shows an error banner otherwise. */
   checkCase(id: string): Promise<string | null>;
-  /** URL of trial.json (or the clearly-labeled sample). */
+  /** URL of trial.json (real results only; the page shows an empty state until it exists). */
   trialUrl: string;
-  /** Fake layout preview, offered behind an off-by-default toggle when there is no real data. */
-  trialSampleUrl: string | null;
   /** {tag, sha} of prereg-v1 once it exists (written at build time). */
   preregUrl: string;
   /** Simulated clock shared by /play and the localStorage adapter (Advance 1 h). */
   clock: SimClock;
   kiroUrl: string;
+  /** Recorded output of the built CLI on the demo checkout (data/cli-capture.json), if one exists. */
+  captureUrl: string;
+  /** Cases not available yet, and why (from cases/index.json). */
+  loadPending(): Promise<Array<{ what: string; why: string }>>;
   /** Public repository URL (VITE_REPO_URL), or null. */
   repoUrl: string | null;
   version: string;

@@ -84,8 +84,12 @@ export function Headstone({
         )}
         <span>{order.id}</span>
       </p>
-      {row.illustrative && effective !== order.status && <span className="illus">illustrative state</span>}
-      {row.illustrative && drift && <span className="illus">illustrative drift</span>}
+      {effective === 'violated' && (
+        <span className="violation" data-testid="violation">
+          Re-applied in commit {row.violation ? short(row.violation.commit) : 'unknown'}
+          {row.violation ? ` · ${day(row.violation.at)}` : ''}
+        </span>
+      )}
       {effective === 'relanded' && <Candle />}
     </article>
   );

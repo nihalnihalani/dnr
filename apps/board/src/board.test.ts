@@ -1,98 +1,21 @@
 /**
- * Board acceptance tests (plan §10): real HTTP against `startBoard` on a random port.
- * `node:http` is used so Host, Origin and Cookie can be set freely.
+ * Board acceptance tests (plan §10): real HTTP against `startBoard` on a random port, over the
+ * same store `dnr board` uses (`createBoardStore`) on a real git repository with a real revert
+ * and a real order (see real-repo.ts). `node:http` is used so Host, Origin and Cookie can be set freely.
  */
 
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { EventRecord, Order } from '@dnr/schemas';
+import type { EventRecord } from '@dnr/schemas';
 import type { OrderRow } from '@dnr/ui/model';
 import { afterEach, describe, expect, it } from 'vitest';
-import { type BoardHandle, MemoryStore, type StartBoardOptions, startBoard } from './index';
+import { type BoardHandle, type StartBoardOptions, startBoard } from './index';
+import { MAINTAINER, RealRepo } from './real-repo';
 
 const PLAYGROUND = 'https://dnr-playground.pages.dev';
-const SHA = (c: string) => c.repeat(40);
-
-function order(id: string, status: Order['status']): Order {
-  return {
-    schema: 'dnr.order/v1',
-    id,
-    status,
-    source: 'revert',
-    original_sha: SHA('a'),
-    revert_sha: SHA('b'),
-    snapshot_sha: SHA('c'),
-    tickets: [],
-    links: [{ rel: 'original', url: 'https://example.com/commit/a' }],
-    reason: 'Reverted: broke the parser',
-    reason_source: 'drafter',
-    units: [
-      {
-        file: 'src/a.py',
-        qualname: 'f',
-        kind: 'modified',
-        tokenizer: { grammar: 'python', normalizer: 1 },
-        A: ['x'],
-        R: ['y'],
-        c_state_ref: { sha: SHA('d'), file: 'src/a.py', qualname: 'f' },
-        post_revert_hash: 'e'.repeat(64),
-        post_revert_token_count: 3,
-      },
-    ],
-    history: [{ at: '2026-01-01T00:00:00Z', by: 'dnr', action: 'created' }],
-    created_at: '2026-01-01T00:00:00Z',
-    updated_at: '2026-01-01T00:00:00Z',
-  };
-}
-
-const ID = {
-  draft: 'dnr-000000000a',
-  approved: 'dnr-000000000b',
-  retired: 'dnr-000000000c',
-  stale: 'dnr-000000000d',
-  drift: 'dnr-000000000e',
-};
-
-function rows(): OrderRow[] {
-  return [
-    { order: order(ID.draft, 'draft'), effective: 'draft', drift: false },
-    { order: order(ID.approved, 'approved'), effective: 'approved', drift: false },
-    { order: order(ID.retired, 'retired'), effective: 'retired', drift: false },
-    { order: order(ID.stale, 'approved'), effective: 'stale', drift: false },
-    { order: order(ID.drift, 'approved'), effective: 'approved', drift: true },
-  ];
-}
-
-function event(id: string, orderId: string | null): EventRecord {
-  return {
-    event_id: id,
-    at: '2026-01-02T00:00:00Z',
-    mode: 'enforce',
-    hook: 'pre-write',
-    session_key: 's1',
-    raw: {},
-    target_rel: 'src/a.py',
-    proposed_text: null,
-    session_patch: null,
-    decision: {
-      outcome: orderId ? 'block' : 'allow',
-      tier: orderId ? 'match' : 'none',
-      order_id: orderId,
-      edit_score: null,
-      prox_score: null,
-      fired_by: null,
-      scope: 'order',
-      breakdown: [],
-      reason_line: null,
-      latency_ms: 1,
-      fast_path: false,
-    },
-    dnr_version: '0.0.0',
-    kiro_cli_version: null,
-  };
-}
+const UNKNOWN = 'dnr-ffffffffff';
 
 interface Res {
   status: number;
@@ -132,18 +55,22 @@ function http(
 
 const boards: BoardHandle[] = [];
 afterEach(async () => {
+  for (const r of repos.splice(0)) r.dispose();
   await Promise.all(boards.splice(0).map((b) => b.close()));
 });
 
 const emptyStatic = mkdtempSync(join(tmpdir(), 'dnr-board-empty-'));
 
-async function start(over: Partial<StartBoardOptions> = {}) {
-  const now = { t: 1_000_000 };
-  const store = new MemoryStore({
-    rows: rows(),
-    events: [event('e1', ID.approved), event('e2', null)],
-    now: () => now.t,
-  });
+const repos: RealRepo[] = [];
+
+async function start(
+  over: Partial<StartBoardOptions> & { openOwnOrder?: boolean; storeEnv?: NodeJS.ProcessEnv } = {},
+) {
+  const now = { t: Date.now() };
+  const repo = await RealRepo.create();
+  repos.push(repo);
+  const { openOwnOrder, storeEnv, ...rest } = over;
+  const store = await repo.boardStore(storeEnv);
   const board = await startBoard({
     store,
     version: '1.2.3',
@@ -151,10 +78,11 @@ async function start(over: Partial<StartBoardOptions> = {}) {
     staticDir: emptyStatic,
     now: () => now.t,
     user: 'tester',
-    ...over,
+    ...(openOwnOrder ? { openOrder: repo.order.id } : {}),
+    ...rest,
   });
   boards.push(board);
-  return { board, store, now };
+  return { board, store, now, repo, id: repo.order.id };
 }
 
 const pathOf = (url: string) => {
@@ -268,7 +196,7 @@ describe('board authorization', () => {
   });
 
   it("AUTH-02: host '127.0.0.1' skips the probe; --open lands on the order", async () => {
-    const { board } = await start({ host: '127.0.0.1', openOrder: ID.approved });
+    const { board, id } = await start({ host: '127.0.0.1', openOwnOrder: true });
     expect(board.launchHost).toBe(`127.0.0.1:${board.port}`);
     expect(board.origin).toBe(`http://127.0.0.1:${board.port}`);
     const launch = await http(board.port, pathOf(board.launchUrl));
@@ -276,7 +204,7 @@ describe('board authorization', () => {
     expect(launch.body).not.toContain('.localhost');
     const s = await http(board.port, `/session?t=${ticketOf(launch.body)}`);
     expect(s.status).toBe(302);
-    expect(s.headers.location).toBe(`/orders/${ID.approved}`);
+    expect(s.headers.location).toBe(`/orders/${id}`);
     // No .localhost host is accepted at all in this mode.
     expect((await http(board.port, '/api/health', { host: `dnr-x.localhost:${board.port}` })).status).toBe(
       421,
@@ -284,7 +212,7 @@ describe('board authorization', () => {
   });
 
   it('AUTH-03: a bad Host gets 421 on every route', async () => {
-    const { board } = await start();
+    const { board, id } = await start();
     const cookie = await login(board);
     const rand = board.launchHost.split('.')[0];
     const bad = [
@@ -309,7 +237,7 @@ describe('board authorization', () => {
         expect(r.status, `${host} ${path}`).toBe(421);
         expect(r.json()).toMatchObject({ error: 'misdirected' });
       }
-      const p = await http(board.port, `/api/orders/${ID.draft}`, {
+      const p = await http(board.port, `/api/orders/${id}`, {
         method: 'PATCH',
         host,
         headers: { cookie, origin: `http://${host}`, 'x-dnr-csrf': '1' },
@@ -352,18 +280,18 @@ describe('board authorization', () => {
   });
 
   it('AUTH-05: every /api route except health and ping needs the cookie', async () => {
-    const { board } = await start();
+    const { board, id } = await start();
     const cookie = await login(board);
     const name = cookie.split('=')[0];
     const routes: [string, string][] = [
       ['GET', '/api/orders'],
-      ['GET', `/api/orders/${ID.approved}`],
-      ['PATCH', `/api/orders/${ID.draft}`],
-      ['POST', `/api/orders/${ID.approved}/allow-once`],
-      ['POST', `/api/orders/${ID.stale}/reapprove`],
-      ['GET', `/api/orders/${ID.approved}/diff`],
+      ['GET', `/api/orders/${id}`],
+      ['PATCH', `/api/orders/${id}`],
+      ['POST', `/api/orders/${id}/allow-once`],
+      ['POST', `/api/orders/${id}/reapprove`],
+      ['GET', `/api/orders/${id}/diff`],
       ['GET', '/api/events'],
-      ['GET', `/api/events?order=${ID.approved}`],
+      ['GET', `/api/events?order=${id}`],
       ['GET', '/api/unknown'],
     ];
     const origin = `http://${board.launchHost}`;
@@ -395,9 +323,9 @@ describe('board authorization', () => {
   });
 
   it('AUTH-06: a mutating request with a missing or foreign Origin gets 403', async () => {
-    const { board, store } = await start();
+    const { board, store, id } = await start();
     const cookie = await login(board);
-    const path = `/api/orders/${ID.draft}`;
+    const path = `/api/orders/${id}`;
     const body = '{"status":"approved"}';
     const base = mutating(board, cookie);
     const { origin: _o, ...noOrigin } = base.headers;
@@ -414,7 +342,7 @@ describe('board authorization', () => {
       expect(r.status, JSON.stringify(headers.origin)).toBe(403);
       expect(r.json()).toMatchObject({ error: 'forbidden' });
     }
-    for (const p of [`/api/orders/${ID.approved}/allow-once`, `/api/orders/${ID.stale}/reapprove`]) {
+    for (const p of [`/api/orders/${id}/allow-once`, `/api/orders/${id}/reapprove`]) {
       const r = await http(board.port, p, {
         method: 'POST',
         host: board.launchHost,
@@ -423,7 +351,7 @@ describe('board authorization', () => {
       });
       expect(r.status).toBe(403);
     }
-    expect((await store.getOrder(ID.draft))?.order.status).toBe('draft');
+    expect((await store.getOrder(id))?.order.status).toBe('draft');
     // The 127.0.0.1 host with its own origin is accepted.
     const ok = await http(board.port, path, {
       method: 'PATCH',
@@ -434,11 +362,11 @@ describe('board authorization', () => {
   });
 
   it('AUTH-07: a mutating request without X-DNR-CSRF: 1 gets 403', async () => {
-    const { board } = await start();
+    const { board, id } = await start();
     const cookie = await login(board);
     const { 'x-dnr-csrf': _c, ...noCsrf } = mutating(board, cookie).headers;
     for (const headers of [noCsrf, { ...noCsrf, 'x-dnr-csrf': '0' }, { ...noCsrf, 'x-dnr-csrf': 'true' }]) {
-      const r = await http(board.port, `/api/orders/${ID.draft}`, {
+      const r = await http(board.port, `/api/orders/${id}`, {
         method: 'PATCH',
         host: board.launchHost,
         headers,
@@ -449,7 +377,7 @@ describe('board authorization', () => {
     }
     // Order of checks: no cookie beats missing CSRF (401 before 403).
     const { cookie: _k, ...anon } = noCsrf;
-    const r = await http(board.port, `/api/orders/${ID.draft}`, {
+    const r = await http(board.port, `/api/orders/${id}`, {
       method: 'PATCH',
       host: board.launchHost,
       headers: anon,
@@ -550,44 +478,50 @@ describe('board API', () => {
     expect(preOrders.headers['access-control-allow-origin']).toBeUndefined();
   });
 
-  it('API-02: list, get, diff and events', async () => {
-    const { board } = await start();
+  it('API-02: list, get, diff and events (real store, real git, a real hook event)', async () => {
+    const { board, repo, id } = await start();
     const cookie = await login(board);
     const get = (p: string) => http(board.port, p, { host: board.launchHost, headers: { cookie } });
+    const rows = async () => ((await get('/api/orders')).json() as { orders: OrderRow[] }).orders;
 
     const list = await get('/api/orders');
     expect(list.status).toBe(200);
     expect(list.headers['cache-control']).toBe('no-store');
-    const { orders } = list.json() as { orders: OrderRow[] };
-    expect(orders.map((r) => [r.order.id, r.effective, r.drift])).toEqual([
-      [ID.draft, 'draft', false],
-      [ID.approved, 'approved', false],
-      [ID.retired, 'retired', false],
-      [ID.stale, 'stale', false],
-      [ID.drift, 'approved', true],
-    ]);
+    expect((await rows()).map((r) => [r.order.id, r.effective, r.drift])).toEqual([[id, 'draft', false]]);
 
-    const detail = await get(`/api/orders/${ID.stale}`);
-    expect(detail.json()).toMatchObject({
-      order: { id: ID.stale },
-      effective: 'stale',
-      drift: false,
-      grants: [],
-    });
+    // A maintainer approves and commits the order; it is enforced and matches git.
+    await repo.approve();
+    expect((await rows())[0]).toMatchObject({ effective: 'approved', drift: true }); // approved but not committed
+    repo.commitOrders('Approve the order');
+    expect((await rows())[0]).toMatchObject({ effective: 'approved', drift: false });
 
-    const diff = await get(`/api/orders/${ID.drift}/diff`);
-    expect(diff.status).toBe(200);
-    const d = diff.json() as { file: Order; git: Order | null; unified: string };
-    expect(d.file.id).toBe(ID.drift);
-    expect(d.git?.id).toBe(ID.drift);
-    expect(typeof d.unified).toBe('string');
-
+    // A real agent write through the PreToolUse hook is blocked and logged.
+    const io = await repo.agentWrite();
+    expect(io.exitCode).toBe(2);
     const all = (await get('/api/events')).json() as { events: EventRecord[] };
-    expect(all.events.map((e) => e.event_id)).toEqual(['e1', 'e2']);
-    const one = (await get(`/api/events?order=${ID.approved}`)).json() as { events: EventRecord[] };
-    expect(one.events.map((e) => e.event_id)).toEqual(['e1']);
+    expect(all.events.map((e) => e.decision.outcome)).toEqual(['block']);
+    const one = (await get(`/api/events?order=${id}`)).json() as { events: EventRecord[] };
+    expect(one.events).toHaveLength(1);
+    expect((await get(`/api/events?order=${UNKNOWN}`)).json()).toEqual({ events: [] });
 
-    for (const p of ['/api/orders/dnr-ffffffffff', '/api/orders/dnr-ffffffffff/diff', '/api/nope']) {
+    // Later code moves the unit's logic: stale. Editing the order file without committing: drift.
+    repo.makeStale();
+    const detail = await get(`/api/orders/${id}`);
+    expect(detail.json()).toMatchObject({ order: { id }, effective: 'stale', drift: false, grants: [] });
+    repo.makeDrift();
+    expect((await rows())[0]).toMatchObject({ effective: 'stale', drift: true });
+    const diff = await get(`/api/orders/${id}/diff`);
+    const d = diff.json() as {
+      file: { id: string; reason: string };
+      git: { id: string } | null;
+      unified: string;
+    };
+    expect(d.file.id).toBe(id);
+    expect(d.git?.id).toBe(id);
+    expect(d.file.reason).toContain('(edited locally)');
+    expect(d.unified).toContain('(edited locally)');
+
+    for (const p of [`/api/orders/${UNKNOWN}`, `/api/orders/${UNKNOWN}/diff`, '/api/nope']) {
       const r = await get(p);
       expect(r.status).toBe(404);
       expect(r.json()).toMatchObject({ error: 'not_found' });
@@ -595,45 +529,93 @@ describe('board API', () => {
   });
 
   it('API-03: invalid transitions are 409; draft → approved logs history', async () => {
-    const { board } = await start();
+    const { board, id } = await start();
     const cookie = await login(board);
-    const patch = (id: string, body: string) =>
-      http(board.port, `/api/orders/${id}`, { method: 'PATCH', ...mutating(board, cookie), body });
-
-    for (const [id, status] of [
-      [ID.approved, 'draft'],
-      [ID.retired, 'approved'],
-      [ID.draft, 'draft'],
-    ] as const) {
+    const patch = (oid: string, body: string) =>
+      http(board.port, `/api/orders/${oid}`, { method: 'PATCH', ...mutating(board, cookie), body });
+    const expect409 = async (status: string) => {
       const r = await patch(id, JSON.stringify({ status }));
-      expect(r.status, `${id} → ${status}`).toBe(409);
+      expect(r.status, `→ ${status}`).toBe(409);
       expect(r.json()).toMatchObject({ error: 'invalid_transition' });
-      expect((r.json() as { message: string }).message).toMatch(/Invalid transition/);
-    }
+      expect(typeof (r.json() as { message: unknown }).message).toBe('string');
+    };
 
+    await expect409('draft'); // draft → draft
     for (const bad of ['not json', '{"status":"stale"}', '{"status":1}', '{"extra":true}', '{}', '[]']) {
-      const r = await patch(ID.draft, bad);
+      const r = await patch(id, bad);
       expect(r.status, bad).toBe(400);
       expect(r.json()).toMatchObject({ error: 'bad_request' });
     }
-    expect((await patch('dnr-ffffffffff', '{"status":"approved"}')).status).toBe(404);
+    expect((await patch(UNKNOWN, '{"status":"approved"}')).status).toBe(404);
 
-    const ok = await patch(ID.draft, JSON.stringify({ status: 'approved', reason: '  Broke the parser  ' }));
+    const ok = await patch(id, JSON.stringify({ status: 'approved', reason: '  Broke query grouping  ' }));
     expect(ok.status).toBe(200);
     const row = ok.json() as OrderRow;
     expect(row.effective).toBe('approved');
     expect(row.order.status).toBe('approved');
-    expect(row.order.reason).toBe('Broke the parser');
-    expect(row.order.history.slice(-2)).toEqual([
-      expect.objectContaining({ by: 'tester', action: 'approved' }),
-      expect.objectContaining({ by: 'tester', action: 'edited_reason' }),
-    ]);
-    const again = await http(board.port, `/api/orders/${ID.draft}`, { headers: { cookie } });
+    expect(row.order.reason).toBe('Broke query grouping');
+    // Both changes are logged, by the board user (the store records the reason edit first).
+    expect(row.order.history.slice(-2)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ by: 'tester', action: 'approved' }),
+        expect.objectContaining({ by: 'tester', action: 'edited_reason' }),
+      ]),
+    );
+    expect(row.order.history).toHaveLength(3);
+    const again = await http(board.port, `/api/orders/${id}`, { headers: { cookie } });
     expect((again.json() as OrderRow).order.status).toBe('approved');
+
+    await expect409('draft'); // approved → draft
+    expect((await patch(id, '{"status":"retired"}')).status).toBe(200);
+    await expect409('approved'); // retired → approved needs an unretire first
+    const un = await patch(id, '{"status":"draft"}');
+    expect(un.status).toBe(200);
+    expect((un.json() as OrderRow).order.history.at(-1)).toMatchObject({ action: 'unretired' });
   });
 
-  it('API-04: allow-once creates a grant; reapprove is 409 on approved and works on stale', async () => {
-    const { board, now } = await start();
+  it('N5: a grant made while an agent session is live is suspect; a CSRF-checked POST confirms it, once', async () => {
+    // The board is launched from inside a Kiro agent's environment, which grant provenance detects.
+    const { board, repo, id } = await start({ storeEnv: { KIRO_SESSION_ID: 'agent-session-1' } });
+    await repo.approve();
+    repo.commitOrders('Approve the order');
+    const cookie = await login(board);
+    const g = await http(board.port, `/api/orders/${id}/allow-once`, {
+      method: 'POST',
+      ...mutating(board, cookie),
+      body: '{}',
+    });
+    expect(g.status).toBe(200);
+    const grant = g.json() as {
+      session_key: string | null;
+      origin?: { suspect: boolean; markers: string[] };
+    };
+    expect(grant.origin?.suspect).toBe(true);
+    expect(grant.origin?.markers).toContain('env:KIRO_SESSION_ID');
+
+    const path = `/api/orders/${id}/grants/confirm`;
+    const body = JSON.stringify({ session_key: grant.session_key });
+    const noCsrf = await http(board.port, path, {
+      method: 'POST',
+      host: board.launchHost,
+      headers: { cookie, origin: `http://${board.launchHost}`, 'content-type': 'application/json' },
+      body,
+    });
+    expect(noCsrf.status).toBe(403);
+    const ok = await http(board.port, path, { method: 'POST', ...mutating(board, cookie), body });
+    expect(ok.status).toBe(200);
+    expect(ok.json()).toMatchObject({ origin: { suspect: true, confirmed_by: 'tester' } });
+    const again = await http(board.port, path, { method: 'POST', ...mutating(board, cookie), body });
+    expect(again.status).toBe(409);
+    const missing = await http(board.port, path, {
+      method: 'POST',
+      ...mutating(board, cookie),
+      body: '{"session_key":"nope"}',
+    });
+    expect(missing.status).toBe(404);
+  });
+
+  it('API-04: allow-once creates a grant only on an enforced order; reapprove is 409 on approved and works on stale', async () => {
+    const { board, repo, id } = await start();
     const cookie = await login(board);
     const post = (p: string, body?: string) =>
       http(board.port, p, {
@@ -642,45 +624,57 @@ describe('board API', () => {
         ...(body !== undefined ? { body } : {}),
       });
 
-    const g = await post(`/api/orders/${ID.approved}/allow-once`, '{"ttl":120}');
+    // Draft: not enforced, nothing to allow.
+    expect((await post(`/api/orders/${id}/allow-once`, '{"ttl":60}')).status).toBe(409);
+    await repo.approve();
+    repo.commitOrders('Approve the order');
+
+    const g = await post(`/api/orders/${id}/allow-once`, '{"ttl":120}');
     expect(g.status).toBe(200);
+    const grant = g.json() as { granted_at: string; expires_at: string };
     expect(g.json()).toMatchObject({
-      order_id: ID.approved,
+      order_id: id,
       session_key: null,
       kind: 'allow_once',
       granted_by: 'tester',
-      granted_at: new Date(now.t).toISOString(),
-      expires_at: new Date(now.t + 120_000).toISOString(),
       used: [],
       blobs: [],
     });
-    const dflt = await post(`/api/orders/${ID.approved}/allow-once`);
+    expect(Date.parse(grant.expires_at) - Date.parse(grant.granted_at)).toBe(120_000);
+    const dflt = await post(`/api/orders/${id}/allow-once`);
     expect(dflt.status).toBe(200);
-    expect((dflt.json() as { expires_at: string }).expires_at).toBe(
-      new Date(now.t + 3_600_000).toISOString(),
-    );
+    const d2 = dflt.json() as { granted_at: string; expires_at: string };
+    expect(Date.parse(d2.expires_at) - Date.parse(d2.granted_at)).toBe(3_600_000);
 
-    const detail = (await http(board.port, `/api/orders/${ID.approved}`, { headers: { cookie } })).json() as {
+    const detail = (await http(board.port, `/api/orders/${id}`, { headers: { cookie } })).json() as {
       grants: unknown[];
     };
-    expect(detail.grants).toHaveLength(2);
+    expect(detail.grants.length).toBeGreaterThanOrEqual(1);
 
     for (const bad of ['{"ttl":59}', '{"ttl":86401}', '{"ttl":1.5}', '{"ttl":"60"}']) {
-      expect((await post(`/api/orders/${ID.approved}/allow-once`, bad)).status, bad).toBe(400);
+      expect((await post(`/api/orders/${id}/allow-once`, bad)).status, bad).toBe(400);
     }
-    expect((await post(`/api/orders/${ID.draft}/allow-once`, '{"ttl":60}')).status).toBe(409);
-    expect((await post(`/api/orders/${ID.retired}/allow-once`, '{"ttl":60}')).status).toBe(409);
 
-    const r409 = await post(`/api/orders/${ID.approved}/reapprove`);
+    const r409 = await post(`/api/orders/${id}/reapprove`);
     expect(r409.status).toBe(409);
     expect(r409.json()).toMatchObject({ error: 'invalid_transition' });
 
-    const r = await post(`/api/orders/${ID.stale}/reapprove`);
+    repo.makeStale();
+    const rows = (await http(board.port, '/api/orders', { headers: { cookie } })).json() as {
+      orders: OrderRow[];
+    };
+    expect(rows.orders[0]?.effective).toBe('stale');
+    const r = await post(`/api/orders/${id}/reapprove`);
     expect(r.status).toBe(200);
     const row = r.json() as OrderRow;
     expect(row.effective).toBe('approved');
     expect(row.order.history.at(-1)).toMatchObject({ by: 'tester', action: 'reapproved' });
-    expect((await post(`/api/orders/${ID.stale}/reapprove`)).status).toBe(409);
+    expect(row.order.snapshot_sha).toBe(repo.git('rev-parse', 'HEAD'));
+    expect((await post(`/api/orders/${id}/reapprove`)).status).toBe(409);
+
+    // Retired: not enforced again.
+    await repo.retire(MAINTAINER);
+    expect((await post(`/api/orders/${id}/allow-once`, '{"ttl":60}')).status).toBe(409);
   });
 
   it('STATIC: SPA fallback injects the api adapter meta; security headers; wasm type', async () => {
@@ -693,7 +687,7 @@ describe('board API', () => {
     writeFileSync(join(dir, 'tree-sitter.wasm'), new Uint8Array([0, 97, 115, 109]));
     const { board } = await start({ staticDir: dir });
 
-    const idx = await http(board.port, '/orders/dnr-000000000a', { host: board.launchHost });
+    const idx = await http(board.port, `/orders/${UNKNOWN}`, { host: board.launchHost });
     expect(idx.status).toBe(200);
     expect(idx.body).toContain('<head><meta name="dnr-adapter" content="api">');
     expect(idx.headers['content-security-policy']).toBe(

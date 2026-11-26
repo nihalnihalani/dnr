@@ -44,6 +44,7 @@ export function PlayIndex() {
   useTitle('Play');
   const cfg = useConfig();
   const q = useAsync(() => cfg.loadCaseIndex(), []);
+  const pending = useAsync(() => cfg.loadPending(), []);
   return (
     <>
       <h1 id="page-title">Try a revert</h1>
@@ -59,13 +60,15 @@ export function PlayIndex() {
               <Link to={`/play/${c.id}`}>{c.title}</Link>
             </h2>
             <p>
-              {c.synthetic ? (
-                <span className="tag">synthetic</span>
-              ) : (
-                <span className="tag">real revert</span>
-              )}{' '}
-              {c.source.repo} ({c.source.license}) · {c.grammars.join(', ')}
+              <span className="tag">real revert</span> {c.source.repo} ({c.source.license}) ·{' '}
+              {c.grammars.join(', ')}
             </p>
+          </li>
+        ))}
+        {pending.data?.map((p) => (
+          <li key={p.what} className="card" data-testid="pending-case">
+            <h2 style={{ marginTop: 0, fontSize: '1.1rem' }}>{p.what}: pending</h2>
+            <p>Not available yet: {p.why}.</p>
           </li>
         ))}
       </ul>
@@ -108,11 +111,6 @@ export function Play({ caseId }: { caseId: string }) {
       <h1 id="page-title" style={{ fontSize: 'clamp(1.75rem, 3.4vw, 2.3rem)' }}>
         {entry?.title ?? caseId}
       </h1>
-      {entry?.synthetic && (
-        <Banner kind="sample" title="Synthetic case">
-          Built from a hand-written test fixture, not a real revert. Use it to see TypeScript scoring.
-        </Banner>
-      )}
       {bundleQ.loading && <Loading what="the case" />}
       {bundleQ.error !== undefined && <ErrorBanner error={bundleQ.error} />}
       {engineQ.error !== undefined && <ErrorBanner error={engineQ.error} />}
@@ -270,6 +268,13 @@ function PlayBody({
           })}
         </section>
 
+        {effective === 'draft' && (
+          <Banner kind="warn" title="Draft: not enforced" testId="banner-draft">
+            This is the order as built from Django's history. No maintainer has approved it, so DNR allows
+            every write. Use <strong>Approve (simulated)</strong> under Maintainer actions to enforce it in
+            this browser only.
+          </Banner>
+        )}
         <section aria-labelledby="presets-h">
           <h2 id="presets-h">Presets</h2>
           {!engine && (

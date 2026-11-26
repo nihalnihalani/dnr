@@ -16,7 +16,7 @@ export type ActionId =
   | 'restore';
 
 export interface StateInfo {
-  visual: 'outlined' | 'solid' | 'faded' | 'cracked' | 'candle';
+  visual: 'outlined' | 'solid' | 'faded' | 'cracked' | 'candle' | 'disturbed';
   label: string;
   actions: ActionId[];
 }
@@ -29,6 +29,11 @@ export const STATE_INFO: Record<EffectiveStatus, StateInfo> = {
   relanded: {
     visual: 'candle',
     label: 'Re-landed: warn only until re-approved',
+    actions: ['reapprove', 'retire'],
+  },
+  violated: {
+    visual: 'disturbed',
+    label: 'Violated: re-applied by an agent, still enforced',
     actions: ['reapprove', 'retire'],
   },
 };
@@ -68,9 +73,9 @@ export function checkTransition(
   return { ok: false, message: `Invalid transition: ${from} → ${to}` };
 }
 
-/** Re-approve is valid only for an approved order that is stale or re-landed. */
+/** Re-approve is valid only for an approved order that is stale, re-landed or violated. */
 export function canReapprove(effective: EffectiveStatus): boolean {
-  return effective === 'stale' || effective === 'relanded';
+  return effective === 'stale' || effective === 'relanded' || effective === 'violated';
 }
 
 /** Apply a PATCH to an order (pure). Throws `TransitionRejected` on an invalid transition or reason. */

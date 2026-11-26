@@ -3,7 +3,6 @@ import { expect, type Page } from '@playwright/test';
 
 export const DEMO = '43933a1dca';
 export const DEMO_ORDER = 'dnr-43933a1dca';
-export const TS_CASE = 'ts-pricing';
 export const isRemote = !!process.env.PLAYGROUND_URL;
 
 /** Open a /play case and wait until the engine (WASM grammar) is ready. */
@@ -40,4 +39,13 @@ export async function expectNoAxeViolations(page: Page) {
   expect(
     r.violations.map((v) => `${v.id}: ${v.nodes.length} × ${v.help} (${v.nodes[0]?.target.join(' ')})`),
   ).toEqual([]);
+}
+
+/**
+ * The demo orders are drafts (no maintainer has approved them), so DNR allows every write. This
+ * clicks the browser-local "Approve (simulated)" action, as a judge would, to enforce the order.
+ */
+export async function approveSim(page: Page) {
+  await page.locator('.sim-actions [data-action="approve"]').click();
+  await expect(page.locator('.sim-actions')).toContainText('Approved: enforced');
 }

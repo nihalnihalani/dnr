@@ -57,6 +57,11 @@ export class ApiAdapter implements DataAdapter {
   allowOnce(id: string, ttlSeconds: number) {
     return this.req<Grant>('POST', `/orders/${encodeURIComponent(id)}/allow-once`, { ttl: ttlSeconds });
   }
+  confirmGrant(id: string, sessionKey: string | null) {
+    return this.req<Grant>('POST', `/orders/${encodeURIComponent(id)}/grants/confirm`, {
+      session_key: sessionKey,
+    });
+  }
   reapprove(id: string) {
     return this.req<OrderRow>('POST', `/orders/${encodeURIComponent(id)}/reapprove`, {});
   }
