@@ -71,12 +71,14 @@ export function draftPrompt(
 }
 
 /** Default runner: `kiro-cli chat --no-interactive --agent <bundled agent>` (needs kiro-cli ≥ 3.4). */
-export const kiroCliRunner: DraftRunner = ({ agentPath, prompt, cwd }) =>
+export const kiroCliRunner: DraftRunner = ({ agentPath, prompt, cwd, env }) =>
   new Promise((res, rej) => {
     execFile(
-      'kiro-cli',
+      env?.KIRO_CLI ?? 'kiro-cli',
       ['chat', '--v3', '--no-interactive', '--agent', agentPath, prompt],
-      { cwd, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, timeout: 180_000 },
+      // Resolve kiro-cli on the caller's PATH (io.env), not this process's: a test can create the
+      // "missing" condition with a PATH that has no kiro-cli.
+      { cwd, env: env ?? process.env, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, timeout: 180_000 },
       (err, stdout) => {
         if (err && (err as NodeJS.ErrnoException).code === 'ENOENT')
           rej(missingDependency('DNR: kiro-cli is not installed; `dnr draft` needs it'));
@@ -160,6 +162,7 @@ export async function cmdDraft(argv: string[], io: CliIO): Promise<number> {
             ? `${prompt}\n\nYour previous output was invalid (${lastErr}). Print only the JSON object.`
             : prompt,
           cwd: ctx.repoRoot,
+          env: io.env,
         });
         const p = parseDraft(out, o.id);
         if (p.ok) reason = p.reason;

@@ -108,6 +108,9 @@ export function catBlobs(repo: string, specs: readonly string[]): Promise<Map<st
         resolvePromise(out);
       },
     );
+    // git can exit before reading stdin (a missing repo, a bad object store): EPIPE is then
+    // reported through the exec callback, never as an unhandled stream error.
+    child.stdin?.on('error', () => {});
     child.stdin?.end(`${unique.join('\n')}\n`);
   });
 }

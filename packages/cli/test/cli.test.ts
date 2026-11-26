@@ -85,11 +85,13 @@ describe('exit codes', () => {
 
   it('exit: codes: a missing kiro-cli makes `dnr draft` exit 69', async () => {
     fx = await revertFixture();
-    const r = await dnr(fx.repo.dir, ['draft', '--all'], {
-      env: { ...envFor(fx.repo), PATH: '/nonexistent' },
-    });
+    // Create the "missing" condition: no kiro-cli on PATH and no configured KIRO_CLI path,
+    // whatever this machine has installed.
+    const env = envFor(fx.repo, { PATH: '/nonexistent-dnr-path' });
+    delete env.KIRO_CLI;
+    const r = await dnr(fx.repo.dir, ['draft', '--all'], { env });
     expect(r.code).toBe(69);
-    expect(r.err).toContain('kiro-cli');
+    expect(r.err).toContain('kiro-cli is not installed');
   });
 
   it('exit: codes: every command prints help', async () => {

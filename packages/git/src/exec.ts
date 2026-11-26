@@ -66,6 +66,7 @@ export function runGit(args: readonly string[], opts: GitOptions): Promise<GitRe
       },
     );
     if (opts.input !== undefined) {
+      child.stdin?.on('error', () => {}); // EPIPE when git exits first: the exit code reports it
       child.stdin?.end(opts.input);
     }
   });

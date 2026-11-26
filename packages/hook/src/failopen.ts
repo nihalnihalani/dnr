@@ -32,7 +32,10 @@ export async function failOpen(
       timer = setTimeout(() => reject(new HookTimeoutError(ms)), ms);
       timer.unref?.();
     });
-    return await Promise.race([fn(), timeout]);
+    const work = fn();
+    // After a timeout the work keeps running; a later failure must not become an unhandled rejection.
+    work.catch(() => {});
+    return await Promise.race([work, timeout]);
   } catch (e) {
     await logErrorOpen(hook, stdin, opts, e);
     return { ...OK };

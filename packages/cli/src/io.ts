@@ -2,7 +2,12 @@
 import type { GuardResult } from '@dnr/hook';
 
 /** Run the dnr-drafter agent with `prompt`; return its raw text output. */
-export type DraftRunner = (input: { agentPath: string; prompt: string; cwd: string }) => Promise<string>;
+export type DraftRunner = (input: {
+  agentPath: string;
+  prompt: string;
+  cwd: string;
+  env?: NodeJS.ProcessEnv;
+}) => Promise<string>;
 
 export type BoardStarter = (
   opts: Record<string, unknown>,
