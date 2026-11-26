@@ -1010,3 +1010,39 @@ textarea.code {
 .links a {
   overflow-wrap: anywhere;
 }
+
+.unavailable {
+  list-style: none;
+  padding: 0;
+  margin: 10px 0 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  display: grid;
+  gap: 4px;
+}
+.unavailable li::before {
+  content: "⊘ ";
+}
+
+.fake-zone {
+  background: #17140b;
+  border: 2px dashed #6c5717;
+  border-radius: var(--radius);
+  padding: 4px 16px 16px;
+  margin-top: 16px;
+}
+.fake-num {
+  white-space: nowrap;
+}
+.fake-tag {
+  margin-left: 4px;
+  font-family: var(--sans);
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #111;
+  background: var(--warn);
+  border-radius: 3px;
+  padding: 0 4px;
+  text-decoration: none;
+}

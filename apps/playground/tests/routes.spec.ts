@@ -145,7 +145,7 @@ test('empty-states: all retired, board down, no trial data', { tag: ['@empty-sta
   await expect(page.getByTestId('banner-board-down')).toBeVisible();
   await page.route(/\/data\/trial(\.sample)?\.json$/, (r) => r.fulfill({ status: 404, body: 'not found' }));
   await page.goto('trial');
-  await expect(page.getByTestId('empty-trial')).toContainText('No trial data yet');
+  await expect(page.getByTestId('empty-trial')).toContainText('has not run yet');
   await expectNoAxeViolations(page);
 });
 
@@ -199,15 +199,43 @@ test('ROUTE-04: /orders/view renders a raw GitHub order; Zod-invalid and foreign
   await expect(page.getByTestId('view-error-missing')).toBeVisible();
 });
 
-test('ROUTE-07: /trial renders the clearly-labeled sample and Recompute in browser matches', {
+test('ROUTE-07: before the trial runs, /trial shows the empty state and no numbers', {
+  tag: ['@ROUTE-07', '@ROUTE-trial', '@empty-states'],
+}, async ({ page }) => {
+  await page.goto('trial');
+  const empty = page.getByTestId('empty-trial');
+  await expect(empty).toContainText('The pre-registered trial has not run yet');
+  await expect(empty).toContainText('Recompute in browser');
+  await expect(page.getByTestId('prereg')).toContainText('prereg-v1');
+  await expect(page.getByTestId('fake-toggle')).not.toBeChecked();
+  await expect(page.getByTestId('fake-preview')).toHaveCount(0);
+  // No figure from the sample file is on the page.
+  await expect(page.locator('main')).not.toContainText(/\d+ of \d+/);
+  await expectNoAxeViolations(page);
+});
+
+test('ROUTE-07: the fake-numbers preview is opt-in and stamps every figure FAKE', {
   tag: ['@ROUTE-07', '@ROUTE-trial'],
 }, async ({ page }) => {
   await page.goto('trial');
-  await expect(page.getByTestId('banner-sample')).toContainText('SAMPLE DATA');
-  await expect(page.getByRole('heading', { name: 'Headline (sample)' })).toBeVisible();
+  await page.getByLabel('Preview the layout with fake numbers').check();
+  const preview = page.getByTestId('fake-preview');
+  await expect(preview).toBeVisible();
+  await expect(page.getByTestId('banner-sample')).toContainText('FAKE numbers');
+  await expect(page.getByRole('heading', { name: 'Headline (FAKE preview)' })).toBeVisible();
+  for (const line of await preview.locator('.stat-line .num').all()) await expect(line).toContainText('FAKE');
   await page.getByTestId('recompute').click();
   await expect(page.getByTestId('recompute-table')).not.toContainText('differs');
   await expect(page.getByTestId('recompute-table').getByText('✓ matches')).toHaveCount(4);
+  // Turning it off removes every fake figure.
+  const toggle = page.getByLabel('Preview the layout with fake numbers');
+  await toggle.uncheck();
+  await expect(preview).toHaveCount(0);
+  await toggle.check();
+  await expect(preview).toBeVisible();
+  // axe last: in Playwright's Firefox, unmounting a large subtree after an axe run crashes the
+  // page (no crash without axe, toggling on and off repeatedly).
+  await expectNoAxeViolations(page);
 });
 
 test('ROUTE-08: /replay decides a pasted PreToolUse event', { tag: ['@ROUTE-08', '@ROUTE-replay'] }, async ({

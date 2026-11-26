@@ -7,7 +7,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./model": "./src/model/index.ts",
-    "./engine": "./src/engine/index.ts"
+    "./engine": "./src/engine/index.ts",
+    "./engine/pack": "./src/engine/pack.ts"
   },
   "dependencies": {
     "@codemirror/lang-javascript": "6.2.4",

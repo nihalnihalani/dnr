@@ -4,7 +4,7 @@
  * its git history, never from hand-written claims.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -109,3 +109,16 @@ const rows = [...walk(join(root, '.kiro')), ...walk(join(root, 'powers'))]
 mkdirSync(dirname(out), { recursive: true });
 writeFileSync(out, `${JSON.stringify({ generated_from: ['.kiro/', 'powers/'], rows }, null, 2)}\n`);
 console.log(`kiro.json: ${rows.length} files`);
+
+// /trial names the pre-registration tag once it exists (written only when the tag is present).
+const prereg = resolve(here, '../public/data/prereg.json');
+try {
+  const sha = execFileSync('git', ['-C', root, 'rev-parse', '--verify', '-q', 'prereg-v1^{commit}'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'ignore'],
+  }).trim();
+  writeFileSync(prereg, `${JSON.stringify({ tag: 'prereg-v1', sha })}\n`);
+  console.log(`prereg.json: prereg-v1 ${sha}`);
+} catch {
+  if (existsSync(prereg)) rmSync(prereg);
+}

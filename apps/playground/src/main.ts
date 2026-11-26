@@ -37,9 +37,10 @@ const cases = new Map<string, Promise<CaseBundle>>();
 const loadCase = (id: string) => {
   let p = cases.get(id);
   if (!p) {
-    p = Promise.all([json<unknown>(`cases/${encodeURIComponent(id)}.json`), import('@dnr/ui/engine')]).then(
-      ([raw, e]) => e.unpackCase(raw) as CaseBundle,
-    );
+    p = Promise.all([
+      json<unknown>(`cases/${encodeURIComponent(id)}.json`),
+      import('@dnr/ui/engine/pack'),
+    ]).then(([raw, e]) => e.unpackCase(raw) as CaseBundle);
     cases.set(id, p);
   }
   return p;
@@ -71,6 +72,7 @@ const config: AppConfig = {
   checkCase,
   trialUrl: asset('data/trial.json'),
   trialSampleUrl: asset('data/trial.sample.json'),
+  preregUrl: asset('data/prereg.json'),
   kiroUrl: asset('data/kiro.json'),
   repoUrl: import.meta.env.VITE_REPO_URL || null,
   version: import.meta.env.VITE_DNR_VERSION || '0.0.0',

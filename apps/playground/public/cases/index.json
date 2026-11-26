@@ -15,9 +15,10 @@
       },
       "notes": [
         "source: dnr export-case (packages/cli/templates/demo/43933a1dca.case.json)",
-        "held-out-paraphrase omitted: fixtures/mutations/43933a1dca/extract-helper/2000 does not exist yet",
+        "held-out-paraphrase: testkit invert-condition, seed 2000 (tried extract-helper/2000, extract-helper/2001, extract-helper/2002, extract-helper/2003, extract-helper/2004, invert-condition/2000; export-case had no fixture)",
         "half-of-two-file omitted: the order covers one file (c_file_count < 2)",
         "original-change: first write decides block",
+        "held-out-paraphrase: first write decides block",
         "hard-negative: first write decides warn_block",
         "formatting-only: first write decides block"
       ],
@@ -25,7 +26,13 @@
         "path": "django/db/models/sql/query.py",
         "edit": 1,
         "stderr": "DNR: Reverted \"Fixed #26434 -- Removed faulty clearing of ordering field when missing from explicit grouping.\" https://github.com/django/django/commit/43933a1dca07047e95ec990d9289d0212668009e\nDNR order dnr-43933a1dca matched (edit 1.00 ≥ 0.60) in Query.clear_ordering. Original: https://github.com/django/django/commit/ea3a71c2d09f8281d8a50ed20e40e1fb13db5cd9. Ticket: https://code.djangoproject.com/ticket/26434.\nThis change was tried and reverted. Do not re-apply it or route around this block. Tell the user. Only a human maintainer, not the agent, can approve a re-land: `dnr board --open dnr-43933a1dca` or `dnr allow dnr-43933a1dca`, which both need a terminal and refuse inside an agent session."
-      }
+      },
+      "omitted": [
+        {
+          "kind": "half-of-two-file",
+          "reason": "the order covers one file (c_file_count < 2)"
+        }
+      ]
     },
     {
       "id": "d0e4dd5cdd",
@@ -41,14 +48,15 @@
       },
       "notes": [
         "source: dnr export-case (packages/cli/templates/demo/d0e4dd5cdd.case.json)",
-        "held-out-paraphrase: generated with testkit extract-helper seed 2000 (export-case had no fixture)",
+        "held-out-paraphrase: testkit extract-helper, seed 2000 (tried extract-helper/2000; export-case had no fixture)",
         "original-change: first write decides warn_block",
         "held-out-paraphrase: first write decides warn_block",
         "hard-negative: first write decides warn_block",
         "half-of-two-file: first write decides warn_block",
         "formatting-only: first write decides warn_block"
       ],
-      "demo": null
+      "demo": null,
+      "omitted": []
     },
     {
       "id": "ts-pricing",
@@ -73,7 +81,13 @@
         "path": "src/pricing.ts",
         "edit": 1,
         "stderr": "DNR: Synthetic example: the bulk discount double-counted quantities, so it was reverted. https://example.test/commit/2222\nDNR order dnr-2222222222 matched (edit 1.00 ≥ 0.60) in subtotal, Cart.total. Original: https://example.test/commit/1111.\nThis change was tried and reverted. Do not re-apply it or route around this block. Tell the user. Only a human maintainer, not the agent, can approve a re-land: `dnr board --open dnr-2222222222` or `dnr allow dnr-2222222222`, which both need a terminal and refuse inside an agent session."
-      }
+      },
+      "omitted": [
+        {
+          "kind": "half-of-two-file",
+          "reason": "the order covers fewer than two files of C"
+        }
+      ]
     }
   ]
 }

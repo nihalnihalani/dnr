@@ -5,7 +5,9 @@ import { defineConfig, devices } from '@playwright/test';
  * against `vite preview` of a local build (`pnpm -F @dnr/playground build` first).
  */
 const remote = process.env.PLAYGROUND_URL;
-const baseURL = remote ?? 'http://127.0.0.1:4173';
+// PW_PORT moves the local preview server off 4173 (another preview of this project may be running).
+const port = Number(process.env.PW_PORT ?? 4173);
+const baseURL = remote ?? `http://127.0.0.1:${port}`;
 
 export default defineConfig({
   testDir: './tests',
@@ -32,8 +34,8 @@ export default defineConfig({
     ? {}
     : {
         webServer: {
-          command: 'pnpm exec vite preview --strictPort --port 4173 --host 127.0.0.1',
-          url: 'http://127.0.0.1:4173/',
+          command: `pnpm exec vite preview --strictPort --port ${port} --host 127.0.0.1 --bypass-lock`,
+          url: `http://127.0.0.1:${port}/`,
           reuseExistingServer: !process.env.CI,
           timeout: 60_000,
         },

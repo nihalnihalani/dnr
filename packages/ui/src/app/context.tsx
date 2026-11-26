@@ -13,6 +13,8 @@ export interface CaseIndexEntry {
   source: { repo: string; license: string };
   notes: string[];
   demo: { path: string; edit: number | null; stderr: string } | null;
+  /** Presets this case cannot offer, and why. */
+  omitted?: Array<{ kind: string; reason: string }>;
 }
 
 export interface AppConfig {
@@ -29,8 +31,10 @@ export interface AppConfig {
   checkCase(id: string): Promise<string | null>;
   /** URL of trial.json (or the clearly-labeled sample). */
   trialUrl: string;
-  /** Clearly-labeled sample, shown only when trialUrl has no data (null: show the empty state). */
+  /** Fake layout preview, offered behind an off-by-default toggle when there is no real data. */
   trialSampleUrl: string | null;
+  /** {tag, sha} of prereg-v1 once it exists (written at build time). */
+  preregUrl: string;
   /** Simulated clock shared by /play and the localStorage adapter (Advance 1 h). */
   clock: SimClock;
   kiroUrl: string;

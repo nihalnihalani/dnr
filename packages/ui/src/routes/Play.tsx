@@ -123,6 +123,7 @@ export function Play({ caseId }: { caseId: string }) {
       )}
       {bundleQ.data && (
         <PlayBody
+          omitted={entry?.omitted ?? []}
           bundle={bundleQ.data}
           engine={engineQ.data?.engine ?? null}
           grammars={engineQ.data?.grammars ?? []}
@@ -132,7 +133,17 @@ export function Play({ caseId }: { caseId: string }) {
   );
 }
 
+const KIND_LABEL: Record<string, string> = {
+  'original-change': 'Original change C',
+  'recorded-agent': 'Recorded agent write (demo/L)',
+  'held-out-paraphrase': 'Held-out paraphrase',
+  'hard-negative': 'Hard negative',
+  'half-of-two-file': 'One half of a two-file change',
+  'formatting-only': 'Formatting only',
+};
+
 function PlayBody({
+  omitted,
   bundle,
   engine,
   grammars,
@@ -140,6 +151,7 @@ function PlayBody({
   bundle: CaseBundle;
   engine: CaseEngine | null;
   grammars: string[];
+  omitted: Array<{ kind: string; reason: string }>;
 }) {
   const cfg = useConfig();
   const sim = cfg.sim;
@@ -289,11 +301,25 @@ function PlayBody({
               Reset (new session)
             </button>
           </fieldset>
-          {bundle.presets.every((p) => p.kind !== 'recorded-agent') && (
-            <p style={{ fontSize: '0.85rem', color: 'var(--muted)' }}>
-              The recorded agent write from <code>demo/L</code> is added after the demo runs are captured.
-            </p>
-          )}
+          <ul
+            className="unavailable"
+            aria-label="Presets not available for this case"
+            data-testid="unavailable-presets"
+          >
+            {bundle.presets.every((p) => p.kind !== 'recorded-agent') && (
+              <li data-kind="recorded-agent">
+                <strong>{KIND_LABEL['recorded-agent']}</strong>: unavailable until the <code>demo/L</code> run
+                is captured.
+              </li>
+            )}
+            {omitted
+              .filter((o) => !bundle.presets.some((p) => p.kind === o.kind))
+              .map((o) => (
+                <li key={o.kind} data-kind={o.kind}>
+                  <strong>{KIND_LABEL[o.kind] ?? o.kind}</strong>: unavailable, {o.reason}.
+                </li>
+              ))}
+          </ul>
         </section>
 
         <section aria-labelledby="editor-h">

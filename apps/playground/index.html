@@ -10,7 +10,11 @@
     <title>DNR · Do Not Resurrect</title>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <!-- Static first paint; React replaces it on mount. -->
+      <header class="top"><span class="brand">DNR <small>Do Not Resurrect</small></span></header>
+      <main><p class="lede">Loading the Playground…</p></main>
+    </div>
     <noscript>The DNR Playground runs the match engine in your browser and needs JavaScript.</noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>

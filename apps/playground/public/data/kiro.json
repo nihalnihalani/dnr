@@ -99,6 +99,7 @@
       "file": ".kiro/specs/dnr-check/design.md",
       "what": "Design Document: dnr-check",
       "history": [
+        "bd3ebb2 Make spec ticks truthful, amend R7, update threat model and README",
         "59f5040 Add engine, schemas, grammars, testkit and Kiro artifacts (wave 1)"
       ]
     },
@@ -107,6 +108,7 @@
       "file": ".kiro/specs/dnr-check/requirements.md",
       "what": "Requirements Document: dnr-check",
       "history": [
+        "bd3ebb2 Make spec ticks truthful, amend R7, update threat model and README",
         "b6f3a09 Add order store, Kiro hooks, dnr CLI and MCP server (wave 2)",
         "59f5040 Add engine, schemas, grammars, testkit and Kiro artifacts (wave 1)"
       ]
@@ -114,11 +116,11 @@
     {
       "surface": "Spec: dnr-check",
       "file": ".kiro/specs/dnr-check/tasks.md",
-      "what": "Implementation Plan: dnr-check (24 of 83 tasks ticked)",
+      "what": "Implementation Plan: dnr-check (24 of 86 tasks ticked)",
       "history": [
+        "bd3ebb2 Make spec ticks truthful, amend R7, update threat model and README",
         "b6f3a09 Add order store, Kiro hooks, dnr CLI and MCP server (wave 2)",
-        "9a951a2 Fix wave-1 review findings in Kiro artifacts and add review docs",
-        "59f5040 Add engine, schemas, grammars, testkit and Kiro artifacts (wave 1)"
+        "9a951a2 Fix wave-1 review findings in Kiro artifacts and add review docs"
       ]
     },
     {
@@ -140,8 +142,9 @@
     {
       "surface": "Spec: trial-harness",
       "file": ".kiro/specs/trial-harness/tasks.md",
-      "what": "Implementation Plan: trial-harness (0 of 55 tasks ticked)",
+      "what": "Implementation Plan: trial-harness (1 of 55 tasks ticked)",
       "history": [
+        "bd3ebb2 Make spec ticks truthful, amend R7, update threat model and README",
         "9a951a2 Fix wave-1 review findings in Kiro artifacts and add review docs",
         "59f5040 Add engine, schemas, grammars, testkit and Kiro artifacts (wave 1)"
       ]

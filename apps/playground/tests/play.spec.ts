@@ -60,6 +60,14 @@ test('ROUTE-03: decision panel shows verdict, exit code, exact stderr, JSON, sco
   // Hard negative: changes the covered unit without re-applying it → warn tier, not a block.
   await runPreset(page, 'hard-negative');
   await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'WARN');
+  // The held-out paraphrase (a mutant DNR never saw while tuning) still blocks.
+  await page.locator('[data-preset="reset"]').click();
+  await runPreset(page, 'paraphrase');
+  await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'BLOCK');
+  // Presets the case cannot offer are listed with their reason.
+  const na = page.getByTestId('unavailable-presets');
+  await expect(na.locator('[data-kind="half-of-two-file"]')).toContainText('covers one file');
+  await expect(na.locator('[data-kind="recorded-agent"]')).toContainText('demo/L');
   // Formatting cannot hide a re-application.
   await page.locator('[data-preset="reset"]').click();
   await runPreset(page, 'formatting');

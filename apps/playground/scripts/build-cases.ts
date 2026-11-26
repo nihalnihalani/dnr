@@ -34,7 +34,7 @@ import {
 } from '@dnr/core';
 import { loadGrammarsNode } from '@dnr/grammar/node';
 import { CaseBundle, type Order } from '@dnr/schemas';
-import { LINKS, mutate, SHA_C, SHA_R, TS_FIXTURE } from '@dnr/testkit';
+import { HELD_OUT_FAMILIES, LINKS, mutate, SEEDS, SHA_C, SHA_R, TS_FIXTURE } from '@dnr/testkit';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const outDir = resolve(here, '../public/cases');
@@ -55,6 +55,8 @@ interface IndexEntry {
   synthetic: boolean;
   source: { repo: string; license: string };
   notes: string[];
+  /** Presets this case cannot offer, with the reason (shown on /play). */
+  omitted?: Array<{ kind: string; reason: string }>;
   /** The block the original change produces (shown in the home-page terminal). */
   demo: { path: string; edit: number | null; stderr: string } | null;
 }
@@ -306,6 +308,10 @@ function makeBundle(
       source: opts.source,
       notes,
       demo: firstStderr(provider, order, files, presets[0]?.writes ?? []),
+      omitted: notes.flatMap((n) => {
+        const m = n.match(/^(\S+) omitted: (.*)$/);
+        return m ? [{ kind: m[1] as string, reason: m[2] as string }] : [];
+      }),
     },
   };
 }
@@ -482,32 +488,52 @@ function fromExport(
     `source: dnr export-case (${file.startsWith(repoRoot) ? relative(repoRoot, file) : basename(file)})`,
   ];
   const presets = [...exported.presets];
+  const omitted: Array<{ kind: string; reason: string }> = [];
   for (const o of raw.omitted_presets ?? []) {
     if (o.kind === 'held-out-paraphrase') {
-      const m = mutate({
-        provider,
-        family: 'extract-helper',
-        seed: 2000,
-        revertSha: order.revert_sha ?? order.original_sha,
-        files: files.map((f) => ({ path: f.path, text: f.c, baseline: f.baseline })),
-        units: order.units.map((u) => ({ file: u.file, qualname: u.qualname })),
-      });
-      const writes = (m?.sessions[0] ?? [])
-        .filter((w) => w.text !== null)
-        .map((w) => ({ path: w.path, proposed_text: w.text as string }));
-      if (writes.length) {
-        presets.splice(1, 0, {
-          id: 'held-out-paraphrase',
-          label: 'Held-out paraphrase (extract-helper, seed 2000; generated here)',
-          kind: 'held-out-paraphrase',
-          writes,
-        });
+      // export-case reads fixtures/mutations/<sha10>/extract-helper/2000, which is not generated yet.
+      // Use the same generator: the held-out families in order, seeds 2000–2004; the first valid
+      // mutant wins and the label says which one.
+      const tried: string[] = [];
+      let found: Preset | null = null;
+      for (const family of HELD_OUT_FAMILIES) {
+        for (const seed of SEEDS.heldOut) {
+          const m = mutate({
+            provider,
+            family,
+            seed,
+            revertSha: order.revert_sha ?? order.original_sha,
+            files: files.map((f) => ({ path: f.path, text: f.c, baseline: f.baseline })),
+            units: order.units.map((u) => ({ file: u.file, qualname: u.qualname })),
+          });
+          const writes = (m?.sessions[0] ?? [])
+            .filter((w) => w.text !== null)
+            .map((w) => ({ path: w.path, proposed_text: w.text as string }));
+          tried.push(`${family}/${seed}`);
+          if (writes.length) {
+            found = {
+              id: 'held-out-paraphrase',
+              label: `Held-out paraphrase (${family}, seed ${seed})`,
+              kind: 'held-out-paraphrase',
+              writes,
+            };
+            break;
+          }
+        }
+        if (found) break;
+      }
+      if (found) {
+        presets.splice(1, 0, found);
         notes.push(
-          'held-out-paraphrase: generated with testkit extract-helper seed 2000 (export-case had no fixture)',
+          `held-out-paraphrase: testkit ${found.label.replace(/^.*\((.*)\)$/, '$1')} (tried ${tried.join(', ')}; export-case had no fixture)`,
         );
         continue;
       }
+      omitted.push({ kind: o.kind, reason: `no valid held-out mutant (tried ${tried.join(', ')})` });
+      notes.push(`held-out-paraphrase omitted: no valid mutant in ${tried.join(', ')}`);
+      continue;
     }
+    omitted.push({ kind: o.kind, reason: o.reason });
     notes.push(`${o.kind} omitted: ${o.reason}`);
   }
   const bundle = CaseBundle.parse({ ...exported, order, presets });
@@ -527,6 +553,7 @@ function fromExport(
       source: bundle.source,
       notes,
       demo: firstStderr(provider, order, files, presets[0]?.writes ?? []),
+      omitted,
     },
   };
 }

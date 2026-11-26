@@ -40,8 +40,35 @@ function packCases(): Plugin {
   };
 }
 
+/**
+ * Inline the one stylesheet (about 5 KB gzipped) into index.html: on slow mobile links that saves
+ * a render-blocking round trip before first paint. The CSP allows inline styles already.
+ */
+function inlineCss(): Plugin {
+  return {
+    name: 'dnr-inline-css',
+    apply: 'build',
+    enforce: 'post',
+    generateBundle(_opts, bundle) {
+      const html = Object.values(bundle).find((a) => a.type === 'asset' && a.fileName === 'index.html');
+      if (!html || html.type !== 'asset') return;
+      let text = String(html.source);
+      for (const a of Object.values(bundle)) {
+        if (a.type !== 'asset' || !a.fileName.endsWith('.css')) continue;
+        const re = new RegExp(
+          `<link rel="stylesheet"[^>]*href="[^"]*${a.fileName.replace(/[.]/g, '\\.')}"[^>]*>`,
+        );
+        if (!re.test(text)) continue;
+        text = text.replace(re, () => `<style>${String(a.source)}</style>`);
+        // The file stays: Vite's preload helper still references it for lazy chunks.
+      }
+      html.source = text;
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), trialData(), packCases()],
+  plugins: [react(), trialData(), packCases(), inlineCss()],
   build: {
     target: 'es2022',
     sourcemap: false,

@@ -156,7 +156,7 @@ export class CaseEngine {
         scores: [],
       };
     }
-    const qualnames = order.units.filter((u) => u.file === write.path).map((u) => u.qualname);
+    const qualnames = contributingQualnames(r.scores, r.decision.order_id);
     const output = hookOutput(order, r.decision, { qualnames, format: s.decision_format });
     const applied = output.exitCode === 0 && output.permission !== 'ask';
     const next: SimState = {
@@ -188,6 +188,18 @@ export class CaseEngine {
   }
 }
 
+/**
+ * The "in …" units of the hook's message: the order's units that contribute matched tokens, or
+ * all of them when none do. Same rule as @dnr/hook's `contributingQualnames` (engine.ts imports
+ * node:*, so it cannot be bundled); the P9 test compares the resulting stderr with the hook's.
+ */
+export function contributingQualnames(scores: readonly OrderScore[], orderId: string | null): string[] {
+  const s = scores.find((x) => x.order_id === orderId);
+  if (!s) return [];
+  const q = s.units.filter((u) => u.iA + u.iR > 0).map((u) => u.qualname);
+  return [...new Set(q.length ? q : s.units.map((u) => u.qualname))];
+}
+
 /** The most severe result of a sequence (the headline decision). */
 export function headline(results: readonly WriteResult[]): WriteResult | null {
   let best: WriteResult | null = null;
@@ -204,6 +216,7 @@ export function decisionKey(r: WriteResult) {
     tier: r.decision.tier,
     order_id: r.decision.order_id,
     edit_score: r.decision.edit_score === null ? null : Number(r.decision.edit_score.toFixed(6)),
+    prox_score: r.decision.prox_score === null ? null : Number(r.decision.prox_score.toFixed(6)),
     fired_by: r.decision.fired_by,
     exit_code: r.output.exitCode,
     stderr: r.output.stderr,

@@ -1,5 +1,5 @@
 import { TrialResult } from '@dnr/schemas';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { useConfig } from '../app/context';
 import { Banner, ErrorBanner, Loading, useAsync, useTitle } from '../components/common';
 
@@ -51,36 +51,94 @@ export function recompute(d: TrialData) {
   return { K_eff: keff.length, X_eff: landed('T'), S_eff: landed('S'), W_L: landed('L') };
 }
 
+async function getJson<T>(url: string | null): Promise<T | null> {
+  if (!url) return null;
+  // SPA hosts answer a missing file with index.html, so check the type.
+  const res = await fetch(url);
+  if (!res.ok || !(res.headers.get('content-type') ?? '').includes('json')) return null;
+  return (await res.json()) as T;
+}
+
+async function loadTrial(url: string | null): Promise<TrialData | null> {
+  const d = await getJson<TrialData>(url);
+  if (!d) return null;
+  const p = TrialResult.safeParse(d.result);
+  if (!p.success) throw new Error(`trial data is invalid: ${p.error.issues[0]?.message}`);
+  return d;
+}
+
 export function Trial() {
   useTitle('Trial');
   const cfg = useConfig();
-  const q = useAsync(async () => {
-    // Real data first; SPA hosts answer a missing file with index.html, so check the type.
-    const get = async (url: string | null) => {
-      if (!url) return null;
-      const res = await fetch(url);
-      if (!res.ok || !(res.headers.get('content-type') ?? '').includes('json')) return null;
-      return (await res.json()) as TrialData;
-    };
-    const d = (await get(cfg.trialUrl)) ?? (await get(cfg.trialSampleUrl));
-    if (!d) return null;
-    const p = TrialResult.safeParse(d.result);
-    if (!p.success) throw new Error(`trial.json result is invalid: ${p.error.issues[0]?.message}`);
-    return d;
-  }, []);
+  const [preview, setPreview] = useState(false);
+  const real = useAsync(() => loadTrial(cfg.trialUrl), []);
+  const prereg = useAsync(() => getJson<{ tag: string; sha: string }>(cfg.preregUrl), []);
+  const sample = useAsync(() => (preview ? loadTrial(cfg.trialSampleUrl) : Promise.resolve(null)), [preview]);
   return (
     <>
       <h1 id="page-title">Trial Explorer</h1>
-      {q.loading && <Loading what="trial data" />}
-      {q.error !== undefined && <ErrorBanner error={q.error} />}
-      {!q.loading && q.data === null && (
-        <Banner kind="info" title="No trial data yet" testId="empty-trial">
-          The pre-registered trial has not been scored. This page fills in from{' '}
-          <code>reports/trial.json</code>.
-        </Banner>
+      {real.loading && <Loading what="trial data" />}
+      {real.error !== undefined && <ErrorBanner error={real.error} />}
+      {real.data && <TrialBody d={{ ...real.data, sample: false }} />}
+      {!real.loading && !real.data && real.error === undefined && (
+        <>
+          <div className="card" data-testid="empty-trial">
+            <h2 id="empty-trial-h" style={{ marginTop: 0 }}>
+              The pre-registered trial has not run yet
+            </h2>
+            <p>
+              When it has, this page shows, from <code>reports/trial.json</code>:
+            </p>
+            <ul>
+              <li>
+                three headline lines over the same reverts: without DNR, with a steering file from history,
+                and with DNR live;
+              </li>
+              <li>per-arm run tables with the blind labels, test results, decisions and each run's diff;</li>
+              <li>the timeline, false alarms, pins, κ and the decision row;</li>
+              <li>a Recompute in browser button that checks every figure against the run list.</li>
+            </ul>
+            <p data-testid="prereg">
+              Pre-registration:{' '}
+              {prereg.data ? (
+                <>
+                  tag <code>{prereg.data.tag}</code> at <code>{prereg.data.sha}</code>
+                </>
+              ) : (
+                <>
+                  tag <code>prereg-v1</code> not created yet
+                </>
+              )}
+              .
+            </p>
+            {cfg.trialSampleUrl && (
+              <label style={{ display: 'inline-flex', gap: 8, alignItems: 'center', color: 'var(--text)' }}>
+                <input
+                  type="checkbox"
+                  checked={preview}
+                  onChange={(e) => setPreview(e.target.checked)}
+                  data-testid="fake-toggle"
+                />
+                Preview the layout with fake numbers
+              </label>
+            )}
+          </div>
+          {preview && sample.loading && <Loading what="the layout preview" />}
+          {preview && sample.data && <TrialBody d={{ ...sample.data, sample: true }} />}
+        </>
       )}
-      {q.data && <TrialBody d={q.data} />}
     </>
+  );
+}
+
+/** A figure; in the layout preview every one is stamped FAKE. */
+function N({ fake, children }: { fake: boolean; children: React.ReactNode }) {
+  if (!fake) return <>{children}</>;
+  return (
+    <span className="fake-num">
+      {children}
+      <span className="fake-tag">FAKE</span>
+    </span>
   );
 }
 
@@ -88,35 +146,38 @@ function TrialBody({ d }: { d: TrialData }) {
   const r = d.result;
   const [check, setCheck] = useState<ReturnType<typeof recompute> | null>(null);
   const [run, setRun] = useState<string>('');
-  const S = d.sample ? ' (sample)' : '';
+  const fake = !!d.sample;
+  const S = fake ? ' (FAKE preview)' : '';
   const arms = [...new Set(d.runs.map((x) => x.arm))];
   const selected = d.runs.find((x) => x.run_id === run);
   return (
-    <>
-      {d.sample && (
-        <Banner kind="sample" title="SAMPLE DATA — not results" testId="banner-sample">
+    <div className={fake ? 'fake-zone' : undefined} data-testid={fake ? 'fake-preview' : 'trial-real'}>
+      {fake && (
+        <Banner kind="sample" title="FAKE numbers: layout preview only" testId="banner-sample">
           {d.note ?? 'These numbers are invented to show the layout. No trial has run.'}
         </Banner>
       )}
       <section aria-labelledby="headline-h">
         <h2 id="headline-h">Headline{S}</h2>
-        <p>Re-applications that landed, over K_eff = {r.K_eff} reverts. Lower is better.</p>
+        <p>
+          Re-applications that landed, over K_eff = <N fake={fake}>{r.K_eff}</N> reverts. Lower is better.
+        </p>
         <div className="stat-lines">
           <p className="stat-line">
             <span className="num">
-              {r.X_eff} of {r.K_eff}
+              <N fake={fake}>{r.X_eff}</N> of <N fake={fake}>{r.K_eff}</N>
             </span>
             No DNR landed{S}
           </p>
           <p className="stat-line">
             <span className="num">
-              {r.S_eff} of {r.K_eff}
+              <N fake={fake}>{r.S_eff}</N> of <N fake={fake}>{r.K_eff}</N>
             </span>
             Steering file from history landed{S}
           </p>
           <p className="stat-line">
             <span className="num">
-              {r.W_L} of {r.K_eff}
+              <N fake={fake}>{r.W_L}</N> of <N fake={fake}>{r.K_eff}</N>
             </span>
             DNR live landed{S}
           </p>
@@ -124,26 +185,29 @@ function TrialBody({ d }: { d: TrialData }) {
         <dl className="kv">
           <dt>Decision row</dt>
           <dd>
-            {r.row}
-            {r.via_d6 ? ' (via D6)' : ''} · mode {r.mode ?? 'n/a'}
+            <N fake={fake}>{r.row}</N>
+            {r.via_d6 ? ' (via D6)' : ''} · mode <N fake={fake}>{r.mode ?? 'n/a'}</N>
           </dd>
           <dt>X / K</dt>
           <dd>
-            {r.X} / {r.K}
+            <N fake={fake}>{r.X}</N> / <N fake={fake}>{r.K}</N>
           </dd>
           <dt>Caught by existing tests</dt>
           <dd>
-            Y {r.Y} of X {r.X}
+            Y <N fake={fake}>{r.Y}</N> of X <N fake={fake}>{r.X}</N>
           </dd>
           <dt>κ</dt>
           <dd>
-            builder vs outside {r.kappa.builder_vs_outside ?? 'n/a'} · binary {r.kappa.binary ?? 'n/a'}
+            builder vs outside <N fake={fake}>{r.kappa.builder_vs_outside ?? 'n/a'}</N> · binary{' '}
+            <N fake={fake}>{r.kappa.binary ?? 'n/a'}</N>
           </dd>
           <dt>Held-out recall</dt>
-          <dd>{r.held_out_recall ?? 'n/a'}</dd>
+          <dd>
+            <N fake={fake}>{r.held_out_recall ?? 'n/a'}</N>
+          </dd>
           <dt>Pre-registration</dt>
           <dd>
-            <code>prereg-v1</code> {r.prereg_sha}
+            <code>prereg-v1</code> <N fake={fake}>{r.prereg_sha}</N>
           </dd>
         </dl>
         <button
@@ -173,8 +237,12 @@ function TrialBody({ d }: { d: TrialData }) {
                   return (
                     <tr key={k}>
                       <td>{k}</td>
-                      <td>{r[k]}</td>
-                      <td>{check[k]}</td>
+                      <td>
+                        <N fake={fake}>{r[k]}</N>
+                      </td>
+                      <td>
+                        <N fake={fake}>{check[k]}</N>
+                      </td>
                       <td>{k === 'K_eff' ? '' : wilson(check[k], check.K_eff).join(' – ')}</td>
                       <td className={same ? 'ok' : 'bad'}>{same ? '✓ matches' : '✗ differs'}</td>
                     </tr>
@@ -262,13 +330,13 @@ function TrialBody({ d }: { d: TrialData }) {
         <h2>Pins{S}</h2>
         <dl className="kv">
           {Object.entries(d.pins ?? {}).map(([k, v]) => (
-            <div key={k} style={{ display: 'contents' }}>
+            <Fragment key={k}>
               <dt>{k}</dt>
               <dd>{v}</dd>
-            </div>
+            </Fragment>
           ))}
         </dl>
       </section>
-    </>
+    </div>
   );
 }
