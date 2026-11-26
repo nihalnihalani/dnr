@@ -5,20 +5,31 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "tsx scripts/build-kiro.ts",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview --strictPort --port 4173",
+    "cases": "tsx scripts/build-cases.ts",
+    "test": "playwright test",
+    "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@dnr/ui": "workspace:*",
     "@dnr/core": "workspace:*",
-    "@dnr/grammar": "workspace:*"
+    "@dnr/grammar": "workspace:*",
+    "@dnr/schemas": "workspace:*",
+    "@dnr/ui": "workspace:*",
+    "web-tree-sitter": "0.27.2"
   },
   "devDependencies": {
-    "vite": "8.4.0",
-    "@vitejs/plugin-react": "6.3.0",
+    "@axe-core/playwright": "4.14.1",
+    "@dnr/board": "workspace:*",
+    "@dnr/grammar": "workspace:*",
+    "@dnr/testkit": "workspace:*",
+    "@playwright/test": "1.65.1",
     "@types/react": "19.3.3",
     "@types/react-dom": "19.2.3",
-    "@playwright/test": "1.65.1",
-    "@axe-core/playwright": "4.14.1"
+    "@vitejs/plugin-react": "6.3.0",
+    "diff": "9.0.0",
+    "lighthouse": "12.8.2",
+    "vite": "8.4.0"
   }
 }

@@ -11,6 +11,7 @@
     "@hono/node-server": "2.1.11",
     "@dnr/ui": "workspace:*",
     "@dnr/store": "workspace:*",
-    "@dnr/schemas": "workspace:*"
+    "@dnr/schemas": "workspace:*",
+    "zod": "4.6.7"
   }
 }

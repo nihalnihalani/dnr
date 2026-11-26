@@ -1,0 +1,160 @@
+import { expect, test } from '@playwright/test';
+import { DEMO, DEMO_ORDER, openPlay, results, runPreset, TS_CASE } from './helpers';
+
+test('smoke: the demo case loads the WASM engine and blocks the original change', {
+  tag: ['@smoke'],
+}, async ({ page }) => {
+  await page.goto('./');
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Some changes should stay dead');
+  await openPlay(page);
+  await runPreset(page, 'original');
+  await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'BLOCK');
+  await expect(page.getByTestId('exit-code')).toHaveText('2');
+});
+
+test('ROUTE-02: order card with A/R chips, editor on the post-revert baseline, presets and reset, Send write', {
+  tag: ['@ROUTE-02', '@P7-routes'],
+}, async ({ page }) => {
+  await openPlay(page);
+  const card = page.locator('.order-card');
+  await expect(card).toContainText(DEMO_ORDER);
+  await expect(card).toContainText('Query.clear_ordering');
+  await expect(card.getByRole('list', { name: 'Added tokens (A)' }).locator('li').first()).toContainText('+');
+  // Editor opens on the post-revert baseline (R). Sending it unchanged is ALLOW (C would BLOCK).
+  await expect(page.getByTestId('editor')).toContainText('Create SQL statements for QuerySets');
+  for (const kind of ['original-change', 'hard-negative', 'formatting-only'])
+    await expect(page.locator(`[data-preset-kind="${kind}"]`)).toBeVisible();
+  await expect(page.locator('[data-preset="reset"]')).toBeVisible();
+  // Send write with the unchanged baseline: nothing changes, ALLOW.
+  await page.getByTestId('send-write').click();
+  await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'ALLOW');
+  await page.locator('[data-preset="reset"]').click();
+  await expect(page.locator('.verdict.idle')).toBeVisible();
+});
+
+test('ROUTE-03: decision panel shows verdict, exit code, exact stderr, JSON, score bars and highlighted tokens', {
+  tag: ['@ROUTE-03'],
+}, async ({ page }) => {
+  await openPlay(page);
+  await runPreset(page, 'original');
+  const stderr = page.getByTestId('stderr');
+  await expect(stderr).toContainText(
+    `DNR order ${DEMO_ORDER} matched (edit 1.00 ≥ 0.60) in Query.clear_ordering.`,
+  );
+  await expect(stderr).toContainText(`dnr board --open ${DEMO_ORDER}`);
+  const text = (await stderr.textContent()) ?? '';
+  expect(text.length).toBeLessThanOrEqual(1200);
+  expect(text.split('\n')[0]).toMatch(/^DNR: .+ https:\/\/github\.com\/django\/django\/commit\/43933a1dca/);
+  await page.getByText('Decision JSON').click();
+  const json = JSON.parse((await page.getByTestId('decision-json').textContent()) ?? '{}');
+  expect(json).toMatchObject({
+    outcome: 'block',
+    tier: 'match',
+    order_id: DEMO_ORDER,
+    edit_score: 1,
+    fired_by: 'edit',
+  });
+  await expect(page.getByRole('meter', { name: /Edit score 1\.00, threshold 0\.60/ })).toBeAttached();
+  await expect(page.locator('.chip.hit').first()).toBeVisible();
+  await expect(page.getByTestId('live')).toContainText('BLOCK, exit 2');
+  // Hard negative: changes the covered unit without re-applying it → warn tier, not a block.
+  await runPreset(page, 'hard-negative');
+  await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'WARN');
+  // Formatting cannot hide a re-application.
+  await page.locator('[data-preset="reset"]').click();
+  await runPreset(page, 'formatting');
+  await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'BLOCK');
+});
+
+test('ROUTE-03: simulated Allow once lets the re-land through, Advance 1 h expires it in a new session', {
+  tag: ['@ROUTE-03', '@board-flow-sim'],
+}, async ({ page }) => {
+  await openPlay(page);
+  await runPreset(page, 'original');
+  await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'BLOCK');
+  await page.locator('.sim-actions [data-action="allow-once"]').click();
+  await expect(page.locator('.sim-actions')).toContainText('active until');
+  await page.locator('[data-preset="reset"]').click();
+  await runPreset(page, 'original');
+  expect((await results(page))[0]).toMatchObject({ outcome: 'allow_grant', applied: true });
+  await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'ALLOW');
+  await page.getByTestId('advance').click();
+  await page.locator('[data-preset="reset"]').click();
+  await runPreset(page, 'original');
+  await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'BLOCK');
+  // The grant's use is in the audit panel.
+  await page.goto(`orders/${DEMO_ORDER}`);
+  await expect(page.getByTestId('grants')).toContainText('allow_once');
+  await expect(page.getByTestId('grants')).toContainText('1 (write)');
+});
+
+test('ROUTE-03: simulated Retire stops enforcement; the ask format exits 0 with JSON', {
+  tag: ['@ROUTE-03'],
+}, async ({ page }) => {
+  await openPlay(page);
+  await page.getByLabel('Decision format ask').check();
+  await runPreset(page, 'original');
+  await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'ASK');
+  await expect(page.getByTestId('exit-code')).toHaveText('0');
+  const out = JSON.parse((await page.getByTestId('stdout').textContent()) ?? '{}');
+  expect(out.hookSpecificOutput.permissionDecision).toBe('ask');
+  await page.locator('.sim-actions [data-action="retire"]').click();
+  await expect(page.locator('.sim-actions')).toContainText('Retired');
+  await page.locator('[data-preset="reset"]').click();
+  await runPreset(page, 'original');
+  await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'ALLOW');
+});
+
+test('ts-case: the TypeScript case blocks its original change', { tag: ['@ts-case'] }, async ({ page }) => {
+  await openPlay(page, TS_CASE);
+  await expect(page.getByText('Synthetic case')).toBeVisible();
+  await runPreset(page, 'original');
+  await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'BLOCK');
+});
+
+test('STATE-08: a parse-degraded unit shows its banner', { tag: ['@STATE-08'] }, async ({ page }) => {
+  // Text is pasted through /replay (a textarea), so the editor's auto-closing brackets cannot change it.
+  await page.goto('replay');
+  await page.getByLabel('Case (baseline and order)').selectOption(TS_CASE);
+  await expect(page.getByTestId('replay-run')).toBeEnabled();
+  // subtotal() still parses as a function, but most of its tokens sit under ERROR nodes.
+  const broken =
+    'export function subtotal(items: Item[], limit: number): number {\n  @@ ## $$ %% ^^ && ** (( )) [[ ]] ;; :: ?? !! ~~ `` \n  @@ ## $$ %% ^^ && ** (( )) [[ ]]\n  return total;\n}\n';
+  await page.getByLabel('PreToolUse stdin').fill(
+    JSON.stringify({
+      tool_name: 'fs_write',
+      cwd: '/w',
+      tool_input: { command: 'create', path: '/w/src/pricing.ts', file_text: broken },
+    }),
+  );
+  await page.getByTestId('replay-run').click();
+  await expect(page.getByTestId('banner-degraded')).toBeVisible();
+});
+
+test('A11Y-01: keyboard only: reach a preset, run it, hear the decision', {
+  tag: ['@A11Y-01', '@keyboard'],
+}, async ({ page, browserName }) => {
+  test.skip(
+    browserName === 'webkit',
+    'WebKit does not Tab to buttons by default (macOS full keyboard access setting)',
+  );
+  await openPlay(page, DEMO);
+  const original = page.locator('[data-preset-kind="original-change"]');
+  for (let i = 0; i < 60; i++) {
+    await page.keyboard.press('Tab');
+    if (await original.evaluate((el) => el === document.activeElement)) break;
+  }
+  await expect(original).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'BLOCK');
+  await expect(page.getByTestId('live')).toHaveAttribute('aria-live', 'assertive');
+  await expect(page.getByTestId('live')).toContainText('BLOCK');
+});
+
+test('ROUTE-02: unknown case shows a way back', { tag: ['@ROUTE-02'] }, async ({ page }) => {
+  await page.goto('play/nope');
+  await expect(page.getByRole('heading', { name: /No case/ })).toBeVisible();
+  await page.goto('play');
+  await expect(page.getByRole('link', { name: /26434/ })).toBeVisible();
+  void DEMO;
+});
