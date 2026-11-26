@@ -3,9 +3,12 @@
  * every hook event performs (§5.7: any DNR hook event starts a session).
  */
 
-import { findRepoRoot, snapshotTree } from '@dnr/git';
+import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import { findRepoRoot, runGit, snapshotTree } from '@dnr/git';
 import type { Decision, DnrConfig, EventRecord, Session } from '@dnr/schemas';
 import {
+  hookLog,
   newEventId,
   newSession,
   nowMs,
@@ -14,9 +17,11 @@ import {
   type Store,
   sessionExpired,
   sessionKeyFor,
+  withLock,
 } from '@dnr/store';
 import { createPatch } from 'diff';
 import type { HookEvent } from './event';
+import { loadTrusted, type TrustedState } from './trusted';
 import { DNR_VERSION } from './version';
 
 export type HookName = EventRecord['hook'];
@@ -40,16 +45,55 @@ export interface HookContext {
   env: NodeJS.ProcessEnv;
   repoRoot: string;
   store: Store;
+  /** The trusted config (committed when the working copy differs; defaults when invalid). */
   config: DnrConfig;
+  /** Effective orders and tamper signals (wave-2 C1). */
+  trusted: TrustedState;
+  /** The repo's filesystem is case-insensitive (wave-2 C2): compare paths case-folded. */
+  fold: boolean;
   now: () => number;
 }
 
+const foldCache = new Map<string, boolean>();
+
+/** Detect once per repo whether its filesystem is case-insensitive (`.git` vs `.GIT` resolve to one inode). */
+export function caseInsensitive(repoRoot: string): boolean {
+  const hit = foldCache.get(repoRoot);
+  if (hit !== undefined) return hit;
+  let ci = false;
+  try {
+    const a = statSync(join(repoRoot, '.git'));
+    const upper = join(repoRoot, '.GIT');
+    ci = existsSync(upper) && statSync(upper).ino === a.ino;
+  } catch {}
+  foldCache.set(repoRoot, ci);
+  return ci;
+}
+
 export async function openContext(cwd: string, env: NodeJS.ProcessEnv): Promise<HookContext | null> {
-  const repoRoot = findRepoRoot(cwd);
-  if (!repoRoot) return null;
+  const found = findRepoRoot(cwd);
+  if (!found) return null;
+  let repoRoot = found;
+  try {
+    repoRoot = realpathSync.native(found);
+  } catch {}
   const store = openStore(repoRoot, { env });
-  const { config } = await store.loadConfig();
-  return { env, repoRoot, store, config, now: () => nowMs(env) };
+  const trusted = await loadTrusted({
+    repoRoot,
+    ordersDir: store.paths.ordersDir,
+    configFile: store.paths.configFile,
+    env,
+  });
+  if (trusted.configIssue) hookLog(store.paths.hookLog, `config: ${trusted.configIssue}`);
+  return {
+    env,
+    repoRoot,
+    store,
+    config: trusted.config,
+    trusted,
+    fold: caseInsensitive(repoRoot),
+    now: () => nowMs(env),
+  };
 }
 
 export function isoAt(ms: number): string {
@@ -104,6 +148,47 @@ export function keyOf(ev: HookEvent): SessionKey {
   return sessionKeyFor(ev.session_id, ev.cwd);
 }
 
+/** The committed tree (HEAD^{tree}), or null on an unborn HEAD. */
+async function headTree(repoRoot: string): Promise<string | null> {
+  const r = await runGit(['rev-parse', '--verify', '--quiet', 'HEAD^{tree}'], {
+    cwd: repoRoot,
+    okCodes: [0, 1, 128],
+  });
+  return r.code === 0 ? r.stdout.trim() : null;
+}
+
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904';
+
+/** Did this session key log events before (so a missing session file was deleted, not new)? */
+function seenBefore(ctx: HookContext, key: string): boolean {
+  try {
+    return readFileSync(ctx.store.paths.eventsFile, 'utf8').includes(`"session_key":"${key}"`);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Read the session, robust to tampering (wave-2 C1). A corrupt, unreadable or deleted session is
+ * rebuilt with the committed tree as its baseline (the agent's edits are then scored, not
+ * absorbed) and an `orders_hash` of `rebuilt:<why>`, so Stop reports it.
+ */
+async function readSessionChecked(
+  ctx: HookContext,
+  key: SessionKey,
+): Promise<{ session: Session | null; rebuilt: string | null }> {
+  const file = ctx.store.sessions.fileFor(key.key);
+  let raw: string | null = null;
+  try {
+    raw = readFileSync(file, 'utf8');
+  } catch (e) {
+    if ((e as NodeJS.ErrnoException).code !== 'ENOENT') return { session: null, rebuilt: 'unreadable' };
+  }
+  if (raw === null) return { session: null, rebuilt: seenBefore(ctx, key.key) ? 'deleted' : null };
+  const s = await ctx.store.sessions.get(key.key).catch(() => null);
+  return s ? { session: s, rebuilt: null } : { session: null, rebuilt: 'corrupt' };
+}
+
 /**
  * Create the session if needed (baseline = temp-index snapshot), expire an idle fallback session,
  * claim pending allow-once grants, and expire pending asks (each one logs `ask_denied`).
@@ -114,6 +199,7 @@ export async function prepareSession(
   key: SessionKey,
   cur: Session | null,
   hook: HookName,
+  rebuilt: string | null = null,
 ): Promise<{ session: Session; events: EventRecord[]; created: boolean }> {
   const now = ctx.now();
   const at = isoAt(now);
@@ -121,16 +207,28 @@ export async function prepareSession(
   let created = false;
   if (s && sessionExpired(s, ctx.config.session_ttl_minutes, now)) s = null;
   if (!s) {
+    let baseline: string;
+    if (rebuilt) {
+      baseline = (await headTree(ctx.repoRoot)) ?? EMPTY_TREE;
+      hookLog(
+        ctx.store.paths.hookLog,
+        `session ${key.key.slice(0, 12)} ${rebuilt}: rebuilt with the committed tree as baseline`,
+      );
+    } else {
+      baseline = await snapshotTree(ctx.repoRoot).catch(
+        async () => (await headTree(ctx.repoRoot)) ?? EMPTY_TREE,
+      );
+    }
     s = newSession({
       key,
-      baseline_tree: await snapshotTree(ctx.repoRoot),
-      orders_hash: ctx.store.ordersHash(),
+      baseline_tree: baseline,
+      orders_hash: rebuilt ? `rebuilt:${rebuilt}` : ctx.store.ordersHash(),
       at,
     });
     created = true;
   }
   s.last_seen_at = at;
-  await ctx.store.grants.claimPending(s.session_key, now);
+  await ctx.store.grants.claimPending(s.session_key, now).catch(() => []);
   const events: EventRecord[] = [];
   const keep: Session['pending_ask'] = [];
   for (const p of s.pending_ask) {
@@ -148,6 +246,38 @@ export async function prepareSession(
   }
   s.pending_ask = keep;
   return { session: s, events, created };
+}
+
+/**
+ * Run `fn` on the prepared session under its lock and save the result. Tampered state (a lock
+ * that never frees, an unwritable sessions dir) never stops the decision: the lock is broken
+ * after its timeout, and a failed save is logged while the decision still stands.
+ */
+export async function withSession<T>(
+  ctx: HookContext,
+  key: SessionKey,
+  hook: HookName,
+  fn: (prep: { session: Session; events: EventRecord[]; created: boolean }) => Promise<T>,
+): Promise<T> {
+  const run = async () => {
+    const { session, rebuilt } = await readSessionChecked(ctx, key);
+    const prep = await prepareSession(ctx, key, session, hook, rebuilt);
+    const result = await fn(prep);
+    try {
+      await ctx.store.sessions.put(prep.session);
+    } catch (e) {
+      hookLog(ctx.store.paths.hookLog, `session save failed (${String(e).slice(0, 120)}); decision kept`);
+    }
+    return result;
+  };
+  try {
+    return await withLock(ctx.store.sessions.fileFor(key.key), run);
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    if (code === 'EACCES' || code === 'EPERM' || code === 'ENOTDIR' || code === 'EEXIST' || code === 'ENOENT')
+      return run();
+    throw e;
+  }
 }
 
 export function addTouched(s: Session, rel: string): void {
@@ -180,5 +310,11 @@ export function sessionPatch(
 }
 
 export async function appendEvents(ctx: HookContext, events: EventRecord[]): Promise<void> {
-  for (const e of events) await ctx.store.appendEvent(e, { record: ctx.config.mode === 'record' });
+  for (const e of events) {
+    try {
+      await ctx.store.appendEvent(e, { record: ctx.config.mode === 'record' });
+    } catch (err) {
+      hookLog(ctx.store.paths.hookLog, `event append failed (${String(err).slice(0, 120)})`);
+    }
+  }
 }

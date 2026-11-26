@@ -17,10 +17,11 @@ import {
   makeEvent,
   OK,
   openContext,
-  prepareSession,
+  withSession,
 } from './context';
 import { parseHookEvent } from './event';
 import { failOpen } from './failopen';
+import { postShellCheck, postShellReason } from './post-shell';
 import { readWorktree, repoRelative } from './repo';
 
 /** `dnr session start --stdin` (SessionStart). */
@@ -32,8 +33,7 @@ export function runSessionStart(stdin: string, opts: HookOptions = {}): Promise<
     if (!ctx) return { ...OK };
     const key = keyOf(ev);
     const events: EventRecord[] = [];
-    await ctx.store.sessions.with(key.key, async (cur) => {
-      const prep = await prepareSession(ctx, key, cur, 'session-start');
+    await withSession(ctx, key, 'session-start', async (prep) => {
       events.push(...prep.events);
       events.push(
         makeEvent(ctx, {
@@ -44,7 +44,7 @@ export function runSessionStart(stdin: string, opts: HookOptions = {}): Promise<
           decision: baseDecision({ outcome: 'allow', tier: 'none', breakdown: [{ created: prep.created }] }),
         }),
       );
-      return { session: prep.session, result: null };
+      return null;
     });
     await appendEvents(ctx, events);
     return { ...OK };
@@ -67,11 +67,10 @@ export function runSessionConfirm(stdin: string, opts: HookOptions = {}): Promis
     const rel =
       effect.kind === 'none' ? null : repoRelative(ctx.repoRoot, resolve(ev.cwd, effect.path ?? ''));
     const events: EventRecord[] = [];
-    await ctx.store.sessions.with(key.key, async (cur) => {
-      const prep = await prepareSession(ctx, key, cur, 'post-write');
+    await withSession(ctx, key, 'post-write', async (prep) => {
       const s = prep.session;
       events.push(...prep.events);
-      if (!rel) return { session: s, result: null };
+      if (!rel) return null;
       addTouched(s, rel);
       const text = readWorktree(ctx.repoRoot, rel);
       const hash = sha256(text ?? '');
@@ -86,7 +85,7 @@ export function runSessionConfirm(stdin: string, opts: HookOptions = {}): Promis
             decision: baseDecision({ outcome: 'allow', tier: 'none' }),
           }),
         );
-        return { session: s, result: null };
+        return null;
       }
       s.pending_ask = s.pending_ask.filter((p) => p !== pending);
       const now = ctx.now();
@@ -103,6 +102,7 @@ export function runSessionConfirm(stdin: string, opts: HookOptions = {}): Promis
         session_key: s.session_key,
         granted_by: 'ask',
         at: now,
+        origin: { via: 'ask', suspect: false, markers: [] },
       });
       await ctx.store.grants.recordUse(
         pending.order_id,
@@ -112,7 +112,7 @@ export function runSessionConfirm(stdin: string, opts: HookOptions = {}): Promis
       );
       if (!s.grants_used.includes(pending.order_id)) s.grants_used.push(pending.order_id);
       events.push(ev2);
-      return { session: s, result: null };
+      return null;
     });
     await appendEvents(ctx, events);
     return { ...OK };
@@ -131,8 +131,7 @@ export function runShellAfter(stdin: string, opts: HookOptions = {}): Promise<Ho
     if (!ctx) return { ...OK };
     const key = keyOf(ev);
     const events: EventRecord[] = [];
-    await ctx.store.sessions.with(key.key, async (cur) => {
-      const prep = await prepareSession(ctx, key, cur, 'post-shell');
+    const io = await withSession(ctx, key, 'post-shell', async (prep): Promise<HookIO> => {
       const s = prep.session;
       events.push(...prep.events);
       const before = s.shell_snapshot ?? s.baseline_tree;
@@ -142,19 +141,42 @@ export function runShellAfter(stdin: string, opts: HookOptions = {}): Promise<Ho
       for (const f of changed)
         if (!stateRel || !(f === stateRel || f.startsWith(`${stateRel}/`))) addTouched(s, f);
       s.shell_snapshot = null;
+      const finding = await postShellCheck(ctx, s);
+      const reduced = ctx.config.mode === 'warn-only' || ctx.config.mode === 'commit-enforce';
+      const record = ctx.config.mode === 'record';
+      const decision = finding
+        ? baseDecision({
+            outcome: record ? 'record' : reduced ? 'warn_block' : 'block',
+            tier: 'match',
+            order_id: finding.order.id,
+            edit_score: finding.edit,
+            fired_by: 'edit',
+            breakdown: [
+              {
+                changed,
+                post_shell: finding.kind,
+                commit: finding.commit ?? null,
+                qualnames: finding.qualnames,
+              },
+            ],
+            reason_line: postShellReason(finding, reduced).split('\n')[0] ?? null,
+          })
+        : baseDecision({ outcome: 'allow', tier: 'none', breakdown: [{ changed }] });
       events.push(
         makeEvent(ctx, {
           hook: 'post-shell',
           session_key: s.session_key,
           raw: ev.raw,
           target_rel: null,
-          decision: baseDecision({ outcome: 'allow', tier: 'none', breakdown: [{ changed }] }),
+          decision,
         }),
       );
-      return { session: s, result: null };
+      if (!finding || record) return { ...OK };
+      // PostToolUse: exit 2 sends stderr to the agent (provisional until spike S15).
+      return { exitCode: 2, stdout: '', stderr: `${postShellReason(finding, reduced)}\n` };
     });
     await appendEvents(ctx, events);
-    return { ...OK };
+    return io;
   });
 }
 

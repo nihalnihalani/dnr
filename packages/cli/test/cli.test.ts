@@ -46,6 +46,7 @@ function io(
     guard: opts.guard ?? (() => ({ ok: true })),
     scriptPath: opts.scriptPath ?? '/usr/local/lib/node_modules/dnr-guard/dist/cli.js',
     ...(opts.draftRunner ? { draftRunner: opts.draftRunner } : {}),
+    processChain: opts.processChain ?? (() => []),
     buf,
   };
 }
@@ -169,15 +170,34 @@ describe('cli: check', () => {
       env: envFor(fx.repo, { DNR_MODE: 'warn-only' }),
     });
     expect(r.code).toBe(0);
-    expect(r.err).toContain('re-applies');
+    expect(r.err).toContain('DNR: the staged changes re-apply');
   });
 
-  it('R7: pre-commit fails open on an internal error', async () => {
+  it('L3: the pre-commit message reads "the staged changes re-apply"', async () => {
+    fx = await revertFixture();
+    fx.repo.write('shop.py', AFTER);
+    fx.repo.git('add', 'shop.py');
+    const r = await dnr(fx.repo.dir, ['check', '--staged']);
+    expect(r.err).toContain(`DNR: the staged changes re-apply ${fx.order.id}`);
+    expect(r.err).not.toContain('changes re-applies');
+  });
+
+  it('R7: pre-commit fails open on an internal error (timeout)', async () => {
+    fx = await revertFixture();
+    fx.repo.write('shop.py', AFTER);
+    fx.repo.git('add', 'shop.py');
+    expect(
+      (await dnr(fx.repo.dir, ['check', '--staged'], { env: envFor(fx.repo, { DNR_HOOK_TIMEOUT_MS: '1' }) }))
+        .code,
+    ).toBe(0);
+  });
+
+  it('C1: an invalid config does not make pre-commit fail open', async () => {
     fx = await revertFixture();
     fx.repo.write('.dnr/config.json', '{bad');
     fx.repo.write('shop.py', AFTER);
     fx.repo.git('add', 'shop.py');
-    expect((await dnr(fx.repo.dir, ['check', '--staged'])).code).toBe(0);
+    expect((await dnr(fx.repo.dir, ['check', '--staged'])).code).toBe(1);
   });
 
   it('cli: check --replay --canonical replays an events file', async () => {
@@ -641,16 +661,20 @@ describe('event records from the CLI', () => {
 });
 
 describe('board', () => {
-  it('cli: board starts the ui board with the store adapter, writes board.json, never prints the nonce', async () => {
+  it('H4: board keeps the nonce out of argv (0600 temp launch file, deleted after use) and never prints it', async () => {
     fx = await revertFixture();
     const i = io(fx.repo.dir);
     let opened = '';
+    let launchText = '';
+    let launchMode = 0;
     let health: unknown = null;
     let rows: unknown = null;
     const code = await runCli(['board', '--port', '0'], {
       ...i,
       openBrowser: (u) => {
         opened = u;
+        launchText = readFileSync(u, 'utf8');
+        launchMode = statSync(u).mode;
       },
       untilExit: async () => {
         const b = JSON.parse(readFileSync(join(fx?.repo.dir as string, '.dnr', 'board.json'), 'utf8'));
@@ -665,10 +689,134 @@ describe('board', () => {
       },
     });
     expect(code).toBe(0);
-    expect(opened).toMatch(/\/launch\?n=/);
     expect(i.buf.out + i.buf.err).not.toContain('n=');
+    expect(launchText).toMatch(/\/launch\?n=/);
+    expect(launchMode & 0o077).toBe(0);
+    expect(existsSync(opened)).toBe(false); // deleted after use
     expect(health).toHaveProperty('version');
     expect(rows).toEqual([{ order: fx.order, effective: 'approved', drift: false }]);
     expect(existsSync(join(fx.repo.dir, '.dnr', 'board.json'))).toBe(false);
+  });
+});
+
+describe('grant provenance (wave-2 C3/H4)', () => {
+  it('C3: a grant made while an agent session is active is flagged suspect in `dnr orders show` and in the Stop report', async () => {
+    fx = await revertFixture();
+    const d = fx.repo.dir;
+    // An agent session is live.
+    await dnr(d, ['check', '--stdin', '--hook', 'kiro'], { stdin: writeEvent(fx.repo, 'notes.txt', 'n\n') });
+    const r = await dnr(d, ['allow', fx.order.id], { processChain: () => [] });
+    expect(r.code).toBe(0);
+    expect(r.err).toContain('flagged suspect');
+    const g = JSON.parse(readFileSync(join(d, '.dnr', 'grants', `${fx.order.id}.pending.json`), 'utf8'));
+    expect(g.origin).toMatchObject({ via: 'cli', suspect: true });
+    expect(g.origin.markers.some((m: string) => m.startsWith('active-session:'))).toBe(true);
+    expect((await dnr(d, ['orders', 'show', fx.order.id])).out).toContain('SUSPECT');
+    // The live session claims it; Stop reports it.
+    await dnr(d, ['check', '--stdin', '--hook', 'kiro'], { stdin: writeEvent(fx.repo, 'notes.txt', 'm\n') });
+    const st = await dnr(d, ['check', '--worktree', '--hook', 'stop'], {
+      stdin: JSON.stringify({ hook_event_name: 'Stop', cwd: d, session_id: 'sess-1' }),
+    });
+    expect(JSON.parse(st.out).reason).toContain(`grant for ${fx.order.id} is suspect`);
+  });
+
+  it('C3: a grant made with no agent session active and no agent markers is not suspect', async () => {
+    fx = await revertFixture();
+    const r = await dnr(fx.repo.dir, ['allow', fx.order.id], { processChain: () => [] });
+    expect(r.code).toBe(0);
+    const g = JSON.parse(
+      readFileSync(join(fx.repo.dir, '.dnr', 'grants', `${fx.order.id}.pending.json`), 'utf8'),
+    );
+    expect(g.origin).toEqual({ via: 'cli', suspect: false, markers: [] });
+  });
+
+  it('C3: agent markers (Kiro env, a kiro-cli ancestor) are recorded even when the guard is fooled', async () => {
+    fx = await revertFixture();
+    const r = await dnr(fx.repo.dir, ['allow', fx.order.id], {
+      env: envFor(fx.repo, { KIRO_SESSION_ID: 'x' }),
+      processChain: () => [{ pid: 9, ppid: 1, command: '/usr/local/bin/kiro-cli chat' }],
+    });
+    expect(r.code).toBe(0); // the injected guard says ok, as a double-forked process would make it
+    const g = JSON.parse(
+      readFileSync(join(fx.repo.dir, '.dnr', 'grants', `${fx.order.id}.pending.json`), 'utf8'),
+    );
+    expect(g.origin.suspect).toBe(true);
+    expect(g.origin.markers).toEqual(expect.arrayContaining(['env:KIRO_SESSION_ID', 'ancestor:kiro-cli']));
+  });
+});
+
+describe('trial falsealarm (wave-2 M5)', () => {
+  it('falsealarm: M5 scores later non-merge commits touching a covered unit against the first parent; ticket mentions are re-lands', async () => {
+    fx = await revertFixture();
+    const d = fx.repo.dir;
+    // X1: unrelated edit of a covered unit (warn tier). X2: re-applies C without naming the ticket (false block).
+    fx.repo.write('shop.py', BEFORE.replace('return result', 'return -result'));
+    const X1 = fx.repo.commit('Tweak totals');
+    fx.repo.write('shop.py', AFTER);
+    const X2 = fx.repo.commit('Refactor totals');
+    fx.repo.write('notes.txt', 'unrelated\n');
+    fx.repo.commit('Notes only');
+    const r = await dnr(d, [
+      'trial',
+      'falsealarm',
+      '--orders',
+      '.dnr/orders',
+      '--git-dir',
+      d,
+      '--branch',
+      'main',
+      '--out',
+      'fa.json',
+    ]);
+    expect(r.code).toBe(0);
+    const j = JSON.parse(readFileSync(join(d, 'fa.json'), 'utf8'));
+    expect(j.totals).toMatchObject({ orders: 1, N: 2, F: 1, RL: 0, warn_blocks: 1 });
+    expect(j.orders[0].false_blocks[0].sha).toBe(X2);
+    expect(j.orders[0].warn_blocks).toEqual([X1]);
+  });
+
+  it("falsealarm: M5 a commit that names C's ticket is a re-land (RL), not a false block; --role filters", async () => {
+    fx = await revertFixture();
+    const d = fx.repo.dir;
+    fx.repo.write('shop.py', AFTER);
+    fx.repo.commit('Fixed #1 -- Re-land totals with a fix');
+    const r = await dnr(d, [
+      'trial',
+      'falsealarm',
+      '--orders',
+      '.dnr/orders',
+      '--git-dir',
+      d,
+      '--branch',
+      'main',
+      '--out',
+      'fa.json',
+    ]);
+    expect(r.code).toBe(0);
+    const j = JSON.parse(readFileSync(join(d, 'fa.json'), 'utf8'));
+    expect(j.totals).toMatchObject({ F: 0, RL: 1 });
+    const none = await dnr(d, [
+      'trial',
+      'falsealarm',
+      '--role',
+      'none',
+      '--orders',
+      '.dnr/orders',
+      '--git-dir',
+      d,
+      '--branch',
+      'main',
+      '--out',
+      'fa2.json',
+    ]);
+    expect(none.code).toBe(0);
+    expect((await dnr(d, ['trial', 'falsealarm', '--role', 'bogus'])).code).toBe(64);
+  });
+
+  it('L1: `dnr trial mine --help` prints usage instead of crashing', async () => {
+    fx = await revertFixture();
+    const r = await dnr(fx.repo.dir, ['trial', 'mine', '--help']);
+    expect(r.code).toBe(0);
+    expect(r.err).not.toContain('at ');
   });
 });

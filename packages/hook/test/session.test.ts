@@ -288,12 +288,35 @@ describe('Stop backstop', () => {
 
   it('exit: stop always exits 0, including on a crash', async () => {
     fx = await revertFixture();
-    fx.repo.write('.dnr/config.json', 'not json');
-    const io = await stop(fx, envFor(fx.repo));
-    expect(io.exitCode).toBe(0);
-    expect(io.stdout).toBe('');
     const crash = await runStop('garbage', { env: envFor(fx.repo), cwd: fx.repo.dir });
     expect(crash.exitCode).toBe(0);
+    const timeout = await stop(fx, envFor(fx.repo, { DNR_HOOK_TIMEOUT_MS: '1' }));
+    expect([timeout.exitCode, timeout.stdout]).toEqual([0, '']);
+  });
+
+  it('C1: an invalid config does not make Stop fail open: it reports tamper first and still forces the re-application turn', async () => {
+    fx = await revertFixture();
+    const env = envFor(fx.repo);
+    await runPreWrite(writeEvent(fx.repo, 'notes.txt', 'n\n'), { env });
+    fx.repo.write('.dnr/config.json', '{"threshold":2}');
+    fx.repo.write('shop.py', AFTER);
+    await runPreWrite(writeEvent(fx.repo, 'shop.py', AFTER), {
+      env: envFor(fx.repo, { DNR_MODE: 'record' }),
+    });
+    const a = await stop(fx, env);
+    expect(a.exitCode).toBe(0);
+    expect(JSON.parse(a.stdout).reason).toContain('DNR config: config is invalid');
+    const b = await stop(fx, env);
+    expect(JSON.parse(b.stdout).reason).toContain(`re-apply ${fx.order.id}`);
+  });
+
+  it('H1: Stop reports tamper in every mode, including DNR_MODE=record', async () => {
+    fx = await revertFixture();
+    const env = envFor(fx.repo, { DNR_MODE: 'record' });
+    await runPreWrite(writeEvent(fx.repo, 'notes.txt', 'n\n'), { env });
+    fx.repo.write('.dnr/config.json', '{"mode":"record"}');
+    const a = await stop(fx, env);
+    expect(JSON.parse(a.stdout).reason).toContain('only DNR_MODE may set');
   });
 
   it('mode: warn-only Stop forces one turn with the "Tell the user; do not revert unless asked" text', async () => {

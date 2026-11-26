@@ -85,6 +85,7 @@ _Plan: §5.5. Properties: P4, P5._
 #### Acceptance Criteria
 
 1. WHEN a write targets `.dnr/**`, `.kiro/hooks/**`, `.kiro/settings/**`, `.kiro/agents/**`, `$HOME/.kiro/**`, `realpath($DNR_ORDERS)/**`, `realpath($DNR_STATE_DIR)/**` or `realpath($DNR_CONFIG)` THEN the hook SHALL deny it (`deny_protected`) in every decision format and every mode.
+2. The protect tier SHALL also cover the git hooks directory and the `core.hooksPath` target, `.git/config`, `config.worktree` and `.kiro/steering/dnr.md`, and SHALL deny deleting or moving any directory that contains a protected path (review wave 2, H2; extends the plan).
 
 _Plan: §5.4, §6._
 

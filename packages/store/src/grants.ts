@@ -67,6 +67,8 @@ export class GrantStore {
     granted_by: string;
     ttl_ms?: number;
     at?: number;
+    /** How the grant was made and whether agent markers were seen (wave-2 C3/H4). */
+    origin?: Grant['origin'];
   }): Promise<Grant> {
     const at = input.at ?? nowMs();
     const g: Grant = {
@@ -78,6 +80,7 @@ export class GrantStore {
       expires_at: new Date(at + (input.ttl_ms ?? DEFAULT_GRANT_TTL_MS)).toISOString(),
       used: [],
       blobs: [],
+      ...(input.origin ? { origin: input.origin } : {}),
     };
     await withLock(this.fileFor(g.order_id, g.session_key), () => this.put(g));
     return g;

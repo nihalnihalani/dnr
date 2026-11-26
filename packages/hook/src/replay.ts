@@ -54,7 +54,7 @@ export async function replayEvents(
     const r = EventRecord.safeParse(JSON.parse(line));
     if (r.success) records.push(r.data);
   }
-  const orders = (await ctx.store.orders.list()).filter((o) => o.status === 'approved');
+  const orders = [...ctx.trusted.orders.values()].filter((o) => o.status === 'approved');
   const targets = new Set<string>();
   for (const e of records) if (e.target_rel) targets.add(e.target_rel);
   for (const o of orders) for (const f of filesOf(o)) targets.add(f);

@@ -21,7 +21,8 @@ export function realpathLoose(p: string): string {
   let cur = abs;
   for (;;) {
     try {
-      const r = realpathSync(cur);
+      // .native returns the on-disk casing (case-insensitive filesystems, wave-2 C2).
+      const r = realpathSync.native(cur);
       return tail.length ? join(r, ...tail.reverse()) : r;
     } catch {
       const up = dirname(cur);

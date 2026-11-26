@@ -32,7 +32,7 @@ DNR order dnr-43933a1dca matched (edit 1.00 ≥ 0.60) in Query.clear_ordering. O
 This change was tried and reverted. Do not re-apply it or route around this block. Tell the user. Only a human maintainer, not the agent, can approve a re-land: `dnr board --open dnr-43933a1dca` or `dnr allow dnr-43933a1dca`, which both need a terminal and refuse inside an agent session.
 ```
 
-A human recovers with `dnr board --open <order_id>` or `dnr allow <order_id>`, from a terminal. The human-only check stops a careless agent; it is not a boundary against a hostile process running as the same user (see the [threat model](docs/threat-model.md)).
+A human recovers with `dnr board --open <order_id>` or `dnr allow <order_id>`, from a terminal. As the [threat model](docs/threat-model.md) puts it, the human-only guard is a speed bump against a careless agent, not a security boundary against a hostile same-user process; DNR detects and flags such approvals.
 
 ## Testing
 

@@ -16,6 +16,10 @@ export interface SimpleCommand {
   assigns: string[];
   /** The wrappers this command was found inside (`sh -c`, `npx`, …). */
   via: string[];
+  /** stdout goes into a pipe (`cmd | …`). */
+  pipedTo?: boolean;
+  /** stdin comes from a pipe; the previous command's argv. */
+  pipedFromArgv?: string[];
 }
 
 const SPLIT_OPS = new Set([';', '&&', '||', '|', '&', '(', ')', '|&', ';;']);
@@ -62,7 +66,8 @@ type Tok = ReturnType<typeof parse>[number];
 
 function tokenize(cmd: string, env: Record<string, string | undefined>): Tok[] {
   try {
-    return parse(cmd, (k: string) => (k === 'HOME' && env.HOME ? env.HOME : `$${k}`)) as Tok[];
+    // Expand HOME and variables assigned earlier in the same command line (`X=sha; git cherry-pick $X`).
+    return parse(cmd, (k: string) => env[k] ?? `$${k}`) as Tok[];
   } catch {
     return cmd.split(/\s+/).filter(Boolean);
   }
@@ -74,7 +79,7 @@ function splitSimple(tokens: Tok[]): SimpleCommand[] {
   const out: SimpleCommand[] = [];
   let cur = empty();
   const flush = () => {
-    if (cur.argv.length || cur.redirects.length || cur.globs.length) out.push(cur);
+    if (cur.argv.length || cur.redirects.length || cur.globs.length || cur.assigns.length) out.push(cur);
     cur = empty();
   };
   for (let i = 0; i < tokens.length; i++) {
@@ -108,11 +113,29 @@ function splitSimple(tokens: Tok[]): SimpleCommand[] {
         }
         continue;
       }
-      if (SPLIT_OPS.has(op)) flush();
+      if (SPLIT_OPS.has(op)) {
+        const prev = cur;
+        flush();
+        if (op === '|' || op === '|&') {
+          prev.pipedTo = true;
+          cur.pipedFromArgv = prev.argv;
+        }
+      }
     }
   }
   flush();
   return out;
+}
+
+/** `NAME=value` assignments made anywhere in a command line (assignment-only words). */
+function assignmentsOf(cmd: string, env: Record<string, string | undefined>): Record<string, string> {
+  const vars: Record<string, string> = {};
+  for (const sc of splitSimple(tokenize(cmd, env)))
+    for (const a of sc.assigns) {
+      const i = a.indexOf('=');
+      vars[a.slice(0, i)] = a.slice(i + 1);
+    }
+  return vars;
 }
 
 const base = (p: string) => p.split('/').pop() ?? p;
@@ -122,7 +145,9 @@ const SHELLS = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'fish']);
  * Unwrap one level of wrapper. Returns the inner argv (or a nested command string for `sh -c`),
  * or null when argv is not a wrapper.
  */
-function unwrapOnce(argv: string[]): { inner: string[] | null; script?: string; via: string } | null {
+function unwrapOnce(
+  argv: string[],
+): { inner: string[] | null; script?: string; via: string; assigns?: string[] } | null {
   const [a0 = '', ...rest] = argv;
   const b = base(a0);
   const at = (i: number) => rest[i] as string;
@@ -140,7 +165,8 @@ function unwrapOnce(argv: string[]): { inner: string[] | null; script?: string; 
       }
       break;
     }
-    return { inner: rest.slice(i), via: 'env' };
+    const assigns = rest.slice(0, i).filter((t) => /^[A-Za-z_][A-Za-z0-9_]*=/.test(t));
+    return { inner: rest.slice(i), via: 'env', assigns };
   }
   if (['nohup', 'exec', 'command', 'builtin', 'time', 'caffeinate', 'stdbuf', 'unbuffer'].includes(b)) {
     let i = 0;
@@ -155,6 +181,9 @@ function unwrapOnce(argv: string[]): { inner: string[] | null; script?: string; 
     if (b === 'timeout' && i < rest.length) i++; // the duration
     return { inner: rest.slice(i), via: b };
   }
+  if (b === 'eval') return { inner: null, script: rest.join(' '), via: 'eval' };
+  if (['export', 'declare', 'typeset', 'local', 'readonly'].includes(b))
+    return { inner: [], via: b, assigns: rest.filter((t) => /^[A-Za-z_][A-Za-z0-9_]*=/.test(t)) };
   if (SHELLS.has(b)) {
     const ci = rest.findIndex((t) => /^-[a-z]*c[a-z]*$/.test(t));
     if (ci >= 0 && rest[ci + 1] !== undefined) return { inner: null, script: at(ci + 1), via: `${b} -c` };
@@ -212,22 +241,36 @@ export function parseCommands(
 ): SimpleCommand[] {
   if (depth > 8) return [];
   const out: SimpleCommand[] = [];
-  for (const sc of splitSimple(tokenize(cmd, env))) {
+  const vars = { ...env, ...assignmentsOf(cmd, env) };
+  for (const sc of splitSimple(tokenize(cmd, vars))) {
     let c: SimpleCommand | null = { ...sc, via: [...via] };
+    // `echo "git cherry-pick X" | sh`: the piped text is a script.
+    const b0 = base(c.argv[0] ?? '');
+    if (SHELLS.has(b0) && c.pipedFromArgv && !c.argv.some((t) => /^-[a-z]*c/.test(t))) {
+      const src = c.pipedFromArgv;
+      if (['echo', 'printf'].includes(base(src[0] ?? ''))) {
+        const text = src
+          .slice(1)
+          .filter((t) => !/^-[neE]+$/.test(t))
+          .join(' ');
+        out.push(...parseCommands(text, vars, depth + 1, [...via, `| ${b0}`]));
+      }
+    }
     for (let guard = 0; guard < 10 && c; guard++) {
       const u = unwrapOnce(c.argv);
       if (!u) break;
       out.push({ ...c });
+      if (u.assigns?.length) c = { ...c, assigns: [...c.assigns, ...u.assigns] };
       if (u.script !== undefined) {
-        out.push(...parseCommands(u.script, env, depth + 1, [...c.via, u.via]));
+        out.push(...parseCommands(u.script, vars, depth + 1, [...c.via, u.via]));
         c = null;
         break;
       }
       c = { ...c, argv: u.inner ?? [], via: [...c.via, u.via] };
     }
-    if (c && (c.argv.length || c.redirects.length)) out.push(c);
+    if (c && (c.argv.length || c.redirects.length || c.assigns.length)) out.push(c);
   }
-  for (const sub of substitutions(cmd)) out.push(...parseCommands(sub, env, depth + 1, [...via, '$()']));
+  for (const sub of substitutions(cmd)) out.push(...parseCommands(sub, vars, depth + 1, [...via, '$()']));
   return out;
 }
 

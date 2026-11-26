@@ -75,6 +75,9 @@ importers:
       '@dnr/board':
         specifier: workspace:*
         version: link:../board
+      '@dnr/store':
+        specifier: workspace:*
+        version: link:../../packages/store
       '@dnr/testkit':
         specifier: workspace:*
         version: link:../../packages/testkit

@@ -9,10 +9,11 @@
  * board port · R8 hook bypasses (commit --no-verify / -n, core.hooksPath, terminal automation).
  */
 import { existsSync, globSync, readFileSync } from 'node:fs';
-import { isAbsolute, resolve } from 'node:path';
+import { isAbsolute, join, resolve } from 'node:path';
 import { overlayState, scoreOrder } from '@dnr/core';
-import { revList, snapshotTree, tryResolve } from '@dnr/git';
+import { headCommit, revList, snapshotTree, tryResolve } from '@dnr/git';
 import type { EventRecord, Order, Session } from '@dnr/schemas';
+import { writeJsonAtomic } from '@dnr/store';
 import { applyPatch, parsePatch } from 'diff';
 import {
   appendEvents,
@@ -24,17 +25,25 @@ import {
   makeEvent,
   OK,
   openContext,
-  prepareSession,
   sessionPatch,
+  withSession,
 } from './context';
 import { createState, filesOf, loadParser, UnitCache } from './engine';
 import { parseHookEvent, shellCommandOf } from './event';
 import { failOpen } from './failopen';
 import { cap } from './messages';
 import { loadEntries } from './orders';
-import { isProtectedPath } from './prewrite';
+import { isProtectedPath, wouldRemoveProtected } from './prewrite';
 import { BlobReader, readWorktree, repoRelative } from './repo';
 import { isDnr, parseCommands, type SimpleCommand } from './shell-parse';
+
+/** Record HEAD before a shell call, so post-shell can check commits it made (wave-2 H3). */
+export async function writeShellHead(ctx: HookContext, sessionKey: string): Promise<void> {
+  try {
+    const head = await headCommit(ctx.repoRoot);
+    await writeJsonAtomic(join(ctx.store.paths.stateDir, 'shell-heads', `${sessionKey}.json`), { head });
+  } catch {}
+}
 
 export type ShellRule = 'R1' | 'R2' | 'R3' | 'R4' | 'R5' | 'R6' | 'R7' | 'R8';
 
@@ -52,6 +61,8 @@ export interface ShellEnv {
   repoRoot: string;
   home: string | null;
   isProtected(absPath: string): boolean;
+  /** Removing or replacing this path would remove a protected path (it is one, or contains one). */
+  wouldRemove?(absPath: string): boolean;
   /** Approved orders whose grant does not apply. */
   orders: Order[];
   /** Resolve a revision to a full SHA (null when it does not resolve). */
@@ -147,9 +158,20 @@ function gitSub(argv: string[]): { sub: string; args: string[]; configs: string[
       i++;
     }
   }
-  const sub = argv[i];
+  let sub = argv[i];
   if (!sub) return null;
-  return { sub, args: argv.slice(i + 1), configs };
+  let args = argv.slice(i + 1);
+  // `git -c alias.pp=cherry-pick pp X` runs `git cherry-pick X` (wave-2 H3).
+  for (const c of configs) {
+    const m = /^alias\.([^=]+)=(.*)$/i.exec(c);
+    if (m && m[1] === sub) {
+      const words = (m[2] as string).replace(/^!/, '').trim().split(/\s+/);
+      if (words[0] === 'git') words.shift();
+      sub = words[0] ?? sub;
+      args = [...words.slice(1), ...args];
+    }
+  }
+  return { sub, args, configs };
 }
 
 async function resolvesTo(env: ShellEnv, rev: string, shas: Set<string>): Promise<string | null> {
@@ -214,6 +236,45 @@ export async function evaluateShell(command: string, env: ShellEnv): Promise<She
         }
       }
     }
+    // R1 (wave-2 H2): deleting or replacing a directory that contains a protected path.
+    const b00 = base(a0 ?? '');
+    const destructive =
+      ['rm', 'rmdir', 'unlink', 'shred', 'trash', 'srm'].includes(b00) ||
+      (b00 === 'find' && argv.some((t) => t === '-delete' || t === '-exec' || t === '-execdir')) ||
+      (b00 === 'git' && argv.includes('clean'));
+    const moving = ['mv', 'cp', 'rsync', 'ln', 'install', 'ditto'].includes(b00);
+    if ((destructive || moving) && env.wouldRemove) {
+      const toks = pathTokens(c).filter((t) => t !== 'clean');
+      // rm/find: the target; mv/cp/rsync/ln: the source (moved away) and the destination (replaced).
+      for (const tok of toks) {
+        if (expandPath(env, tok).some((p) => env.wouldRemove?.(p))) {
+          findings.push({
+            rule: 'R1',
+            level: 'deny',
+            detail: `${b00} ${tok} would remove or replace a protected path`,
+          });
+          break;
+        }
+      }
+    }
+    // R8 (wave-2 H2): git configuration from the environment (GIT_CONFIG_PARAMETERS, GIT_CONFIG_COUNT/KEY/VALUE, GIT_CONFIG*).
+    for (const a of c.assigns) {
+      if (/^GIT_CONFIG(_PARAMETERS|_COUNT|_KEY_\d+|_VALUE_\d+|_GLOBAL|_SYSTEM)?=/.test(a))
+        findings.push({
+          rule: 'R8',
+          level: 'deny',
+          detail: `${a.split('=')[0]} can change git hooks and aliases`,
+        });
+    }
+    if (
+      b00 === 'open' &&
+      argv.some((t) => /\.(command|tool|terminal|app|scpt|applescript|workflow)\/?$/i.test(t))
+    )
+      findings.push({
+        rule: 'R8',
+        level: 'deny',
+        detail: 'opening a script or app that can drive a terminal',
+      });
     // R6: enforcement-changing dnr subcommands, directly or through a wrapper.
     if (isDnr(a0)) {
       const sub = r6Subcommand(argv.slice(1), env.ordersDir, env.cwd);
@@ -313,14 +374,17 @@ export async function evaluateShell(command: string, env: ShellEnv): Promise<She
           });
       }
     }
-    if (g.sub === 'checkout' || g.sub === 'restore') {
+    if (g.sub === 'checkout' || g.sub === 'restore' || g.sub === 'switch') {
       const revs: string[] = [];
       g.args.forEach((x, i) => {
         if (x === '--source' || x === '-s') revs.push(g.args[i + 1] ?? '');
         else if (x.startsWith('--source=')) revs.push(x.slice(9));
+        else if (/^-s[^-]/.test(x)) revs.push(x.slice(2)); // attached `-s<rev>` (wave-2 H3)
       });
       const dd = g.args.indexOf('--');
-      if (g.sub === 'checkout' && dd > 0) revs.push(...g.args.slice(0, dd).filter((x) => !x.startsWith('-')));
+      const before = (dd >= 0 ? g.args.slice(0, dd) : g.args).filter((x) => !x.startsWith('-'));
+      // `git checkout <rev> [<path>…]`, with or without `--`, and `git switch --detach <rev>`.
+      if (g.sub !== 'restore') revs.push(...before);
       for (const rev of revs) {
         const hit = rev ? await resolvesTo(env, rev, origSet) : null;
         if (hit)
@@ -332,7 +396,8 @@ export async function evaluateShell(command: string, env: ShellEnv): Promise<She
           });
       }
     }
-    if (g.sub === 'show' && c.redirects.some((r) => r.op.startsWith('>'))) {
+    const writesOut = c.redirects.some((r) => r.op.startsWith('>')) || !!c.pipedTo;
+    if ((g.sub === 'show' || g.sub === 'cat-file') && writesOut) {
       for (const spec of positional) {
         const rev = spec.includes(':') ? spec.slice(0, spec.indexOf(':')) : '';
         const hit = rev ? await resolvesTo(env, rev, origSet) : null;
@@ -340,7 +405,19 @@ export async function evaluateShell(command: string, env: ShellEnv): Promise<She
           findings.push({
             rule: 'R5',
             level: 'deny',
-            detail: `git show ${spec} > …`,
+            detail: `git ${g.sub} ${spec} > …`,
+            order_id: originals.get(hit) as string,
+          });
+      }
+    }
+    if (g.sub === 'archive') {
+      for (const rev of positional) {
+        const hit = await resolvesTo(env, rev, origSet);
+        if (hit)
+          findings.push({
+            rule: 'R5',
+            level: 'deny',
+            detail: `git archive ${rev}`,
             order_id: originals.get(hit) as string,
           });
       }
@@ -431,12 +508,13 @@ async function shellEnvFor(
   s: Session,
 ): Promise<ShellEnv> {
   const grants = new Set((await ctx.store.grants.applying(s, ctx.now())).map((g) => g.order_id));
-  const orders = (await ctx.store.orders.list()).filter((o) => o.status === 'approved' && !grants.has(o.id));
+  const orders = [...ctx.trusted.orders.values()].filter((o) => o.status === 'approved' && !grants.has(o.id));
   return {
     cwd,
     repoRoot: ctx.repoRoot,
     home: env.HOME ?? null,
     isProtected: (p) => isProtectedPath(ctx, env, p),
+    wouldRemove: (p) => wouldRemoveProtected(ctx, env, p),
     orders,
     resolve: (rev) => tryResolve(ctx.repoRoot, rev),
     revList: (range) => revList(ctx.repoRoot, range),
@@ -500,8 +578,7 @@ export function runGuardShell(stdin: string, opts: HookOptions = {}): Promise<Ho
     const command = shellCommandOf(ev) ?? '';
     const key = keyOf(ev);
     const events: EventRecord[] = [];
-    const io = await ctx.store.sessions.with(key.key, async (cur) => {
-      const prep = await prepareSession(ctx, key, cur, 'guard-shell');
+    const io = await withSession(ctx, key, 'guard-shell', async (prep) => {
       const s = prep.session;
       events.push(...prep.events);
       const findings = command ? await evaluateShell(command, await shellEnvFor(ctx, env, ev.cwd, s)) : [];
@@ -528,7 +605,10 @@ export function runGuardShell(stdin: string, opts: HookOptions = {}): Promise<Ho
           })
         : baseDecision({ outcome: record ? 'record' : 'allow', tier: 'none' });
       if (warn) s.warned.push(warnKey);
-      if (!deny || record) s.shell_snapshot = await snapshotTree(ctx.repoRoot);
+      if (!deny || record) {
+        s.shell_snapshot = await snapshotTree(ctx.repoRoot);
+        await writeShellHead(ctx, s.session_key);
+      }
       events.push(
         makeEvent(ctx, {
           hook: 'guard-shell',
@@ -540,8 +620,8 @@ export function runGuardShell(stdin: string, opts: HookOptions = {}): Promise<Ho
           session_patch: null,
         }),
       );
-      if (!shown || record) return { session: s, result: { ...OK } };
-      return { session: s, result: { exitCode: 2, stdout: '', stderr: `${shellMessage(shown)}\n` } };
+      if (!shown || record) return { ...OK };
+      return { exitCode: 2, stdout: '', stderr: `${shellMessage(shown)}\n` };
     });
     await appendEvents(ctx, events);
     return io;

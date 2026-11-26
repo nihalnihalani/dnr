@@ -8,7 +8,8 @@
     ".": "./src/index.ts",
     "./version": "./src/version.ts",
     "./ancestry": "./src/ancestry.ts",
-    "./messages": "./src/messages.ts"
+    "./messages": "./src/messages.ts",
+    "./prewrite": "./src/prewrite.ts"
   },
   "dependencies": {
     "shell-quote": "1.12.0",

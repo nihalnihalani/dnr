@@ -4,8 +4,10 @@
  * for guard-shell R7, and opens the launch URL. The launch URL holds the nonce and is never printed.
  */
 import { spawn } from 'node:child_process';
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import { DNR_VERSION } from '@dnr/hook';
 import { parse, str } from '../args';
 import { createBoardStore } from '../board-store';
@@ -13,11 +15,29 @@ import { repoContext, requireHuman } from '../context';
 import { EXIT, missingDependency, usage } from '../errors';
 import type { CliIO } from '../io';
 
-function defaultOpen(url: string): void {
+function defaultOpen(target: string): void {
   const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer' : 'xdg-open';
   try {
-    spawn(cmd, [url], { stdio: 'ignore', detached: true }).unref();
+    spawn(cmd, [target], { stdio: 'ignore', detached: true }).unref();
   } catch {}
+}
+
+/**
+ * Wave-2 H4: the launch URL carries the single-use nonce, so it must not appear in any argv
+ * (`ps` shows argv to every same-user process). Write it into a 0600 HTML file in a 0700 temp
+ * dir that redirects, open that file, and delete it after first use (or on exit).
+ */
+export function writeLaunchFile(launchUrl: string): { file: string; remove: () => void } {
+  const dir = mkdtempSync(join(tmpdir(), 'dnr-board-'));
+  const file = join(dir, 'open.html');
+  const u = JSON.stringify(launchUrl);
+  writeFileSync(
+    file,
+    `<!doctype html><meta charset="utf-8"><title>DNR board</title><meta name="referrer" content="no-referrer"><script>location.replace(${u})</script><noscript>Enable JavaScript to open the DNR board.</noscript>\n`,
+    { mode: 0o600 },
+  );
+  chmodSync(file, 0o600);
+  return { file, remove: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
 function untilSignal(): Promise<void> {
@@ -76,10 +96,16 @@ export async function cmdBoard(argv: string[], io: CliIO): Promise<number> {
     `${JSON.stringify({ port: handle.port, origin: handle.origin, pid: process.pid })}\n`,
   );
   io.out(`DNR board on ${handle.origin} (Ctrl-C to stop)\n`);
-  (io.openBrowser ?? defaultOpen)(handle.launchUrl);
+  const launch = writeLaunchFile(handle.launchUrl);
+  (io.openBrowser ?? defaultOpen)(launch.file);
+  // The browser reads the file within a moment; the nonce itself expires after 60 s and is single-use.
+  const timer = setTimeout(launch.remove, 15_000);
+  timer.unref?.();
   try {
     await (io.untilExit ?? untilSignal)();
   } finally {
+    clearTimeout(timer);
+    launch.remove();
     await handle.close();
     await rm(boardFile, { force: true });
   }

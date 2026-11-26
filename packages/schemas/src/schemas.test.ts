@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_CONFIG, DnrConfig } from './config';
 import { Pins } from './fixtures';
 import { Iso, RepoPath, Sha40 } from './primitives';
-import { Decision, Order } from './records';
+import { Decision, Grant, Order } from './records';
 
 const sha = 'a'.repeat(40);
 const order = {
@@ -104,5 +104,26 @@ describe('Pins (strict fixture schema)', () => {
     expect(Pins.safeParse(pins).success).toBe(true);
     expect(Pins.safeParse({ ...pins, extra: 1 }).success).toBe(false);
     expect(Pins.safeParse({ ...pins, demo_cases: [{ ...pins.demo_cases[0], typo: 1 }] }).success).toBe(false);
+  });
+});
+
+describe('Grant.origin (optional, wave-2 C3/H4)', () => {
+  const grant = {
+    order_id: 'dnr-0123456789',
+    session_key: null,
+    kind: 'allow_once',
+    granted_by: 'human',
+    granted_at: '2026-11-26T00:00:00Z',
+    expires_at: '2026-11-26T01:00:00Z',
+    used: [],
+    blobs: [],
+  };
+  it('accepts grants without origin (older files) and keeps origin when present', () => {
+    expect(Grant.safeParse(grant).success).toBe(true);
+    const origin = { via: 'cli', suspect: true, markers: ['env:KIRO_SESSION_ID', 'ancestor:kiro-cli'] };
+    expect(Grant.parse({ ...grant, origin }).origin).toEqual(origin);
+    expect(Grant.safeParse({ ...grant, origin: { via: 'shell', suspect: false, markers: [] } }).success).toBe(
+      false,
+    );
   });
 });

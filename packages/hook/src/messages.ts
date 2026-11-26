@@ -21,14 +21,18 @@ function revertUrl(order: Order): string {
 export function warnMessage(
   order: Order,
   decision: Decision,
-  opts: { qualnames?: readonly string[]; threshold?: number; downgraded?: boolean } = {},
+  opts: { qualnames?: readonly string[]; threshold?: number; downgraded?: boolean; file?: string } = {},
 ): string {
-  const where = opts.qualnames?.length ? ` ${opts.qualnames.join(', ')}` : ' a unit it covers';
+  const files = [...new Set(order.units.map((u) => u.file))];
+  const where = opts.qualnames?.length
+    ? ` ${opts.qualnames.join(', ')}`
+    : ` ${opts.file ?? files[0] ?? 'its files'}`;
+  const scored = decision.edit_score !== null;
   const score = `edit ${(decision.edit_score ?? 0).toFixed(2)}`;
   const tau = (opts.threshold ?? 0.6).toFixed(2);
   const second = opts.downgraded
     ? `DNR order ${order.id}: this write may re-apply it (${score} ≥ ${tau}) in${where}.`
-    : `DNR order ${order.id} covers${where}, which this write changes (${score} < ${tau}, not a re-application).`;
+    : `DNR order ${order.id} covers${where}, which this write changes (${scored ? `${score} < ${tau}, not a re-application` : 'the tool is not one DNR can score'}).`;
   const third = opts.downgraded
     ? 'This change was tried and reverted. Tell the user before going further; do not revert unless asked. This warning is shown once per session.'
     : `This code was changed and reverted before. Check that you are not re-applying it, and tell the user if you are. This warning is shown once per session for ${order.id}; the next write passes.`;
@@ -58,6 +62,13 @@ export function stopReason(order: Order, qualnames: readonly string[], reduced: 
     );
   return cap(
     `DNR: your edits re-apply ${order.id} (${order.reason}, ${url}). Revert only the edits you made to ${qualnames.join(', ') || 'the order units'} this session, then tell the user.`,
+  );
+}
+
+/** Stop's tamper report (wave-2 C1): one forced turn listing what changed. */
+export function tamperReason(findings: readonly string[]): string {
+  return cap(
+    `DNR: DNR's own state was tampered with or is invalid. ${findings.join(' ')} DNR kept enforcing with the committed orders and config. Do not edit DNR files or approvals. Tell the user exactly what changed.`,
   );
 }
 

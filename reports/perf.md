@@ -18,3 +18,18 @@ Notes:
 - The match case runs in the same session each time: a block does not add the order to `warned`, so every run takes the full path. That path loads the grammars, makes one `git cat-file --batch` call for the baseline, snapshot and HEAD texts, parses, derives stale and re-landed (cached in `cache/derived.json`), scores, and appends the event.
 - Before code splitting, the single-file bundle evaluated every dependency at startup (zod, the MCP SDK, hono, shell-quote, web-tree-sitter). The fast path then measured p95 114.5 ms, which failed the target. After splitting it is 65.3 ms.
 - Not measured yet: P10-05 (the fingerprint index on, with a cold cache at Django scale) waits for Phase 10. A Linux CI run on Node 24 is also still to do.
+
+## Re-measured after the wave-2 fixes (November 26, 2026, late)
+
+The C1 fix puts one `git ls-tree HEAD -- .dnr/orders .dnr/config.json` on every hook invocation: orders and config are read from the committed tree when the working copy differs, and there is no on-disk cache an agent could forge. The fast path pays for that spawn. Three things offset it:
+- the write hook has its own lean entry (`check-fast`), which loads only the pre-write module;
+- the `ls-tree` starts while that module is still loading;
+- the derived-status disk cache is gone, because an agent could forge it.
+
+| Case | p50 | p95 | Target |
+|---|---|---|---|
+| Match (block), `reapply-43933a1dca.json` | 162 ms | 167–169 ms | < 300 ms |
+| Fast path, `uncovered.json` | 74 ms | **79.2 ms** on a quiet run | < 80 ms |
+| First write of a fresh Django session | — | 112–140 ms | < 2 s |
+
+The fast path is now at the edge of its budget. Other agents were running test suites during these runs (load average about 10), and under that load the fast-path p95 ranged from 79 to 122 ms. A Linux CI measurement on an idle runner is still owed. If the budget has to hold with margin, the next step is to read HEAD's tree for `.dnr/` straight from the object store, with no git process.

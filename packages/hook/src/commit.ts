@@ -50,7 +50,7 @@ export async function crossingCheck(
   nextRev: string | 'worktree',
   opts: { orders?: Order[]; searchFiles?: string[]; staleRev?: string } = {},
 ): Promise<CrossingFinding[]> {
-  const orders = (opts.orders ?? (await ctx.store.orders.list())).filter((o) => o.status === 'approved');
+  const orders = (opts.orders ?? [...ctx.trusted.orders.values()]).filter((o) => o.status === 'approved');
   if (orders.length === 0) return [];
   const parser = await loadParser();
   const cache = new UnitCache(parser);
@@ -100,7 +100,7 @@ export async function crossingCheck(
 export async function checkStaged(ctx: HookContext): Promise<CrossingFinding[]> {
   const head = (await headCommit(ctx.repoRoot)) ?? EMPTY_TREE;
   const staged = await stagedPaths(ctx.repoRoot);
-  const orders = await ctx.store.orders.list();
+  const orders = [...ctx.trusted.orders.values()];
   const findings = await crossingCheck(ctx, head, ':', { orders, searchFiles: staged });
   const reader = new BlobReader(ctx.repoRoot);
   const events = [];
@@ -171,7 +171,7 @@ export async function checkFile(
   const parser = await loadParser();
   const cache = new UnitCache(parser);
   const reader = new BlobReader(ctx.repoRoot);
-  const orders = (await ctx.store.orders.list()).filter((o) => o.status === 'approved');
+  const orders = [...ctx.trusted.orders.values()].filter((o) => o.status === 'approved');
   const specs: string[] = [];
   for (const o of orders)
     for (const f of filesOf(o)) specs.push(`${o.snapshot_sha}:${f}`, `HEAD:${f}`, `${baseRev}:${f}`);
@@ -184,7 +184,7 @@ export async function checkFile(
       (f) => reader.get('HEAD', f),
       cache,
       ctx.config,
-      ctx.store.paths.cacheDir,
+      null,
     ),
   }));
   const r = decideWrite({

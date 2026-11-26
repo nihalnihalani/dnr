@@ -252,6 +252,10 @@ export async function cmdOrders(argv: string[], io: CliIO): Promise<number> {
         `w(A)+w(R) = ${w} ${w >= ctx.config.min_order_weight ? '≥' : '<'} min_order_weight ${ctx.config.min_order_weight}\n`,
       );
       for (const h of o.history) io.out(`history ${h.at} ${h.action} by ${h.by}\n`);
+      for (const g of await ctx.store.grants.list(o.id))
+        io.out(
+          `grant ${g.kind} via ${g.origin?.via ?? 'unknown'} by ${g.granted_by} at ${g.granted_at} (expires ${g.expires_at}, ${g.used.length} use(s))${g.origin?.suspect ? ` SUSPECT: made while an agent session was active (${g.origin.markers.join(', ')})` : ''}\n`,
+        );
       return EXIT.OK;
     }
     case 'approve': {

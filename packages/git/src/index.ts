@@ -26,10 +26,12 @@ export { DEFAULT_LANG_EXTS, defaultBranch, matchesLang, type ScanPair, scanPairs
 export {
   catBlobs,
   commitInfo,
+  committedStateArgs,
   findRepoRoot,
   githubBase,
   gitPath,
   headCommit,
+  memoGit,
   revList,
   snapshotTree,
   stagedPaths,

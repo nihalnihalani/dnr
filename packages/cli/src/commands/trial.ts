@@ -36,10 +36,21 @@ export async function cmdTrial(argv: string[], io: CliIO): Promise<number> {
     io.out(`dnr trial <${[...MINING, ...LATER].join('|')}> …\n`);
     return sub ? EXIT.OK : EXIT.USAGE;
   }
+  if (sub === 'falsealarm') return (await import('./falsealarm')).cmdFalsealarm(argv, io);
   if (MINING.has(sub)) {
-    const { runMineCli } = await import('@dnr/trial');
-    const code = await runMineCli(argv);
-    return code === 2 ? EXIT.DEPENDENCY : code;
+    // L1 (wave-2): print usage instead of handing --help to the mining entry, which throws on it.
+    if (argv.includes('--help') || argv.includes('-h')) {
+      io.out(`dnr trial ${sub} …  (mining; see packages/trial/src/mine/cli.ts for flags)\n`);
+      return EXIT.OK;
+    }
+    try {
+      const { runMineCli } = await import('@dnr/trial');
+      const code = await runMineCli(argv);
+      return code === 2 ? EXIT.DEPENDENCY : code;
+    } catch (e) {
+      io.err(`DNR: dnr trial ${sub}: ${String((e as Error).message ?? e).split('\n')[0]}\n`);
+      return EXIT.USAGE;
+    }
   }
   if (LATER.has(sub)) {
     io.err(`DNR: \`dnr trial ${sub}\` is not built yet (it belongs to a later build wave).\n`);

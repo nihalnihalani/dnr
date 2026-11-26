@@ -39,6 +39,7 @@ export {
 } from './engine';
 export { type HookEvent, parseHookEvent, StdinError, shellCommandOf } from './event';
 export { failOpen } from './failopen';
+export { grantOrigin } from './grant-origin';
 export {
   blockText,
   cap,
@@ -49,6 +50,7 @@ export {
   warnMessage,
 } from './messages';
 export { loadEntries } from './orders';
+export { postShellCheck, postShellReason } from './post-shell';
 export {
   decideConfig,
   gitHooksDirs,
@@ -77,5 +79,6 @@ export {
   shellMessage,
 } from './shell';
 export { isDnr, parseCommands, type SimpleCommand } from './shell-parse';
-export { runStop } from './stop';
+export { runStop, scoreTouched, tamperFindings } from './stop';
+export { coverageOf, loadTrusted, parseConfigText, type TrustedState } from './trusted';
 export { DNR_VERSION } from './version';

@@ -14,7 +14,7 @@ export async function loadEntries(
 ): Promise<{ entries: OrderEntry[]; orders: Order[] }> {
   const orders: Order[] = [];
   for (const id of ids) {
-    const o = await ctx.store.orders.get(id);
+    const o = ctx.trusted.orders.get(id);
     if (o && o.status === 'approved') orders.push(o);
   }
   const specs = [...extraSpecs];
@@ -27,7 +27,7 @@ export async function loadEntries(
       (f) => reader.get('HEAD', f),
       cache,
       ctx.config,
-      ctx.store.paths.cacheDir,
+      null, // no on-disk cache in the enforcement path: an agent could forge it (wave-2 C1)
     );
     return { order, stale: d.stale, relanded: d.relanded };
   });

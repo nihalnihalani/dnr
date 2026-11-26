@@ -124,7 +124,9 @@ export async function headCommit(repo: string): Promise<string | null> {
 /** Resolve a revision to a full commit SHA without throwing (null when it does not resolve). */
 export async function tryResolve(repo: string, rev: string): Promise<string | null> {
   if (rev.startsWith('-')) return null;
-  const r = await runGit(['rev-parse', '--verify', '--quiet', '--end-of-options', `${rev}^{commit}`], {
+  // `:/<regex>` takes the rest of the string as the regex, so `^{commit}` cannot be appended.
+  const spec = rev.startsWith(':/') ? rev : `${rev}^{commit}`;
+  const r = await runGit(['rev-parse', '--verify', '--quiet', '--end-of-options', spec], {
     cwd: repo,
     okCodes: [0, 1, 128],
   });
@@ -154,4 +156,30 @@ export async function githubBase(repo: string): Promise<string | null> {
   const url = r.stdout.trim();
   const m = /github\.com[:/]([^/]+)\/(.+?)(?:\.git)?\/?$/.exec(url);
   return m ? `https://github.com/${m[1]}/${m[2]}` : null;
+}
+
+const gitMemo = new Map<string, ReturnType<typeof runGit>>();
+
+/**
+ * Run a read-only git command once per process: a caller can start it early (the write hook
+ * starts `ls-tree HEAD` before its modules load) and a later caller gets the same promise.
+ */
+export function memoGit(
+  repo: string,
+  args: readonly string[],
+  okCodes: number[] = [0],
+): ReturnType<typeof runGit> {
+  const k = `${repo}\0${args.join('\0')}\0${okCodes.join(',')}`;
+  let p = gitMemo.get(k);
+  if (!p) {
+    p = runGit(args, { cwd: repo, okCodes });
+    p.catch(() => {});
+    gitMemo.set(k, p);
+  }
+  return p;
+}
+
+/** The `ls-tree` arguments DNR uses to read committed orders and config (shared by prefetch and loader). */
+export function committedStateArgs(scope: readonly string[]): string[] {
+  return ['ls-tree', '-r', '-z', 'HEAD', '--', ...scope];
 }

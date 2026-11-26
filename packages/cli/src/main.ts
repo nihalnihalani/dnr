@@ -56,6 +56,15 @@ export async function runCli(argv: string[], io: CliIO): Promise<number> {
     io.out(`${DNR_VERSION}\n`);
     return EXIT.OK;
   }
+  // The PreToolUse write hook runs on every agent write: skip the generic dispatch (latency, R8).
+  if (cmd === 'check' && rest.includes('--stdin') && !rest.includes('stop')) {
+    try {
+      return await (await import('./commands/check-fast')).cmdCheckFast(rest, io);
+    } catch (e) {
+      io.err(`DNR: internal error: ${String((e as Error)?.message ?? e)}\n`);
+      return EXIT.OK; // fail open, like the hook itself
+    }
+  }
   const load = COMMANDS[cmd];
   if (!load) {
     io.err(`dnr: unknown command ${cmd}\n${HELP}`);

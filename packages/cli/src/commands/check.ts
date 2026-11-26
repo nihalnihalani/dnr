@@ -11,7 +11,6 @@ import {
   failOpen,
   formatReplay,
   replayEvents,
-  runPreWrite,
   runStop,
   warnMessage,
 } from '@dnr/hook';
@@ -50,7 +49,7 @@ function printFindings(io: CliIO, label: string, fs: CrossingFinding[], json: bo
     for (const f of fs) {
       if (f.crossing)
         io.err(
-          `DNR: ${label} re-applies ${f.order_id} (edit ${f.edit.toFixed(2)}, was ${f.parent_edit.toFixed(2)})${f.qualnames.length ? ` in ${f.qualnames.join(', ')}` : ''}${f.granted ? ' — allowed by a used grant' : ''}\n`,
+          `DNR: ${label} ${/changes$/.test(label) ? 're-apply' : 're-applies'} ${f.order_id} (edit ${f.edit.toFixed(2)}, was ${f.parent_edit.toFixed(2)})${f.qualnames.length ? ` in ${f.qualnames.join(', ')}` : ''}${f.granted ? ' — allowed by a used grant' : ''}\n`,
         );
       else if (f.relanded)
         io.err(
@@ -78,7 +77,11 @@ export async function cmdCheck(argv: string[], io: CliIO): Promise<number> {
   if (v.stdin) {
     const hook = str(v.hook) ?? 'kiro';
     const stdin = await io.readStdin();
-    if (hook === 'kiro') return write(await runPreWrite(stdin, { env: io.env, cwd: io.cwd }));
+    if (hook === 'kiro') {
+      // Fast path for the write hook: load only the pre-write module (latency, R8).
+      const { runPreWrite: run } = await import('@dnr/hook/prewrite');
+      return write(await run(stdin, { env: io.env, cwd: io.cwd }));
+    }
     if (hook === 'stop') {
       const max = v['max-forced-turns'] ? Number(v['max-forced-turns']) : undefined;
       return write(
@@ -111,7 +114,7 @@ export async function cmdCheck(argv: string[], io: CliIO): Promise<number> {
     let code = 0;
     const r = await failOpen('pre-commit', '{}', { env: io.env, cwd: io.cwd }, async () => {
       const ctx = await repoContext(io, { ...(v.config ? { config: str(v.config) as string } : {}) });
-      const n = printFindings(io, 'staged changes', await checkStaged(ctx), !!v.json);
+      const n = printFindings(io, 'the staged changes', await checkStaged(ctx), !!v.json);
       const mode = ctx.config.mode;
       code = n > 0 && (mode === 'enforce' || mode === 'commit-enforce') ? EXIT.FINDINGS : EXIT.OK;
       if (n > 0 && code === EXIT.FINDINGS)
@@ -138,7 +141,7 @@ export async function cmdCheck(argv: string[], io: CliIO): Promise<number> {
 
   if (v.worktree) {
     const ctx = await repoContext(io);
-    return printFindings(io, 'working tree', await checkWorktree(ctx), !!v.json) > 0
+    return printFindings(io, 'the working tree', await checkWorktree(ctx), !!v.json) > 0
       ? EXIT.FINDINGS
       : EXIT.OK;
   }

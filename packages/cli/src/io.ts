@@ -16,6 +16,8 @@ export interface CliIO {
   err(s: string): void;
   /** The R6 human-only guard (process ancestry, TTY, Kiro variables). */
   guard(): GuardResult;
+  /** Process ancestry for grant provenance (tests inject it; default: `ps`). */
+  processChain?: () => import('@dnr/hook').Proc[];
   /** The path of the running CLI script (init refuses npx cache paths). */
   scriptPath: string;
   draftRunner?: DraftRunner;

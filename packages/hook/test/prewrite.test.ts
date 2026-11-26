@@ -322,12 +322,15 @@ describe('modes', () => {
     expect((evs[0]?.decision.breakdown[0] as { would?: string } | undefined)?.would).toBe('block');
   });
 
-  it('record mode from the config `mode` key, written to DNR_RECORD_PATH', async () => {
+  it('H1: `mode: "record"` in the repo config is refused (enforces with the defaults); DNR_MODE=record writes to DNR_RECORD_PATH', async () => {
     fx = await revertFixture();
     setConfig(fx, { mode: 'record' });
+    const blocked = await runPreWrite(writeEvent(fx.repo, 'shop.py', AFTER), { env: envFor(fx.repo) });
+    expect(blocked.exitCode).toBe(2);
+    expect(readFileSync(join(fx.repo.dir, '.dnr', 'hook.log'), 'utf8')).toContain('only DNR_MODE may set');
     const out = join(fx.repo.dir, 'rec', 'events.jsonl');
-    const io = await runPreWrite(writeEvent(fx.repo, 'shop.py', AFTER), {
-      env: envFor(fx.repo, { DNR_RECORD_PATH: out }),
+    const io = await runPreWrite(writeEvent(fx.repo, 'shop.py', AFTER, 'sess-rec'), {
+      env: envFor(fx.repo, { DNR_RECORD_PATH: out, DNR_MODE: 'record' }),
     });
     expect(io.exitCode).toBe(0);
     const e = JSON.parse(readFileSync(out, 'utf8').trim());
@@ -387,15 +390,78 @@ describe('fail open', () => {
     expect(readEventsFile(fx.repo).at(-1)?.decision.outcome).toBe('error_open');
   });
 
-  it('R7: an invalid config (injected fault) allows the write and logs', async () => {
-    fx = await revertFixture();
-    fx.repo.write('.dnr/config.json', '{"threshold": "high"}');
-    const io = await runPreWrite(writeEvent(fx.repo, 'shop.py', AFTER), { env: envFor(fx.repo) });
-    expect(io.exitCode).toBe(0);
-    expect(readFileSync(join(fx.repo.dir, '.dnr', 'hook.log'), 'utf8')).toMatch(
-      /error_open hook=pre-write ConfigError/,
-    );
+  it('C1: invalid config does not fail open (defaults apply, the issue is logged)', async () => {
+    for (const bad of ['{"threshold": "high"}', '{"threshold":2}', 'not json', '{"min_order_weight":-1}']) {
+      fx = await revertFixture();
+      fx.repo.write('.dnr/config.json', bad);
+      const io = await runPreWrite(writeEvent(fx.repo, 'shop.py', AFTER), { env: envFor(fx.repo) });
+      expect(io.exitCode, bad).toBe(2);
+      expect(readFileSync(join(fx.repo.dir, '.dnr', 'hook.log'), 'utf8')).toContain('config: config is');
+      expect(readEventsFile(fx.repo).at(-1)?.decision.outcome).toBe('block');
+      fx.repo.cleanup();
+      fx = null;
+    }
   });
+
+  it('C1: a committed config wins over a weaker working-copy edit', async () => {
+    fx = await revertFixture();
+    fx.repo.write('.dnr/config.json', '{"mode":"enforce"}\n');
+    fx.repo.commit('config');
+    fx.repo.write('.dnr/config.json', '{"mode":"warn-only","threshold":1}\n');
+    const io = await runPreWrite(writeEvent(fx.repo, 'shop.py', AFTER), { env: envFor(fx.repo) });
+    expect(io.exitCode).toBe(2);
+    expect(readEventsFile(fx.repo).at(-1)?.decision.outcome).toBe('block');
+  });
+
+  it('C1: a committed order wins over a working copy that retires, corrupts or deletes it', async () => {
+    for (const tamper of ['retire', 'corrupt', 'delete'] as const) {
+      fx = await revertFixture();
+      fx.repo.commit('commit the order');
+      const file = join(fx.repo.dir, '.dnr', 'orders', `${fx.order.id}.json`);
+      if (tamper === 'retire')
+        writeFileSync(file, readFileSync(file, 'utf8').replace('"approved"', '"retired"'));
+      if (tamper === 'corrupt') writeFileSync(file, '{"x"');
+      if (tamper === 'delete') require('node:fs').rmSync(file);
+      const io = await runPreWrite(writeEvent(fx.repo, 'shop.py', AFTER), { env: envFor(fx.repo) });
+      expect(io.exitCode, tamper).toBe(2);
+      fx.repo.cleanup();
+      fx = null;
+    }
+  });
+
+  it('C1: a corrupt, unreadable or deleted session is rebuilt from the committed tree, not a reason to allow', async () => {
+    for (const tamper of ['garble', 'delete'] as const) {
+      fx = await revertFixture();
+      fx.repo.commit('commit order');
+      const env = envFor(fx.repo);
+      await runPreWrite(writeEvent(fx.repo, 'notes.txt', 'n\n'), { env });
+      // The agent lands the re-application through the shell, then destroys the session.
+      fx.repo.write('shop.py', AFTER);
+      const dir = join(fx.repo.dir, '.dnr', 'sessions');
+      for (const n of require('node:fs').readdirSync(dir) as string[]) {
+        if (tamper === 'garble') writeFileSync(join(dir, n), 'x');
+        else require('node:fs').rmSync(join(dir, n));
+      }
+      const io = await runPreWrite(writeEvent(fx.repo, 'shop.py', AFTER), { env });
+      expect(io.exitCode, tamper).toBe(2);
+      expect(readFileSync(join(fx.repo.dir, '.dnr', 'hook.log'), 'utf8')).toContain(
+        'rebuilt with the committed tree',
+      );
+      fx.repo.cleanup();
+      fx = null;
+    }
+  });
+
+  it('C1: a lock file the agent holds does not make the hook fail open', async () => {
+    fx = await revertFixture();
+    const env = envFor(fx.repo);
+    await runPreWrite(writeEvent(fx.repo, 'notes.txt', 'n\n'), { env });
+    const dir = join(fx.repo.dir, '.dnr', 'sessions');
+    for (const n of require('node:fs').readdirSync(dir) as string[])
+      writeFileSync(join(dir, `${n}.lock`), `${process.pid}\n`);
+    const io = await runPreWrite(writeEvent(fx.repo, 'shop.py', AFTER), { env });
+    expect(io.exitCode).toBe(2);
+  }, 15_000);
 
   it('R7: a timeout allows the write and logs', async () => {
     fx = await revertFixture();
@@ -508,5 +574,78 @@ describe('config and env', () => {
       process.stderr.write = orig;
     }
     expect(captured).toContain('DNR debug:');
+  });
+});
+
+describe('case-insensitive filesystems', () => {
+  const ci = (() => {
+    const d = mkdtempSync(join(tmpdir(), 'dnr-ci-'));
+    writeFileSync(join(d, 'probe'), '');
+    return require('node:fs').existsSync(join(d, 'PROBE'));
+  })();
+
+  it.skipIf(!ci)(
+    'C2: a case-variant path to a covered file is still blocked (pre-write and Stop)',
+    async () => {
+      for (const variant of ['Shop.py', 'SHOP.PY', 'shop.PY']) {
+        fx = await revertFixture();
+        const env = envFor(fx.repo);
+        const io = await runPreWrite(writeEvent(fx.repo, variant, AFTER), { env });
+        expect(io.exitCode, variant).toBe(2);
+        expect(io.stderr, variant).toContain('matched (edit 1.00');
+        // If it lands anyway (e.g. via the shell), Stop still scores it.
+        fx.repo.write(variant, AFTER);
+        const { runStop } = await import('../src/stop');
+        const st = await runStop(
+          JSON.stringify({ hook_event_name: 'Stop', cwd: fx.repo.dir, session_id: 'sess-1' }),
+          { env },
+        );
+        expect(st.stdout, variant).toContain(`re-apply ${fx.order.id}`);
+        fx.repo.cleanup();
+        fx = null;
+      }
+    },
+  );
+
+  it.skipIf(!ci)('C2: case-variant protected paths stay denied', async () => {
+    fx = await revertFixture();
+    for (const t of ['.DNR/config.json', '.Kiro/Hooks/x.json', '.GIT/HOOKS/pre-commit', '.git/CONFIG']) {
+      const io = await runPreWrite(writeEvent(fx.repo, t, '{}'), { env: envFor(fx.repo) });
+      expect(io.exitCode, t).toBe(2);
+    }
+  });
+});
+
+describe('protect tier additions (wave-2 H2)', () => {
+  it('H2: .git/config, .git/hooks/** and .kiro/steering/dnr.md are protected; deleting a parent of a protected path is denied', async () => {
+    fx = await revertFixture();
+    const env = envFor(fx.repo);
+    for (const t of ['.git/config', '.git/hooks/post-commit', '.kiro/steering/dnr.md']) {
+      const io = await runPreWrite(writeEvent(fx.repo, t, 'x'), { env });
+      expect(io.exitCode, t).toBe(2);
+    }
+    for (const d of ['.kiro', '.dnr', '.git', '.']) {
+      const io = await runPreWrite(event(fx.repo, 'delete_file', { path: d }), { env });
+      expect(io.exitCode, d).toBe(2);
+    }
+    expect((await runPreWrite(event(fx.repo, 'delete_file', { path: 'notes.txt' }), { env })).exitCode).toBe(
+      0,
+    );
+    expect((await runPreWrite(writeEvent(fx.repo, '.kiro/steering/product.md', 'x'), { env })).exitCode).toBe(
+      0,
+    );
+  });
+});
+
+describe('message wording (wave-2 lows)', () => {
+  it('L2: the unknown-tool warning names the file instead of "a unit it covers"', async () => {
+    fx = await revertFixture();
+    const io = await runPreWrite(event(fx.repo, 'fs_patch', { path: 'shop.py', patch: '…' }), {
+      env: envFor(fx.repo),
+    });
+    expect(io.stderr).toContain(
+      `DNR order ${fx.order.id} covers shop.py, which this write changes (the tool is not one DNR can score)`,
+    );
+    expect(io.stderr).not.toContain('a unit it covers');
   });
 });

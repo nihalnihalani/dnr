@@ -7,7 +7,7 @@
  */
 import { readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { applyTool, isProtected, protectedGlobs } from '@dnr/core';
+import { applyTool, isProtected, normalizePath, protectedGlobs } from '@dnr/core';
 import type { Decision, EventRecord, Order } from '@dnr/schemas';
 import { ASK_PENDING_TTL_MS, sha256 } from '@dnr/store';
 import {
@@ -22,8 +22,8 @@ import {
   makeEvent,
   OK,
   openContext,
-  prepareSession,
   sessionPatch,
+  withSession,
 } from './context';
 import { contributingQualnames, createState, decideWrite, filesOf, loadParser, UnitCache } from './engine';
 import { parseHookEvent } from './event';
@@ -31,6 +31,7 @@ import { failOpen } from './failopen';
 import { blockText, protectMessage, warnMessage } from './messages';
 import { loadEntries } from './orders';
 import { BlobReader, readWorktree, realpathLoose, repoRelative } from './repo';
+import { coverageOf } from './trusted';
 
 /**
  * The git hooks directory (`.git/hooks`, or `core.hooksPath`) without spawning git. Protected so an
@@ -54,11 +55,29 @@ export function gitHooksDirs(repoRoot: string): string[] {
   return out;
 }
 
+/** `.git` (or the worktree's gitdir) for the git-config protection (wave-2 H2). */
+export function gitDirOf(repoRoot: string): string {
+  const g = join(repoRoot, '.git');
+  try {
+    if (statSync(g).isFile()) {
+      const m = /^gitdir:\s*(.+)$/m.exec(readFileSync(g, 'utf8'));
+      if (m?.[1]) return resolve(repoRoot, m[1].trim());
+    }
+  } catch {}
+  return g;
+}
+
 export function protectRoots(ctx: HookContext, env: NodeJS.ProcessEnv): string[] {
   const p = ctx.store.paths;
   const hooks = gitHooksDirs(ctx.repoRoot).map((d) => `${realpathLoose(d)}/**`);
+  const gitDir = realpathLoose(gitDirOf(ctx.repoRoot));
   return [
     ...hooks,
+    // Additions beyond §5.4 (wave-2 H2): git config can disable hooks or alias commands, and the
+    // shipped steering tells the agent not to route around blocks.
+    `${gitDir}/config`,
+    `${gitDir}/config.worktree`,
+    `${realpathLoose(ctx.repoRoot)}/.kiro/steering/dnr.md`,
     ...protectedGlobs({
       repoRoot: realpathLoose(ctx.repoRoot),
       home: env.HOME ? realpathLoose(env.HOME) : null,
@@ -71,6 +90,21 @@ export function protectRoots(ctx: HookContext, env: NodeJS.ProcessEnv): string[]
 
 export function isProtectedPath(ctx: HookContext, env: NodeJS.ProcessEnv, absPath: string): boolean {
   return isProtected(realpathLoose(absPath), protectRoots(ctx, env));
+}
+
+/**
+ * True when removing or replacing `absPath` would remove a protected path: the path is protected,
+ * or it is a directory that contains one (`.kiro`, `.git`, `.dnr`, the repo root). Wave-2 H2.
+ */
+export function wouldRemoveProtected(ctx: HookContext, env: NodeJS.ProcessEnv, absPath: string): boolean {
+  if (isProtectedPath(ctx, env, absPath)) return true;
+  const fold = (s: string) => s.toLowerCase();
+  const p = fold(normalizePath(realpathLoose(absPath)));
+  for (const raw of protectRoots(ctx, env)) {
+    const target = fold(normalizePath(raw.endsWith('/**') ? raw.slice(0, -3) : raw));
+    if (target === p || target.startsWith(p === '/' ? '/' : `${p}/`)) return true;
+  }
+  return false;
 }
 
 /** Render a decision as hook output for the configured format (§6, §8 exit codes). */
@@ -128,12 +162,19 @@ export async function preWrite(stdin: string, opts: HookOptions = {}): Promise<H
   });
   const rawPath = effect.kind === 'none' ? null : effect.path;
   const absTarget = rawPath ? toAbs(rawPath) : null;
-  const isProt = absTarget ? isProtectedPath(ctx, env, absTarget) : false;
-  const rel = rawPath ? relOf(rawPath) : null;
+  const deleting = effect.kind === 'write' && effect.text === null;
+  const isProt = absTarget
+    ? deleting
+      ? wouldRemoveProtected(ctx, env, absTarget)
+      : isProtectedPath(ctx, env, absTarget)
+    : false;
+  const coverage = coverageOf(ctx.trusted.orders, ctx.fold);
+  const relRaw = rawPath ? relOf(rawPath) : null;
+  // On a case-insensitive filesystem, use the spelling the orders use (wave-2 C2).
+  const rel = relRaw && ctx.fold ? (canonicalSpelling(ctx.trusted.orders, relRaw) ?? relRaw) : relRaw;
 
   const events: EventRecord[] = [];
-  const io = await ctx.store.sessions.with(key.key, async (cur) => {
-    const prep = await prepareSession(ctx, key, cur, 'pre-write');
+  const io = await withSession(ctx, key, 'pre-write', async (prep) => {
     const s = prep.session;
     events.push(...prep.events);
     const finish = (
@@ -169,11 +210,11 @@ export async function preWrite(stdin: string, opts: HookOptions = {}): Promise<H
         fast_path: true,
       });
       const shown = finish(d, record ? { proposed_text: effect.kind === 'write' ? effect.text : null } : {});
-      return { session: s, result: renderDecision(ctx, shown, null, protectMessage(rel ?? absTarget)) };
+      return renderDecision(ctx, shown, null, protectMessage(rel ?? absTarget));
     }
     if (rel === null || effect.kind === 'none') {
       finish(baseDecision({ outcome: 'allow', tier: 'none', fast_path: true }));
-      return { session: s, result: { ...OK } };
+      return { ...OK };
     }
     addTouched(s, rel);
     if (effect.kind === 'passthrough') {
@@ -185,13 +226,11 @@ export async function preWrite(stdin: string, opts: HookOptions = {}): Promise<H
           breakdown: [{ passthrough: effect.reason }],
         }),
       );
-      return { session: s, result: { ...OK } };
+      return { ...OK };
     }
 
     // Fast path: no approved order covers the target (no grammar load, no parse).
-    const covering = (ctx.store.orders.coverage().get(rel) ?? [])
-      .filter((c) => c.status === 'approved')
-      .map((c) => c.id);
+    const covering = coverage.get(ctx.fold ? rel.toLowerCase() : rel) ?? [];
     if (covering.length === 0) {
       let extra = {};
       if (record) {
@@ -208,7 +247,7 @@ export async function preWrite(stdin: string, opts: HookOptions = {}): Promise<H
         };
       }
       finish(baseDecision({ outcome: 'allow', tier: 'none', fast_path: true }), extra);
-      return { session: s, result: { ...OK } };
+      return { ...OK };
     }
 
     const parser = await loadParser();
@@ -249,7 +288,7 @@ export async function preWrite(stdin: string, opts: HookOptions = {}): Promise<H
     const shown = finish(d, extra);
     if (record) {
       if (r.effects.warn && !s.warned.includes(r.effects.warn)) s.warned.push(r.effects.warn);
-      return { session: s, result: { ...OK } };
+      return { ...OK };
     }
 
     // Apply effects to the session (§5.4, §5.7).
@@ -288,9 +327,10 @@ export async function preWrite(stdin: string, opts: HookOptions = {}): Promise<H
         qualnames: contributingQualnames(r, order.id),
         threshold: ctx.config.threshold,
         downgraded,
+        file: rel,
       });
     }
-    return { session: s, result: renderDecision(ctx, shown, order, text) };
+    return renderDecision(ctx, shown, order, text);
   });
   await appendEvents(ctx, events);
   return io;
@@ -299,4 +339,11 @@ export async function preWrite(stdin: string, opts: HookOptions = {}): Promise<H
 /** Entry point with fail-open. */
 export function runPreWrite(stdin: string, opts: HookOptions = {}): Promise<HookIO> {
   return failOpen('pre-write', stdin, opts, () => preWrite(stdin, opts));
+}
+
+/** The spelling an effective order uses for `rel`, compared case-insensitively. */
+export function canonicalSpelling(orders: Map<string, Order>, rel: string): string | null {
+  const low = rel.toLowerCase();
+  for (const o of orders.values()) for (const u of o.units) if (u.file.toLowerCase() === low) return u.file;
+  return null;
 }

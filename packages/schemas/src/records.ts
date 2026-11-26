@@ -64,6 +64,15 @@ export const Grant = z.object({
   expires_at: Iso, // a commit is allowed whenever the grant applies (§5.4); no separate count
   used: z.array(z.object({ at: Iso, event_id: z.string(), kind: z.enum(['write', 'commit', 'backstop']) })),
   blobs: z.array(z.object({ file: RepoPath, sha256: z.string() })), // files produced by grant-covered writes (§5.7)
+  // Addition beyond §7 (lead decision, wave-2 review C3/H4): how the grant was made, and whether it
+  // looks agent-made. Optional so grant files written before it stay valid.
+  origin: z
+    .object({
+      via: z.enum(['cli', 'board', 'ask']),
+      suspect: z.boolean(), // created while an agent session was active, or with agent markers seen
+      markers: z.array(z.string()), // e.g. 'env:KIRO_SESSION_ID', 'ancestor:kiro-cli', 'no-tty', 'active-session:<key8>'
+    })
+    .optional(),
 });
 export type Grant = z.infer<typeof Grant>;
 

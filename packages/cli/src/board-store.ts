@@ -4,7 +4,7 @@
  */
 import { relative } from 'node:path';
 import { catBlobs } from '@dnr/git';
-import type { EffectiveStatus, HookContext } from '@dnr/hook';
+import { type EffectiveStatus, grantOrigin, type HookContext } from '@dnr/hook';
 import { Order } from '@dnr/schemas';
 import {
   nowIso,
@@ -93,13 +93,22 @@ export function createBoardStore(ctx: HookContext, errors: BoardErrors) {
     allowOnce: (id: string, ttlSeconds: number, by: string) =>
       wrap(async () => {
         await store.orders.require(id);
+        const at = nowMs(ctx.env);
+        const origin = await grantOrigin({
+          via: 'board',
+          store,
+          env: ctx.env,
+          now: at,
+          sessionTtlMinutes: ctx.config.session_ttl_minutes,
+        });
         return store.grants.create({
           order_id: id,
           kind: 'allow_once',
           session_key: null,
           granted_by: by,
           ttl_ms: ttlSeconds * 1000,
-          at: nowMs(ctx.env),
+          at,
+          origin,
         });
       }),
     listGrants: (orderId?: string) => store.grants.list(orderId),

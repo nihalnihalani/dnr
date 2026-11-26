@@ -38,6 +38,8 @@ export interface LockOptions {
   timeoutMs?: number;
   /** A lock file older than this is considered abandoned and removed (default 10,000). */
   staleMs?: number;
+  /** Throw LockTimeoutError instead of breaking the lock at the timeout. */
+  failOnTimeout?: boolean;
 }
 
 export class LockTimeoutError extends Error {
@@ -95,7 +97,15 @@ export async function withLock<T>(path: string, fn: () => Promise<T>, opts: Lock
       } catch {}
       continue;
     }
-    if (Date.now() - start > timeout) throw new LockTimeoutError(lockPath);
+    if (Date.now() - start > timeout) {
+      // A lock held past the timeout is treated as abandoned or hostile (wave-2 C1): a lock file
+      // must never be a way to make DNR fail open. Break it unless the caller asked to fail.
+      if (opts.failOnTimeout) throw new LockTimeoutError(lockPath);
+      try {
+        unlinkSync(lockPath);
+      } catch {}
+      continue;
+    }
     await sleep(delay);
     delay = Math.min(delay * 2, 50);
   }

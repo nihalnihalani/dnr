@@ -1,5 +1,6 @@
 /** `dnr guard-shell --stdin`, `dnr session start|confirm|shell-after|show|end|gc`, `dnr allow`. */
 import {
+  grantOrigin,
   parseHookEvent,
   runGuardShell,
   runSessionConfirm,
@@ -117,14 +118,28 @@ export async function cmdAllow(argv: string[], io: CliIO): Promise<number> {
   const ctx = await repoContext(io, { ...(v.orders ? { orders: str(v.orders) as string } : {}) });
   const order = await ctx.store.orders.get(id);
   if (!order) throw new CliError(`DNR: no order ${id}`, EXIT.USAGE);
+  const at = nowMs(io.env);
+  const origin = await grantOrigin({
+    via: 'cli',
+    store: ctx.store,
+    env: io.env,
+    now: at,
+    sessionTtlMinutes: ctx.config.session_ttl_minutes,
+    ...(io.processChain ? { chain: io.processChain() } : {}),
+  });
   const g = await ctx.store.grants.create({
     order_id: id,
     kind: 'allow_once',
     session_key: null,
     granted_by: str(v.by) ?? io.env.USER ?? 'human',
     ttl_ms: ttl,
-    at: nowMs(io.env),
+    at,
+    origin,
   });
+  if (origin.suspect)
+    io.err(
+      `DNR: note: this grant is flagged suspect (${origin.markers.join(', ')}); Stop, \`dnr orders show\` and the board will say so.\n`,
+    );
   if (order.status !== 'approved')
     io.err(`DNR: note: ${id} is ${order.status}, so it does not block anyway.\n`);
   io.out(`DNR: allowed ${id} once, for the current or next agent session, until ${g.expires_at}.\n`);
