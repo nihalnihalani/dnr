@@ -33,6 +33,15 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - name: Require the Cloudflare secrets
+        env:
+          CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CF_TOKEN" ] || [ -z "$CF_ACCOUNT" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID are not set (plan Phase 0, Accounts). Add them with gh secret set."
+            exit 1
+          fi
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
       - id: deploy
@@ -40,8 +49,11 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          # wrangler is a devDependency of the playground package, so the action uses it
+          # instead of trying to `pnpm add` it at the workspace root.
+          workingDirectory: apps/playground
           command: >-
-            pages deploy apps/playground/dist --project-name=dnr-playground
+            pages deploy dist --project-name=dnr-playground
             --branch=${{ github.event_name == 'pull_request' && github.head_ref || 'main' }}
       - name: Smoke test the deployment
         if: hashFiles('apps/playground/playwright.config.ts') != ''

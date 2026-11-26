@@ -24,6 +24,7 @@
     "@axe-core/playwright": "4.14.1",
     "@dnr/board": "workspace:*",
     "@dnr/grammar": "workspace:*",
+    "@dnr/store": "workspace:*",
     "@dnr/testkit": "workspace:*",
     "@playwright/test": "1.65.1",
     "@types/react": "19.3.3",
@@ -32,6 +33,6 @@
     "diff": "9.0.0",
     "lighthouse": "12.8.2",
     "vite": "8.4.0",
-    "@dnr/store": "workspace:*"
+    "wrangler": "4.168.0"
   }
 }
