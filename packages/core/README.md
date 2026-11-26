@@ -34,6 +34,7 @@ const { decision, effects } = decide({
 ### Tokens and weights (§5.1, §5.15)
 - `tokenize(provider, grammar, text): Token[]` and `tokenizeTree(root, grammar, text): Token[]`. `Token = { key, start, end, row, inError }`.
 - `tokenWeight(key, grammar): 0 | 1`, `weightOf(tokens, grammar): number` (that is, w()), `weightSet(grammar)`, `NORMALIZER_VERSION`.
+- `unitWeights(orderUnit): { wA, wR }` and `orderWeight(order): number`. Use these, not `A.length`: A and R include weight-0 tokens. For example, dnr-43933a1dca has |A| = 31 but w(A) = 16.
 - `TYPE_ARG_OPEN` (`‹`) and `TYPE_ARG_CLOSE` (`›`) are the token keys of TS `<` and `>` inside type arguments and type parameters.
 
 ### Units and qualnames (§5.2–5.3)
@@ -50,6 +51,7 @@ const { decision, effects } = decide({
 - `buildOrder(input: BuildOrderInput): { ok: true; order; material; changes } | { ok: false; skip_reason: 'no-unit-change' }`. The input is `{ provider, original_sha, revert_sha, snapshot_sha, files: {path, before, after, post_revert}[], links, tickets?, reason?, reason_source?, status? ('draft'), at, by? }`. The output is deterministic: files are sorted by path.
 - `extractUnitChanges(provider, {path, before, after}): UnitChange[]` returns the changed units of one file (`{ file, qualname, grammar, kind, A, R, before, after }`), with formatting-only units skipped. Mining's rule E5 uses it.
 - `changedLines(before, after): { old: number[]; new: number[] }` gives the `git diff -U0` line sets.
+- Test paths are never order units. `buildOrder({ testGlobs })` and `extractUnitChanges(p, f, { testGlobs })` default to `DEFAULT_TEST_GLOBS` (config `test_globs`). Use `isTestPath(path, globs)` and `matchesGlob(path, glob)` to check a path yourself.
 - `orderId(revertSha | null, originalSha)`, `unitHash(tokens)` (the `post_revert_hash`), `sha256Hex(str)`.
 - `materialFromTexts(provider, order, cText(file), snapshotText(file)): Map<unitKey, {C, PR}>` rebuilds the order material from `c_state_ref` and snapshot texts.
 
@@ -74,10 +76,11 @@ const { decision, effects } = decide({
   - Input: `{ target, protected?, unknownTool?, orders: {order, stale?, relanded?, material?}[], baseline, current, proposed, searchFiles?, warned?, grantApplies?, config?: { ...MatchConfig, decision_format: 'deny'|'ask', mode: 'enforce'|'warn-only' }, now? }`.
   - Only `approved` orders are used. Stale and re-landed orders only warn.
   - A write to a file that no order covers takes the fast path (`fast_path: true`) and is not parsed.
+  - A missing covered unit scores as unmatched (it does not cap the order); a degraded unit still caps it at warn (§5.1).
   - Outcomes: `deny_protected`, `block` or `ask`, `warn_block` (`effects.warn` = the order to add to `Session.warned`), `allow_grant` (match or warn tier; `effects.grantsUsed`), `warn_pass`, `allow`.
   - Record and commit-enforce modes are left to the hook.
 - `reasonLine(order)` returns `DNR: <reason> <revert URL>`.
-- `blockMessage(order, decision, { qualnames?, threshold? })` returns the three-line stderr text from §6, at most 1,200 characters.
+- `blockMessage(order, decision, { qualnames?, threshold? })` returns the three-line stderr text from §6, at most 1,200 characters. To fit, it shortens the qualname list, then the links, then the reason. The "Do not … route around this block" line is never cut.
 
 ### Tool adapters (§5.8)
 - `applyTool(tool, input, readCurrent(path)): ToolEffect` returns one of:
@@ -97,7 +100,7 @@ const { decision, effects } = decide({
 3. **Python f-strings** are one token, because §5.1 says each string literal is one token. Only the §5.15 TS rule splits template literals.
 4. **Formatting-only:** a unit whose diff is all weight-0 tokens is skipped, the same as a pure whitespace or comment change.
 5. **`parse-degraded`** is measured over the unit's token text: more than 20% of it under ERROR nodes.
-6. **Missing `kind=modified` unit:** when relocation does not find it, the whole order is capped at the warn tier for that state.
+6. **Missing `kind=modified` unit** (absent, not relocated): it is scored as *unmatched*. Its w(A)+w(R) stays in the denominator, both intersections are 0, and the order is flagged `missing` for reporting only. §5.5 says such a unit goes to "the warn tier" but does not say whether the whole order is capped. A whole-order cap would let an agent re-apply one unit and delete another to earn only a warn (review H6), so the cap is not used. A write that deletes a covered unit still changes it, so it warns when the order does not match.
 7. **Warn tier "changes a covered unit"** is measured against the session state just before this write (token sequences), so a formatting-only write never warns.
 8. **Proximity size(C_u)** is the number of weight-1 tokens in C_u. J(∅, ∅) = 0.
 9. **Fingerprint search** treats typescript and tsx as one vocabulary and excludes the order's own unit locations.

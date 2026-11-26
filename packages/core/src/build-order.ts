@@ -5,6 +5,7 @@
 import type { Order, OrderUnit } from '@dnr/schemas';
 import { diffLines } from 'diff';
 import { diffTokens } from './diff';
+import { DEFAULT_TEST_GLOBS, isTestPath } from './glob';
 import { type UnitMaterial, unitKey } from './material';
 import { sha256Hex } from './sha256';
 import { type GrammarId, grammarForPath, type ParserProvider } from './syntax';
@@ -63,9 +64,12 @@ export function changedLines(before: string, after: string): { old: number[]; ne
 export function extractUnitChanges(
   provider: ParserProvider,
   file: Pick<BuildOrderFile, 'path' | 'before' | 'after'>,
+  opts: { testGlobs?: readonly string[] } = {},
 ): UnitChange[] {
   const grammar = grammarForPath(file.path);
   if (!grammar) return [];
+  // Test paths are never order units: restored tests are the trial's oracle (§9.1 step 7, §9.4).
+  if (isTestPath(file.path, opts.testGlobs ?? DEFAULT_TEST_GLOBS)) return [];
   const before = file.before ?? '';
   const after = file.after ?? '';
   const bu = file.before === null ? null : extractUnits(provider, file.path, before);
@@ -125,6 +129,8 @@ export interface BuildOrderInput {
   /** ISO time for created_at/updated_at/history. */
   at: string;
   by?: string;
+  /** Paths excluded from the order (config `test_globs`); defaults to DEFAULT_TEST_GLOBS. */
+  testGlobs?: readonly string[];
 }
 
 export type BuildOrderResult =
@@ -147,7 +153,11 @@ export function buildOrder(input: BuildOrderInput): BuildOrderResult {
   const changes: UnitChange[] = [];
   const material = new Map<string, UnitMaterial>();
   for (const f of files) {
-    const fileChanges = extractUnitChanges(input.provider, f);
+    const fileChanges = extractUnitChanges(
+      input.provider,
+      f,
+      input.testGlobs ? { testGlobs: input.testGlobs } : {},
+    );
     if (fileChanges.length === 0) continue;
     const pr: FileUnits | null =
       f.post_revert === null ? null : extractUnits(input.provider, f.path, f.post_revert);

@@ -52,3 +52,30 @@ export function weightOf(tokens: readonly string[], grammar: GrammarId): number 
   for (const t of tokens) if (!w0.has(t)) n++;
   return n;
 }
+
+/**
+ * w(A) and w(R) of one order unit. Use this, not `A.length`: the token arrays include
+ * weight-0 punctuation (§5.1), which never counts.
+ */
+export function unitWeights(u: {
+  A: readonly string[];
+  R: readonly string[];
+  tokenizer: { grammar: GrammarId };
+}): {
+  wA: number;
+  wR: number;
+} {
+  return { wA: weightOf(u.A, u.tokenizer.grammar), wR: weightOf(u.R, u.tokenizer.grammar) };
+}
+
+/** The whole order's w(A) + w(R), compared with `min_order_weight` (§5.5 small-order rule). */
+export function orderWeight(order: {
+  units: ReadonlyArray<{ A: readonly string[]; R: readonly string[]; tokenizer: { grammar: GrammarId } }>;
+}): number {
+  let n = 0;
+  for (const u of order.units) {
+    const w = unitWeights(u);
+    n += w.wA + w.wR;
+  }
+  return n;
+}

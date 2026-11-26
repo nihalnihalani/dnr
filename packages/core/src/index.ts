@@ -30,6 +30,7 @@ export {
 } from './decide';
 export { diffTokens, sameTokens, type TokenDiff } from './diff';
 export { type Relocation, relocateUnit } from './fingerprint';
+export { DEFAULT_TEST_GLOBS, globToRegExp, isTestPath, matchesGlob } from './glob';
 export {
   fingerprintsOf,
   type OrderMaterial,

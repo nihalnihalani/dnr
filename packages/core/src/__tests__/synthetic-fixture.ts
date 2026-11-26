@@ -1,7 +1,8 @@
 /**
- * A small Django-like fixture (written for these tests, modelled on the shape of
- * django/db/models/sql/query.py): C adds a select-related guard to Query.set_group_by and
- * removes an `allow_aliases` branch; the revert restores the original.
+ * SYNTHETIC fixture: invented for these tests, not taken from Django. Django never made this
+ * change. It is a query-builder-shaped Python module where an invented commit C rewrites
+ * `Query.set_group_by`, and the invented revert restores it. The real demo case
+ * (dnr-43933a1dca, `Query.clear_ordering`) is tested from real texts in `django-43933a1dca.test.ts`.
  */
 export const BEFORE = `"""SQL query construction."""
 from itertools import chain

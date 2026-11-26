@@ -338,7 +338,7 @@ describe('P10: a grant applies only to its own order', () => {
 });
 
 describe('P12: after a re-land is committed, a later unrelated edit is allowed', () => {
-  it('holds with the re-landed state as the session baseline', () => {
+  it('the re-landed flag matters: commit-time checks after a re-land never cross, and covered edits only warn', () => {
     fc.assert(
       fc.property(modsArb(), freshPicks, ([lang, mods], picks) => {
         const c = mk(lang, mods);
@@ -346,8 +346,10 @@ describe('P12: after a re-land is committed, a later unrelated edit is allowed',
         if (!c) return;
         const snap = stateOf(c, []);
         const head = stateOf(c, c.ids);
-        const relanded = isRelanded(c.entry.order, snap, head);
-        // an unrelated edit: a new function made of fresh tokens appended to the first file
+        fc.pre(scoreOrder(c.entry.order, snap, head).matched);
+        // the re-land is committed: HEAD matches the order against its post-revert snapshot
+        expect(isRelanded(c.entry.order, snap, head)).toBe(true);
+        // an unrelated edit: a new function made of fresh tokens appended to an order file
         const f0 = c.files.find((f) => f.path === orderFile(c));
         if (!f0) return;
         const extra = render(
@@ -369,15 +371,37 @@ describe('P12: after a re-land is committed, a later unrelated edit is allowed',
           new Set(),
         );
         const headTexts = texts(c.files, c.ids);
-        const edited = { ...headTexts, [f0.path]: `${headTexts[f0.path]}\n\n${extra}` };
-        const d = decide({
+        const next = createState({ ...headTexts, [f0.path]: `${headTexts[f0.path]}\n\n${extra}` }, c.cache);
+        // 1. commit time (--staged/--commit): the later commit is not a crossing, so it is allowed
+        expect(isCrossing(c.entry.order, snap, head, next).crossing).toBe(false);
+        // 2. write time, session started at HEAD: the unrelated edit is allowed
+        const later = decide({
           target: f0.path,
-          orders: [{ ...c.entry, relanded }],
+          orders: [{ ...c.entry, relanded: true }],
           baseline: head,
           current: head,
-          proposed: createState(edited, c.cache),
+          proposed: next,
         });
-        expect(d.decision.outcome).toBe('allow');
+        expect(later.decision.outcome).toBe('allow');
+        // 3. the flag itself: from a snapshot baseline, the re-landed state touches covered units.
+        //    With relanded it only warns; without the flag the same write blocks.
+        const target = orderFile(c);
+        const flagged = decide({
+          target,
+          orders: [{ ...c.entry, relanded: true }],
+          baseline: snap,
+          current: snap,
+          proposed: head,
+        });
+        const unflagged = decide({
+          target,
+          orders: [{ ...c.entry, relanded: false }],
+          baseline: snap,
+          current: snap,
+          proposed: head,
+        });
+        expect(flagged.decision.outcome).toBe('warn_block');
+        expect(unflagged.decision.outcome).toBe('block');
       }),
       opts,
     );

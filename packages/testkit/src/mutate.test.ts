@@ -3,7 +3,16 @@ import { loadGrammarsNode } from '@dnr/grammar/node';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { LINKS, SHA_C, SHA_R, SHA_S } from './cases';
 import { MUTATION_FIXTURES, type MutationFixture } from './fixtures';
-import { MUTATION_FAMILIES, type Mutant, mutants, mutate, SEEDS, seedsFor } from './mutate';
+import {
+  MUTATION_FAMILIES,
+  type Mutant,
+  MutantShortfallError,
+  mutantSet,
+  mutants,
+  mutate,
+  SEEDS,
+  seedsFor,
+} from './mutate';
 
 let P: ParserProvider;
 beforeAll(async () => {
@@ -43,6 +52,36 @@ function parsesClean(path: string, text: string): boolean {
   t.delete?.();
   return ok;
 }
+
+describe('M4: no silent mutant shortfall', () => {
+  it('mutantSet reports seeds that produced no mutant, and mutants() throws', () => {
+    // a unit with no if-statement: invert-condition cannot apply to any seed
+    const path = 'm.py';
+    const before = 'def f(a):\n    return a\n';
+    const after = 'def f(a):\n    b = a * 2\n    return b\n';
+    const r = buildOrder({
+      provider: P,
+      original_sha: SHA_C,
+      revert_sha: SHA_R,
+      snapshot_sha: SHA_S,
+      files: [{ path, before, after, post_revert: before }],
+      links: LINKS,
+      at: '2026-11-26T00:00:00Z',
+    });
+    if (!r.ok) throw new Error('no order');
+    const inp = {
+      provider: P,
+      family: 'invert-condition' as const,
+      revertSha: SHA_R,
+      files: [{ path, text: after, baseline: before }],
+      units: r.order.units.map((u) => ({ file: u.file, qualname: u.qualname })),
+    };
+    const set = mutantSet(inp);
+    expect(set).toMatchObject({ expected: 5, mutants: [], missing: SEEDS.heldOut });
+    expect(() => mutants(inp)).toThrow(MutantShortfallError);
+    expect(() => mutants(inp)).toThrow(/produced 0 of 5 valid mutants/);
+  });
+});
 
 describe('seeds', () => {
   it('match the plan', () => {

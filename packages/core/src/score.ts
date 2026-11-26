@@ -30,7 +30,7 @@ export interface UnitScore {
   /**
    * Where the proposed unit came from: `present` (same file and qualname), `empty` (absent and
    * scored as `[]` per §5.5), `relocated` (found by the fingerprint index), `missing` (kind=modified,
-   * absent and not relocated: the order can only warn).
+   * absent and not relocated: scored as unmatched; it adds weight to the denominator only).
    */
   proposed: ProposedSource;
   relocated_to: { file: string; qualname: string; similarity: number } | null;
@@ -53,13 +53,13 @@ export interface OrderScore {
   small: boolean;
   /** A proposed unit is parse-degraded. */
   degraded: boolean;
-  /** A kind=modified unit is missing and was not relocated. */
+  /** A kind=modified unit is missing and was not relocated (reporting only: the unit scores as unmatched). */
   missing: boolean;
   /** Proximity score, or null (disabled, no material, or every unit removed). */
   prox: number | null;
   edit_fires: boolean;
   prox_fires: boolean;
-  /** match(state): fires and is not capped by the small-order, degraded or missing rules. Stale is applied by the caller. */
+  /** match(state): fires and is not capped by the small-order or degraded rules. Stale is applied by the caller. */
   matched: boolean;
   fired_by: 'edit' | 'prox' | null;
   units: UnitScore[];
@@ -130,8 +130,12 @@ export function scoreOrder(
     const d = diffTokens(baseTokens, propTokens);
     const uwA = weightOf(u.A, g);
     const uwR = weightOf(u.R, g);
-    const uiA = intersectionWeight(u.A, d.A, g);
-    const uiR = intersectionWeight(u.R, d.R, g);
+    // A missing kind=modified unit (absent, not relocated) is scored as unmatched: its weight stays in
+    // the denominator and both intersections are 0. It cannot add to the score, and it cannot cap the
+    // order either, so deleting one covered unit never downgrades a re-application of another (H6).
+    const unmatched = source === 'missing';
+    const uiA = unmatched ? 0 : intersectionWeight(u.A, d.A, g);
+    const uiR = unmatched ? 0 : intersectionWeight(u.R, d.R, g);
     wA += uwA;
     wR += uwR;
     iA += uiA;
@@ -180,7 +184,7 @@ export function scoreOrder(
   }
   const edit_fires = total > 0 && edit >= cfg.threshold && two_sided;
   const prox_fires = cfg.prox_enabled && prox !== null && prox >= cfg.prox_threshold;
-  const capped = small || degraded || missing;
+  const capped = small || degraded;
   const matched = !capped && (edit_fires || prox_fires);
   return {
     order_id: order.id,

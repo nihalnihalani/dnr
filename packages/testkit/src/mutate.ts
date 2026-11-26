@@ -683,12 +683,48 @@ export function mutate(input: MutateInput): Mutant | null {
   return null;
 }
 
-/** The family's five mutants (one per seed); seeds whose operator does not apply are skipped. */
-export function mutants(input: Omit<MutateInput, 'seed'>, split: 'tune' | 'held-out' = 'held-out'): Mutant[] {
+/** Mutants per family per revert (plan Phase 4). */
+export const MUTANTS_PER_FAMILY = 5;
+
+export interface MutantSet {
+  family: MutationFamily;
+  /** Always MUTANTS_PER_FAMILY: the gate's denominator never shrinks silently. */
+  expected: number;
+  mutants: Mutant[];
+  /** Seeds whose operator produced no valid mutant. A missing mutant counts as a miss for recall. */
+  missing: number[];
+}
+
+/** The family's mutants for its five seeds, plus the seeds that produced none. Never drops a seed silently. */
+export function mutantSet(
+  input: Omit<MutateInput, 'seed'>,
+  split: 'tune' | 'held-out' = 'held-out',
+): MutantSet {
   const out: Mutant[] = [];
+  const missing: number[] = [];
   for (const seed of seedsFor(input.family, split)) {
     const m = mutate({ ...input, seed });
     if (m) out.push(m);
+    else missing.push(seed);
   }
-  return out;
+  return { family: input.family, expected: MUTANTS_PER_FAMILY, mutants: out, missing };
+}
+
+export class MutantShortfallError extends Error {
+  constructor(readonly set: MutantSet) {
+    super(
+      `DNR mutate: ${set.family} produced ${set.mutants.length} of ${set.expected} valid mutants (no valid mutant for seeds ${set.missing.join(', ')})`,
+    );
+    this.name = 'MutantShortfallError';
+  }
+}
+
+/**
+ * Exactly five valid mutants (one per seed), or a thrown MutantShortfallError naming the seeds that
+ * failed. Callers that score recall should use `mutantSet` and count `missing` as misses.
+ */
+export function mutants(input: Omit<MutateInput, 'seed'>, split: 'tune' | 'held-out' = 'held-out'): Mutant[] {
+  const set = mutantSet(input, split);
+  if (set.missing.length > 0) throw new MutantShortfallError(set);
+  return set.mutants;
 }

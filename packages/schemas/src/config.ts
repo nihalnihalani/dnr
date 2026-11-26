@@ -16,6 +16,16 @@ export const DEFAULT_CONFIG = {
   stop_max_forced_turns: 2,
   board_port: 4317,
   fingerprint_floor: 0.7,
+  // Test paths are never part of an order: restored tests are the trial's oracle (§9.1 step 7, §9.4).
+  test_globs: [
+    '**/tests/**',
+    '**/test/**',
+    '**/test_*.py',
+    '**/*_test.py',
+    '**/*.test.ts',
+    '**/*.spec.ts',
+    '**/__tests__/**',
+  ] as readonly string[],
 } as const;
 
 export const DnrConfig = z.strictObject({
@@ -30,5 +40,6 @@ export const DnrConfig = z.strictObject({
   stop_max_forced_turns: z.number().int().min(0).default(DEFAULT_CONFIG.stop_max_forced_turns),
   board_port: z.number().int().min(1).max(65535).default(DEFAULT_CONFIG.board_port),
   fingerprint_floor: z.number().min(0).max(1).default(DEFAULT_CONFIG.fingerprint_floor),
+  test_globs: z.array(z.string().min(1)).default([...DEFAULT_CONFIG.test_globs]),
 });
 export type DnrConfig = z.infer<typeof DnrConfig>;

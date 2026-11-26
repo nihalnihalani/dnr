@@ -236,6 +236,37 @@ describe('tiers', () => {
     const b = d.decision.breakdown[0] as { degraded: boolean; missing: boolean; edit: number };
     expect(b.degraded || b.missing).toBe(true);
   });
+  it('L1: an over-long message is shortened from the reason and details, never the guard line', () => {
+    const e = mk([['a.py', A_PY, A_PY_C]]);
+    const long = 'https://example.test/' + 'x'.repeat(300);
+    const order = {
+      ...e.order,
+      reason: 'R'.repeat(280),
+      links: [
+        { rel: 'original' as const, url: long },
+        { rel: 'revert' as const, url: `${long}/revert` },
+      ],
+      tickets: [{ system: 'other' as const, id: 't', url: `${long}/ticket` }],
+    };
+    const base = st({ 'a.py': A_PY });
+    const d = decide({
+      target: 'a.py',
+      orders: [{ ...e, order }],
+      baseline: base,
+      current: base,
+      proposed: st({ 'a.py': A_PY_C }),
+    });
+    const qualnames = Array.from({ length: 80 }, (_, i) => `Klass.method_${i}`);
+    const msg = blockMessage(order, d.decision, { qualnames });
+    expect(msg.length).toBeLessThanOrEqual(1200);
+    const lines = msg.split('\n');
+    expect(lines).toHaveLength(3);
+    expect(lines[0]?.startsWith('DNR: ')).toBe(true);
+    expect(lines[0]).toContain(`${long}/revert`);
+    expect(lines[2]).toContain('Do not re-apply it or route around this block');
+    expect(lines[2]).toContain(`dnr allow ${order.id}`);
+    expect(lines[1]).toContain(`DNR order ${order.id} matched (edit 1.00 ≥ 0.60)`);
+  });
   it('the block message follows §6 and stays under 1,200 characters', () => {
     const e = mk([['a.py', A_PY, A_PY_C]]);
     const d = decide({
@@ -262,6 +293,35 @@ describe('missing units (§5.5 table) and delete_file', () => {
       decide({ target: 'a.py', orders: [e], baseline: base, current: base, proposed: st({ 'a.py': A_PY }) })
         .decision.outcome,
     ).toBe('block');
+  });
+  it('H6: deleting one covered unit cannot downgrade a re-application of another to a warn', () => {
+    const extra = `\n\ndef side(a):\n    return a + 1\n`;
+    const extraC = `\n\ndef side(a):\n    return a + 1 + bonus\n`;
+    const e = mk([['a.py', A_PY + extra, A_PY_C + extraC]]);
+    expect(e.order.units.map((u) => `${u.qualname}:${u.kind}`)).toEqual(['target:modified', 'side:modified']);
+    const base = st({ 'a.py': A_PY + extra });
+    // the agent re-applies `target` exactly and deletes `side`, a covered unit, in the same write
+    const evasion = st({ 'a.py': A_PY_C });
+    const s = scoreOrder(e.order, base, evasion);
+    const side = s.units.find((u) => u.qualname === 'side');
+    expect(side).toMatchObject({ proposed: 'missing', iA: 0, iR: 0 });
+    expect(s.missing).toBe(true);
+    // the missing unit's weight stays in the denominator, so the score is exactly the other unit's share
+    const t = s.units.find((u) => u.qualname === 'target');
+    expect(s.edit).toBeCloseTo(((t?.iA ?? 0) + (t?.iR ?? 0)) / (s.wA + s.wR), 12);
+    expect(s.edit).toBeGreaterThanOrEqual(0.6);
+    expect(s.matched).toBe(true);
+    const d = decide({ target: 'a.py', orders: [e], baseline: base, current: base, proposed: evasion });
+    expect(d.decision.outcome).toBe('block');
+  });
+  it('H6: a missing unit scores as unmatched, not as a re-applied removal', () => {
+    // C modified `target`; a proposal that deletes it must not earn the R side (its tokens were removed)
+    const e = mk([['a.py', A_PY, A_PY_C]]);
+    const base = st({ 'a.py': A_PY });
+    const gone = st({ 'a.py': A_PY.slice(0, A_PY.indexOf('def target')) });
+    const s = scoreOrder(e.order, base, gone);
+    expect(s.units[0]).toMatchObject({ proposed: 'missing', iA: 0, iR: 0 });
+    expect(s.edit).toBe(0);
   });
   it('a missing modified unit falls to warn', () => {
     const e = mk([['a.py', A_PY, A_PY_C]]);

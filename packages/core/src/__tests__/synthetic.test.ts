@@ -4,10 +4,10 @@ import { decide, type OrderEntry } from '../decide';
 import { scoreOrder } from '../score';
 import { createState, UnitCache } from '../state';
 import type { ParserProvider } from '../syntax';
-import { AFTER, BEFORE, BEFORE_REFORMATTED, DISJOINT } from './django-fixture';
 import { grammars, LINKS, SHA_C, SHA_R, SHA_S } from './helpers';
+import { AFTER, BEFORE, BEFORE_REFORMATTED, DISJOINT } from './synthetic-fixture';
 
-const FILE = 'django/db/models/sql/query.py';
+const FILE = 'synthetic/sql/query.py';
 let P: ParserProvider;
 let entry: OrderEntry;
 let cache: UnitCache;
@@ -38,7 +38,7 @@ const write = (text: string, warned: string[] = []) =>
     warned,
   });
 
-describe('Django-like fixture', () => {
+describe('synthetic query-builder fixture (invented, not Django)', () => {
   it('builds one modified unit, Query.set_group_by, with a stable id', () => {
     expect(entry.order.id).toBe('dnr-a1b2c3d4e5');
     expect(entry.order.units.map((u) => [u.qualname, u.kind])).toEqual([['Query.set_group_by', 'modified']]);
@@ -53,7 +53,7 @@ describe('Django-like fixture', () => {
     expect(d.decision.outcome).toBe('block');
     expect(d.decision.tier).toBe('match');
     expect(d.decision.reason_line).toMatch(
-      /^DNR: Placeholder: .* https:\/\/github.com\/django\/django\/commit\/a1b2$/,
+      /^DNR: Placeholder: .* https:\/\/example\.test\/synthetic\/commit\/a1b2$/,
     );
   });
   it('an exact re-application in a different format still scores 1.0', () => {

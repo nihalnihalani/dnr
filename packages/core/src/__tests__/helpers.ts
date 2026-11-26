@@ -9,6 +9,6 @@ export const SHA_C = 'c'.repeat(40);
 export const SHA_R = 'a1b2c3d4e5'.padEnd(40, '0');
 export const SHA_S = 'e'.repeat(40);
 export const LINKS = [
-  { rel: 'original' as const, url: 'https://github.com/django/django/commit/cccc' },
-  { rel: 'revert' as const, url: 'https://github.com/django/django/commit/a1b2' },
+  { rel: 'original' as const, url: 'https://example.test/synthetic/commit/cccc' },
+  { rel: 'revert' as const, url: 'https://example.test/synthetic/commit/a1b2' },
 ];

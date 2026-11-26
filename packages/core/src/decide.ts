@@ -332,19 +332,35 @@ export function blockMessage(
   decision: Decision,
   opts: { qualnames?: readonly string[]; threshold?: number; proxThreshold?: number } = {},
 ): string {
+  const LIMIT = 1200;
   const link = (rel: string) => order.links.find((l) => l.rel === rel)?.url;
   const score =
     decision.fired_by === 'prox'
       ? `prox ${(decision.prox_score ?? 0).toFixed(2)} ≥ ${(opts.proxThreshold ?? DEFAULT_MATCH_CONFIG.prox_threshold).toFixed(2)}`
       : `edit ${(decision.edit_score ?? 0).toFixed(2)} ≥ ${(opts.threshold ?? DEFAULT_MATCH_CONFIG.threshold).toFixed(2)}`;
-  const where = opts.qualnames?.length ? ` in ${opts.qualnames.join(', ')}` : '';
   const original = link('original');
   const ticket = order.tickets[0]?.url ?? link('ticket');
-  const lines = [
-    reasonLine(order),
-    `DNR order ${order.id} matched (${score})${where}.${original ? ` Original: ${original}.` : ''}${ticket ? ` Ticket: ${ticket}.` : ''}`,
-    `This change was tried and reverted. Do not re-apply it or route around this block. Tell the user. Only a human maintainer, not the agent, can approve a re-land: \`dnr board --open ${order.id}\` or \`dnr allow ${order.id}\`, which both need a terminal and refuse inside an agent session.`,
-  ];
-  const msg = lines.join('\n');
-  return msg.length <= 1200 ? msg : `${msg.slice(0, 1199)}…`;
+  const guard = `This change was tried and reverted. Do not re-apply it or route around this block. Tell the user. Only a human maintainer, not the agent, can approve a re-land: \`dnr board --open ${order.id}\` or \`dnr allow ${order.id}\`, which both need a terminal and refuse inside an agent session.`;
+  const build = (reason: string, where: string, withLinks: boolean) => {
+    const url =
+      order.links.find((l) => l.rel === 'revert')?.url ??
+      order.links.find((l) => l.rel === 'original')?.url ??
+      '';
+    const first = `DNR: ${reason}${url ? ` ${url}` : ''}`;
+    const second = `DNR order ${order.id} matched (${score})${where}.${withLinks && original ? ` Original: ${original}.` : ''}${withLinks && ticket ? ` Ticket: ${ticket}.` : ''}`;
+    return [first, second, guard].join('\n');
+  };
+  const where = opts.qualnames?.length ? ` in ${opts.qualnames.join(', ')}` : '';
+  // Shorten, in order: the qualname list, the original/ticket links, then the reason. The guard line is never cut.
+  for (const [w, links] of [
+    [where, true],
+    [where, false],
+    ['', false],
+  ] as const) {
+    const msg = build(order.reason, w, links);
+    if (msg.length <= LIMIT) return msg;
+  }
+  const bare = build('', '', false);
+  const room = Math.max(0, LIMIT - bare.length - 1);
+  return build(room > 0 ? `${order.reason.slice(0, room)}…` : '', '', false);
 }

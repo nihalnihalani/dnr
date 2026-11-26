@@ -4,14 +4,14 @@ import { buildOrder } from '../build-order';
 import { decide } from '../decide';
 import { createState, UnitCache } from '../state';
 import type { ParserProvider } from '../syntax';
-import { AFTER, BEFORE } from './django-fixture';
 import { grammars, LINKS, SHA_C, SHA_R, SHA_S } from './helpers';
+import { AFTER, BEFORE } from './synthetic-fixture';
 
 let P: ParserProvider;
 beforeAll(async () => {
   P = await grammars();
 });
-const FILE = 'django/db/models/sql/query.py';
+const FILE = 'synthetic/sql/query.py';
 const build = () =>
   buildOrder({
     provider: P,
