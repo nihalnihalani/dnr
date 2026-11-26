@@ -1,0 +1,35 @@
+[
+  {
+    "ticket": "#30274",
+    "source": "trac",
+    "title": "Segfault on iteration of GEOS Polygons/LinearRings.",
+    "body": "**Environment Details**\r\nUbuntu 14.04 (trusty)\r\nPython 3.6.8 (via package manager, unofficial repo: ppa:deadsnakes/ppa)\r\nDjango 2.1.7 (via pip)\r\nlibgeos (both 3.4.2 via apt-get, and 3.7.1 via source distribution)\r\n\r\nFirst and foremost, I am aware that the OS is a bit older (hence the unofficial installation routes of some newer dependencies), but I was unable to find any reason these components shouldn't play nice.\r\n\r\n**Steps to reproduce**\r\nI have a minimal script showcasing the issue:\r\n\r\n{{{\r\nfrom django.contrib.gis.geos import Polygon\r\n\r\ndef main():\r\n    polygon = Polygon( ((0.0, 0.0), (0.0, 50.0), (50.0, 50.0), (50.0, 0.0), (0.0, 0.0)) )\r\n\r\n    for p in polygon[0]:\r\n        print('Longitude:', p[0])\r\n        print('Latitude:', p[1])\r\n\r\nif __name__ == '__main__':\r\n    main()\r\n}}}\r\n\r\n**Expected Behaviour**\r\nOutput to stdout, something like:\r\n\r\n{{{\r\nLatitude: 0.0\r\nLongitude: 0.0\r\nLatitude: 0.0\r\nLongitude: 50.0\r\n...\r\n}}}\r\n\r\n**Observed Behaviour**\r\nOutput to stderr:\r\n\r\n{{{\r\nSegmentation fault (core dumped)\r\n}}}\r\n\r\n**Notes**\r\nIt should be noted, when originally observed, there was a stacktrace (which I won't post in full, as it's mostly uWSGI functions), but the relevant section suggested the segfault is in `GEOSCoordSeq_getSize` in `libgeos.so`, which leads me to believe the issue may be in https://github.com/django/django/blob/master/django/contrib/gis/geos/prototypes/coordseq.py.\r\n\r\nFurthermore, this issue was uncovered during a Python 2 to 3 migration attempt. The issue did not manifest in this environment:\r\nUbuntu 14.04 (trusty)\r\nPython 2.7.12 (via package manager, unofficial repo: ppa:deadsnakes/ppa)\r\nDjango 1.11.18 (via pip)\r\nlibgeos 3.4.2 (via apt-get)\r\n\r\nLastly, I was able to find a workaround (in case anyone else encounters this). This un-Pythonic variation seems to work:\r\n\r\n{{{\r\nfrom django.contrib.gis.geos import Polygon\r\n\r\ndef main():\r\n    polygon = Polygon( ((0.0, 0.0), (0.0, 50.0), (50.0, 50.0), (50.0, 0.0), (0.0, 0.0)) )\r\n\r\n    for i in range(len(polygon[0])):\r\n        p = polygon[0][i]\r\n        print('Longitude:', p[0])\r\n        print('Latitude:', p[1])\r\n\r\nif __name__ == '__main__':\r\n    main()\r\n}}}\r\n",
+    "comments": [
+      "Tim Graham: status changed; resolution set resolution\n        → needsinfo\n          \n          status\n        new → closed\n          \n        \n        \nGenerally a segmentation fault suggests an issue outside of Django's control as none of Django is written in C. If you identify that Django is at fault, please reopen and give the fix.",
+      "Simon Charette: Hello Murray, in order to identify the origin of segfault I suggest you enable ​faulthandler and rely on catchsegv.\n\nThat would be catchsegv python -X faulthandler script.py.",
+      "Fabian Schindler: status changed; cc set; resolution deleted cc\n        Fabian Schindler added\n          \n          resolution\n        needsinfo\n          \n          status\n        closed → new\n          \n        \n        \nI'm still experiencing this issue (Django 2.2.9), I could reproduce it with the above script or a similar one:\n\n# python3\nPython 3.7.5 (default, Nov 20 2019, 09:21:52)\n[GCC 9.2.1 20191008] on linux\nType \"help\", \"copyright\", \"credits\" or \"license\" for more information.\n>>> from django.contrib.gis.geos import Polygon\n>>> polygon = Polygon( ((0.0, 0.0), (0.0, 50.0), (50.0, 50.0), (50.0, 0.0), (0.0, 0.0)) )\n>>>\n>>> for p in polygon[0]:\n...         print('Longitude:', p[0])\n...         print('Latitude:', p[1])\n...\nSegmentation fault\n\nMy OS details are as follows:\n\nUbuntu 19.10\nlibgeos-3.7.2/eoan (apt)\nPython 3.7.5 (apt)\nDjango 2.2.9 (via pip)\n\nFor what version should this issue be fixed? Is it possible to backport the fix if it is only available for Django 3?\n\nAlso, I could not find any commit related to this issue.",
+      "Claude Paroz: I can reproduce too. Note that putting polygon[0] in a variable runs fine:\n\n>>> from django.contrib.gis.geos import Polygon\n>>> polygon = Polygon( ((0.0, 0.0), (0.0, 50.0), (50.0, 50.0), (50.0, 0.0), (0.0, 0.0)) )\n>>>\n>>> line = polygon[0]\n>>> for p in line:\n...         print('Longitude:', p[0])\n...         print('Latitude:', p[1])\nLongitude: 0.0\nLatitude: 0.0\netc.",
+      "Mariusz Felisiak: stage, summary, version changed stage\n        Unreviewed → Accepted\n          \n          summary\n        Segfault on iteration of GEOS Polygons/LinearRings → Segfault on iteration of GEOS Polygons/LinearRings.\n          \n          version\n        2.1 → master\n          \n        \n        \nSegmentation fault is raised in:\n\n  File \"django/django/contrib/gis/geos/prototypes/threadsafe.py\", line 47 in __call__\n  File \"django/django/contrib/gis/geos/libgeos.py\", line 154 in __call__\n  File \"django/django/contrib/gis/geos/coordseq.py\", line 157 in size\n  File \"django/django/contrib/gis/geos/coordseq.py\", line 29 in __iter__\n\nRegression in 138a78ec8cab5e1df0c8ba2a3ee895cb756ff1ae.",
+      "Sergey Fedoseev: owner, status changed owner\n        changed from nobody to Sergey Fedoseev\n          \n          status\n        new → assigned",
+      "Sergey Fedoseev: has_patch changed has_patch\n        set\n          \n        \n        \n​PR",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        assigned → closed\n          \n        \n        \nIn f2a725fb:\n\nFixed #30274 -- Prevented segmentation fault on LineString iteration.\n\nThis reverts commit 138a78ec8cab5e1df0c8ba2a3ee895cb756ff1ae and adds\n\na test for the regression."
+    ],
+    "fetched_at": "2026-11-26T16:44:16.062Z"
+  },
+  {
+    "ticket": "PR#12356",
+    "source": "github",
+    "title": "Fixed #30274 -- Prevented segmentation fault on LineString iteration.",
+    "body": "https://code.djangoproject.com/ticket/30274\r\n\r\nThis reverts commit 138a78ec8cab5e1df0c8ba2a3ee895cb756ff1ae.",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:44:16.062Z"
+  },
+  {
+    "ticket": "PR#8744",
+    "source": "github",
+    "title": "Made LineString.__iter__() return iter() from internal GEOSCoordSeq both for simplicity and performance.",
+    "body": "",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:44:16.062Z"
+  }
+]

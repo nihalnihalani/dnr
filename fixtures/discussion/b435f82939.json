@@ -1,0 +1,18 @@
+[
+  {
+    "ticket": "PR#11051",
+    "source": "github",
+    "title": "Reverted \"Fixed relative paths imports per isort 4.3.5.\"",
+    "body": "This reverts commit 463fe11bc8b2d068e447c5df677e7a31c2af7e03 due to restore of relative paths sorting from `isort` < 4.3.5 in `isort` [4.3.10](https://github.com/timothycrosley/isort/releases/tag/4.3.10).\r\n\r\nAlternatively we can add `-rr` to reverse the order of relative path imports (see \r\nhttps://github.com/jpgrayson/isort/commit/e60c651a3e7847f406c0ee8a8eb36c96bfe24cb7 and https://github.com/timothycrosley/isort/issues/417). I would prefer to restore the previous order because it seems more correct to sort from the least local  import.",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:43:51.024Z"
+  },
+  {
+    "ticket": "PR#11023",
+    "source": "github",
+    "title": "Fixed relative paths imports per isort 4.3.5.",
+    "body": "See [`isort` 4.3.5](https://github.com/timothycrosley/isort/blob/master/CHANGELOG.md#435---february-24-2019---last-python-27-maintenance-release)",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:43:51.024Z"
+  }
+]

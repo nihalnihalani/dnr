@@ -1,0 +1,32 @@
+[
+  {
+    "ticket": "#35564",
+    "source": "trac",
+    "title": "Improve readability of subclass identification in admin and auth checks",
+    "body": "While researching some code for another ticket I noticed noticed that the `contrib.admin` and `contrib.auth` `checks` modules have a very similar, but slightly different, bits of code:\r\n\r\n[https://github.com/django/django/blob/e56a32b89bb7fadffdfaa2cdf12b4863ccd5af9b/django/contrib/admin/checks.py#L19-L44 _contains_subclass] and [https://github.com/django/django/blob/e56a32b89bb7fadffdfaa2cdf12b4863ccd5af9b/django/contrib/auth/checks.py#L12-L25 _subclass_index].\r\n\r\nIt took some careful reading, but they behave exactly the same, apart from one returning an index and the other a boolean.\r\n\r\nI have a contribution that change these implementations, with the intent to make it easier to follow the flow. \r\n\r\nI tried to find a place in the Django codebase to have a shared implementation, but I haven't been able to identify one. It would be nice to have a canonical implementation of these functions.",
+    "comments": [
+      "Jaap Roes: has_patch changed has_patch\n        set",
+      "Sarah Boyce: owner, stage changed owner\n        changed from nobody to Jaap Roes\n          \n          stage\n        Unreviewed → Accepted\n          \n        \n        \nThank you, agree this is nicer 👍",
+      "Sarah Boyce: stage changed stage\n        Accepted → Ready for checkin",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        assigned → closed\n          \n        \n        \nIn f0d05a74:\n\nFixed #35564 -- Improved readability of subclass identification.",
+      "In 8cfcf9a3:\n\nReverted \"Fixed #35564 -- Improved readability of subclass identification.\"\n\nThis reverts commit f0d05a747f7a099e6c6bc58c42a787546d2212e7 due to a performance regression."
+    ],
+    "fetched_at": "2026-11-26T16:46:26.249Z"
+  },
+  {
+    "ticket": "PR#18322",
+    "source": "github",
+    "title": "Reverted \"Fixed #35564 -- Improved readability of subclass identification.\"",
+    "body": "This reverts commit f0d05a747f7a099e6c6bc58c42a787546d2212e7 due to a performance regression.\r\n\r\nSide note: lead me to look into some recent django-asv failures which also could do with a review https://github.com/django/django-asv/pull/84 🙏 \r\n",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:46:26.249Z"
+  },
+  {
+    "ticket": "PR#18316",
+    "source": "github",
+    "title": "Fixed #35564 -- Improved readability of subclass identification in admin and auth checks",
+    "body": "# Trac ticket number\r\n\r\nticket-35564\r\n\r\n# Branch description\r\n\r\n`_subclass_index` and `_contains_subclass` behave the same, apart from the return value. However, because of the error handling, and the delegation thereof in `_contains_subclass` it's somewhat hard to confirm at first glance.\r\n\r\nThis rewrite utilises [`contextlib.supress`](https://docs.python.org/3/library/contextlib.html#contextlib.suppress) to make the flow of the code easier to understand.\r\n\r\n# Checklist\r\n- [x] This PR targets the `main` branch. <!-- Backports will be evaluated and done by mergers, when necessary. -->\r\n- [x] The commit message is written in past tense, mentions the ticket number, and ends with a period.\r\n- [x] I have checked the \"Has patch\" ticket flag in the Trac system.\r\n- [ ] I have added or updated relevant tests.\r\n- [ ] I have added or updated relevant docs, including release notes if applicable.\r\n- [ ] I have attached screenshots in both light and dark modes for any UI changes.\r\n",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:46:26.249Z"
+  }
+]

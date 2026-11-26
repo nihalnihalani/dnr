@@ -1,0 +1,36 @@
+[
+  {
+    "ticket": "#24146",
+    "source": "trac",
+    "title": "(admin.E116) The value of 'list_filter[0]' refers to 'through__field', which does not refer to a Field.",
+    "body": "{{{\r\nclass PersonAdmin(admin.ModelAdmin):\r\n    list_filter = ['studenthousehold__primary']\r\n\r\nclass Student(models.Model):\r\n    name = models.CharField(max_length=255)\r\n\r\nclass Household(models.Model):\r\n    students = models.ManyToManyField(Student, through='StudentHousehold')\r\n\r\nclass StudentHousehold(models.Model):\r\n    household = models.ForeignKey(Household)\r\n    student = models.ForeignKey(Student)\r\n    primary = models.BooleanField(default=False)\r\n}}}\r\nWorks fine on 1.7, but on 1.8:\r\n{{{\r\n./manage.py check\r\nSystemCheckError: System check identified some issues:\r\n\r\nERRORS:\r\n<class 'app.admin.PersonAdmin'>: (admin.E116) The value of 'list_filter[0]' refers to 'studenthousehold__primary', which does not refer to a Field.\r\n\r\nSystem check identified 1 issue (0 silenced).\r\n}}}",
+    "comments": [
+      "Collin Anderson: To reproduce:\n\ngit clone ​https://github.com/collinanderson/24146\n\ncd 24146\n\n./manage check",
+      "Collin Anderson: The actual underlying exception is:\n\n  File \"django/contrib/admin/checks.py\", line 715, in _check_list_filter_item\n    get_fields_from_path(model, field)\n  File \"django/contrib/admin/utils.py\", line 473, in get_fields_from_path\n    fields.append(parent._meta.get_field(piece))\n  File \"django/db/models/options.py\", line 540, in get_field\n    \"be available yet.\" % (self.object_name, field_name)\ndjango.core.exceptions.FieldDoesNotExist: Household has no field named 'studenthousehold'. The app cache isn't ready yet, so if this is a forward field, it won't be available yet.",
+      "Tim Graham: stage changed stage\n        Unreviewed → Accepted",
+      "Collin Anderson: Here's a simple patch, but it modifies the API.\n\n​https://github.com/django/django/pull/3912",
+      "Collin Anderson: version changed version\n        master → 1.8alpha1",
+      "Berker Peksag: has_patch changed has_patch\n        set",
+      "Tim Graham: needs_tests, version changed needs_tests\n        set\n          \n          version\n        1.8alpha1 → master\n          \n        \n        \nDoes a test in admin_checks not reproduce the issue because of app loading differences when running the tests?",
+      "Collin Anderson: Exactly, because it's only an issue while apps are loading.",
+      "Tim Graham: needs_tests, stage changed needs_tests\n        unset\n          \n          stage\n        Accepted → Ready for checkin",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        new → closed\n          \n        \n        \nIn e8171daf0cd7f0e070395cb4c850c17fea32f11d:\n\nFixed #24146 -- Fixed a missing fields regression in admin checks.\n\nThis allows using get_field() early in the app loading process.\n\nThanks to PirosB3 and Tim Graham.",
+      "Carl Meyer: I'm not convinced this is the right fix. Exposing reverse fields before the app-cache is ready is a recipe for unpredictable behavior, which is exactly what app-loading and the meta-refactor were supposed to fix. Why do admin checks run before the app cache is ready? That seems wrong - can't we fix that instead?",
+      "Collin Anderson: The admin checks run in ready(), and apps.ready isn't True until all ready()s are done.\n\n​https://github.com/django/django/blob/570912a97d5051fa3aeacd9d16c3be9afcf92198/django/apps/registry.py#L111-L114",
+      "Carl Meyer: It seems we already have two stages of app-registry \"readyness\" -- there's models_ready, which is set to True before the app-config ready() methods run, and then there's ready, which isn't set until afterwards. It seems to me that it's really models_ready which should be the basis for the meta API deciding that the model graph is ready for use; in general, app-config ready() methods should be able to introspect models in a deterministic way.\n\nSo I don't think we should introduce the possibility of non-deterministic introspection into the core of the meta API, as this commit does. Instead, we should switch the meta API to require models_ready rather than require ready before it caches the full model graph.",
+      "Collin Anderson: We're kind of repeating the discussion on the PR. :)\n​https://github.com/django/django/pull/3912\n\nIn my head I though Daniel was opposed to it, but apparently on the PR he said \"I think models_ready is a good place.\".",
+      "Collin Anderson: Anyway, I'm not attached to any particular solution, as long as it works :)",
+      "Carl Meyer: I don't have time in the next couple days, but towards the end of this week I can put together an alternative PR that maintains deterministic behavior but uses models_ready instead of ready. I think I'd feel better if the existing commit were rolled back sooner so we don't get anything else that depends on the non-deterministic early calling of get_field(), but I can also just roll it back in my alternate PR.",
+      "In 0e489c19f1554ecfd9825daacfbac73be8ce723e:\n\nReverted \"Fixed #24146 -- Fixed a missing fields regression in admin checks.\"\n\nThis reverts commit e8171daf0cd7f0e070395cb4c850c17fea32f11d.\n\nA new solution is forthcoming.",
+      "In 92d5bedc56155e4c91c7644200415b3e42cdd31f:\n\n[1.8.x] Reverted \"Fixed #24146 -- Fixed a missing fields regression in admin checks.\"\n\nThis reverts commit e8171daf0cd7f0e070395cb4c850c17fea32f11d.\n\nA new solution is forthcoming.\n\nBackport of 0e489c19f1554ecfd9825daacfbac73be8ce723e from master",
+      "Tim Graham: has_patch, stage, version changed has_patch\n        unset\n          \n          stage\n        Ready for checkin → Accepted\n          \n          version\n        master → 1.8alpha1",
+      "Tim Graham: status changed; resolution deleted resolution\n        fixed\n          \n          status\n        closed → new",
+      "pirosb3: cc set cc\n        pirosb3 added",
+      "pirosb3: Hi all,\n\nYes, I am happy for the check to go on  models_ready . This should resolve the current issue and also another one carljm reported earlier. We should make sure that reverse models are always accessible on anything that is public API, so this includes any hooks or ModelAdmin registrations. Can anyone think of other similar parts that should be tested?\n\nIf we are going in this direction (given that what I said above is correct), I have made a PR with a few changes: ​https://github.com/django/django/pull/4053. After we assure Jenkins passes, I will add a few other tests admin-specific.",
+      "pirosb3: has_patch, needs_tests changed has_patch\n        set\n          \n          needs_tests\n        set",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        new → closed\n          \n        \n        \nIn 19188826b4aa989475418f1ea9bf8631b04da1e8:\n\nFixed #24146 -- Allowed model._meta.get_field() to be used after apps.models_ready",
+      "In fdcc9c47d51289576ce17849900c96c161273037:\n\n[1.8.x] Fixed #24146 -- Allowed model._meta.get_field() to be used after apps.models_ready\n\nBackport of 19188826b4aa989475418f1ea9bf8631b04da1e8 from master"
+    ],
+    "fetched_at": "2026-11-26T16:41:57.213Z"
+  }
+]

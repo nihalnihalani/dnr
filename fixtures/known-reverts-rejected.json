@@ -1,0 +1,57 @@
+[
+  {
+    "sha": "0250340e372f652c4f276e6874d452d683c94dfe",
+    "subject": "Refs #32074 -- Used Enum.repr() format proposed for Python 3.10.",
+    "reason": "matches none of the three §9.1 forms (search hit on another word, e.g. \"revert\" in prose)"
+  },
+  {
+    "sha": "26b0e2bb92caf2d16cabe455792350f20d6f42ca",
+    "subject": "Fixed #36620 -- Fixed workflow to summarize coverage in PRs.",
+    "reason": "matches none of the three §9.1 forms (search hit on another word, e.g. \"revert\" in prose)"
+  },
+  {
+    "sha": "27b68bcadf1ab2e9f7fd223aed42db352ccdc62d",
+    "subject": "Fixed #36234 -- Restored single_object argument to LogEntry.objects.log_actions().",
+    "reason": "matches none of the three §9.1 forms (search hit on another word, e.g. \"revert\" in prose)"
+  },
+  {
+    "sha": "34186e731ca20a2344b1f88fd543a854d6b13a00",
+    "subject": "Fixed #36712 -- Evaluated type annotations lazily in template tag registration.",
+    "reason": "matches none of the three §9.1 forms (search hit on another word, e.g. \"revert\" in prose)"
+  },
+  {
+    "sha": "8ed024b9b9ca4491fcb17cb15b3b5f18a8f60ff8",
+    "subject": "Refs #32120 -- Fixed test_add_inline_fk_index_update_data for DatabaseFeatures.indexes_foreign_keys.",
+    "reason": "matches none of the three §9.1 forms (search hit on another word, e.g. \"revert\" in prose)"
+  },
+  {
+    "sha": "a269d8d1d8cec2f9ae7ecc0c97a41fcf9efee580",
+    "subject": "Removed obsolete test_get_or_create_raises_IntegrityError_plus_traceback() test.",
+    "reason": "matches none of the three §9.1 forms (search hit on another word, e.g. \"revert\" in prose)"
+  },
+  {
+    "sha": "aa80b357fbef46e5b6faa08d63bcfd4fe21f3776",
+    "subject": "Fixed #30601 -- Doc'd the need to manually revert all app state on transaction rollbacks.",
+    "reason": "matches none of the three §9.1 forms (search hit on another word, e.g. \"revert\" in prose)"
+  },
+  {
+    "sha": "b1a65eac7c09250d36e12464fc8fff2a401246b6",
+    "subject": "Fixed #36321 -- Defaulted suggest_on_error=True in management commands.",
+    "reason": "matches none of the three §9.1 forms (search hit on another word, e.g. \"revert\" in prose)"
+  },
+  {
+    "sha": "e726254a380f2a35a2fcf71143e96cb5987d8102",
+    "subject": "Refs #36620 -- Added contributor documentation for code coverage reports.",
+    "reason": "matches none of the three §9.1 forms (search hit on another word, e.g. \"revert\" in prose)"
+  },
+  {
+    "sha": "fbac2a4dd846b52c4f379eacb5bab654fe9540cc",
+    "subject": "Fixed #33700 -- Skipped extra resolution for successful requests not ending with /.",
+    "reason": "matches none of the three §9.1 forms (search hit on another word, e.g. \"revert\" in prose)"
+  },
+  {
+    "sha": "fee87345967b3d917b618533585076cbfa43451b",
+    "subject": "Refs #10929 -- Deprecated forced empty result value for PostgreSQL aggregates.",
+    "reason": "matches none of the three §9.1 forms (search hit on another word, e.g. \"revert\" in prose)"
+  }
+]

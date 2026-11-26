@@ -1,0 +1,38 @@
+[
+  {
+    "ticket": "#26398",
+    "source": "trac",
+    "title": "FieldFile open() ignores the mode, always opening the file for reading",
+    "body": "{{{FieldFile.open}}} has a {{{mode}}} parameter, which is always ignored. This is a test from the PR:\r\n\r\n{{{\r\n\r\n    def test_filefield_write(self):\r\n        # Files can be written to\r\n        obj = Storage.objects.create(\r\n            normal=SimpleUploadedFile(\"assignment.txt\", b\"content\"))\r\n        with obj.normal as normal:\r\n            normal.open('wb')\r\n            normal.write(b\"updated\")\r\n        obj = Storage.objects.get()\r\n        self.assertEqual(obj.normal.read(), b\"updated\")\r\n\r\n}}}\r\n\r\nIt fails on at least 1.8 and master with \"File not open for writing\" on {{{write()}}}.\r\n\r\nPull request with a fix: https://github.com/django/django/pull/6325",
+    "comments": [
+      "Alexey Kotlyarov: component changed component\n        Uncategorized → File uploads/storage",
+      "Tim Graham: has_patch, stage, type changed has_patch\n        set\n          \n          stage\n        Unreviewed → Ready for checkin\n          \n          type\n        Uncategorized → Cleanup/optimization",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        new → closed\n          \n        \n        \nIn a52a531:\n\nFixed #26398 -- Made FieldFile.open() respect its mode argument.",
+      "In 7def55c3:\n\nReverted \"Fixed #26398 -- Made FieldFile.open() respect its mode argument.\"\n\nThis reverts commit a52a531a8b34f049fba11c3ee7b010af7534bf90 due to\n\nregressions described in refs #26772.",
+      "In bdc29b7:\n\n[1.10.x] Reverted \"Fixed #26398 -- Made FieldFile.open() respect its mode argument.\"\n\nThis reverts commit a52a531a8b34f049fba11c3ee7b010af7534bf90 due to\n\nregressions described in refs #26772.\n\nBackport of 7def55c3f6716fcfa40a3bd5d0fbb2090588d81e from master",
+      "Tim Graham: has_patch, stage, status changed; resolution deleted has_patch\n        unset\n          \n          resolution\n        fixed\n          \n          stage\n        Ready for checkin → Accepted\n          \n          status\n        closed → new\n          \n        \n        \nAs noted in the commits above, we had to revert this fix due to some regressions reported in #26772.",
+      "Tim Graham: status changed; resolution set resolution\n        → duplicate\n          \n          status\n        new → closed\n          \n        \n        \nDuplicate of #13809"
+    ],
+    "fetched_at": "2026-11-26T16:42:52.246Z"
+  },
+  {
+    "ticket": "#26772",
+    "source": "trac",
+    "title": "FileField should re-open closed files",
+    "body": "\r\nRefactoring of django.db.models.fields.files has introduced a regression that popped up while working on 1.10 compatibility for Wagtail-cms.\r\n\r\n\r\n\r\nFieldFile._get_file should re-open a closed file as it did before 1.10. \r\n\r\nI'll file a PR on GH.",
+    "comments": [
+      "Baptiste Mispelon: Hi,\n\nI'm not familiar with the whole File system but the test you provided in your PR already fails on the 1.9 branch which indicates that this might not be a regression.\n\nCan you craft or decribe a testcase that currently works on 1.9 but fails on 1.10?\n\nThanks.",
+      "Tim Graham: owner, severity, stage, status changed owner\n        changed from nobody to Tim Graham\n          \n          severity\n        Normal → Release blocker\n          \n          stage\n        Unreviewed → Accepted\n          \n          status\n        new → assigned",
+      "In 7def55c3:\n\nReverted \"Fixed #26398 -- Made FieldFile.open() respect its mode argument.\"\n\nThis reverts commit a52a531a8b34f049fba11c3ee7b010af7534bf90 due to\n\nregressions described in refs #26772.",
+      "In bdc29b7:\n\n[1.10.x] Reverted \"Fixed #26398 -- Made FieldFile.open() respect its mode argument.\"\n\nThis reverts commit a52a531a8b34f049fba11c3ee7b010af7534bf90 due to\n\nregressions described in refs #26772.\n\nBackport of 7def55c3f6716fcfa40a3bd5d0fbb2090588d81e from master",
+      "Alexey Kotlyarov: Should #26398 be reopened now? The reverted test fails.",
+      "Tim Graham: status changed; resolution set resolution\n        → fixed\n          \n          status\n        assigned → closed\n          \n        \n        \nYes. I created a new ​PR to add the tests for these regressions.",
+      "In cd217de:\n\nReverted \"Fixed #26644 -- Allowed wrapping NamedTemporaryFile with File.\"\n\nThis reverts commit 1b407050dd53e56686fdd3e168f8cac4f9be8306 as it\n\nintroduces a regression in the test for refs #26772.",
+      "In b45852c:\n\nRefs #26772 -- Added a test for FileField reopening closed files.\n\nThanks Simon Charette for review.",
+      "In 2ff72962:\n\nRefs #26772 -- Added a test for FileField reopening closed files.\n\nThanks Simon Charette for review.",
+      "In e2b266f:\n\n[1.10.x] Reverted \"Fixed #26644 -- Allowed wrapping NamedTemporaryFile with File.\"\n\nThis reverts commit 1b407050dd53e56686fdd3e168f8cac4f9be8306 as it\n\nintroduces a regression in the test for refs #26772.\n\nBackport of cd217de6100e0101fd921dd18bc2e706bac397c9 from master",
+      "In d3b9c499:\n\n[1.10.x] Refs #26772 -- Added a test for FileField reopening closed files.\n\nThanks Simon Charette for review.\n\nBackport of b45852c2631d4f291fb22ef3348065f2a3c2e5e3 from master"
+    ],
+    "fetched_at": "2026-11-26T16:42:52.246Z"
+  }
+]

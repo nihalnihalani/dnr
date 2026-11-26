@@ -1,0 +1,36 @@
+[
+  {
+    "ticket": "#29514",
+    "source": "trac",
+    "title": "get_default_timezone() for UTC is no longer equivalent to timezone.utc",
+    "body": "[https://github.com/encode/django-rest-framework/pull/6044 CI testing on Django REST Framework] revealed a change in behaviour in `timezone.get_default_timezone()`. \r\n\r\nThe essence is: \r\n\r\n\r\n{{{\r\nwith override_settings(USE_TZ=True, TIME_ZONE='UTC'):\r\n    self.assertIs(timezone.get_default_timezone(), timezone.utc)\r\n}}}\r\n\r\nThis passes fails 2.0.x and (currently) fails on 2.1/master. \r\n\r\nRegression in 27ca5ce19f5f184018a61611c1bc319113b1d107. ",
+    "comments": [
+      "Carlton Gibson: has_patch changed has_patch\n        set",
+      "Tim Graham: summary changed; cc set cc\n        Sergey Fedoseev added\n          \n          summary\n        Regression in get_default_timezone() → get_default_timezone() for UTC is no longer equivalent to timezone.utc\n          \n        \n        \nI'm not sure. It seems reasonable to fix the problem but having get_default_timezone() return a different type for a one-off case might lead to some issue.\n\nWhile investing, I noticed that pytz.utc is ​described as \"Optimized UTC implementation.\" yet the ​offending commit in Django says \"Used datetime.timezone.utc instead of pytz.utc for better performance.\"",
+      "Tim Graham: stage changed stage\n        Unreviewed → Accepted\n          \n        \n        \nThe issue is also present anywhere a timezone is constructed with pytz.timezone(), e.g. ​timezone.activate():\n\nfrom django.conf import settings\nsettings.configure(USE_TZ=True)\nfrom django.utils.timezone import get_current_timezone, utc\nfrom django.utils import timezone\ntimezone.activate('UTC')\nget_current_timezone() is utc  # False in Django 2.1, True in older versions\n\nIf we accept the proposed patch, I'd think we would also want to fix the issue there, and perhaps add a backwards incompatible release note for anyone using pytz.timezone() in their code. It might be better to reconsider the original patch.",
+      "Carlton Gibson: status changed; owner deleted owner\n        Carlton Gibson removed\n          \n          status\n        assigned → new\n          \n        \n        \nI'm going to (temporarily) deassign myself here, as I will be unable to work on this for the next week. Happy to pick it up if it's still pending after that.",
+      "status changed; owner, resolution set owner\n        set to Tim Graham <timograham@…>\n          \n          resolution\n        → fixed\n          \n          status\n        new → closed\n          \n        \n        \nIn 2ec151e3:\n\nFixed #29514 -- Reverted \"Used datetime.timezone.utc instead of pytz.utc for better performance.\"\n\nThis reverts commit 27ca5ce19f5f184018a61611c1bc319113b1d107 due to a\n\nregression.",
+      "In f4ef71c6:\n\nRefs #29514 -- Added test for get_default_timezone()/timezone.utc equality.",
+      "Daniel Hahler: Just for information:\n\nWhile investing, I noticed that pytz.utc is ​described as \"Optimized UTC implementation.\" yet the ​offending commit in Django says \"Used datetime.timezone.utc instead of pytz.utc for better performance.\"\n\nThe performance improvement basically comes from datetime being implemented in C completely, while using pytz.utc calls into Python code (at least) 2 times (for utcoffset/dst).",
+      "In 3a604024:\n\n[2.1.x] Fixed #29514 -- Reverted \"Used datetime.timezone.utc instead of pytz.utc for better performance.\"\n\nThis reverts commit 27ca5ce19f5f184018a61611c1bc319113b1d107 due to a\n\nregression.\n\nBackport of 2ec151e35da93047acfeea1b79c27010f2cb8594 from master",
+      "In 2784579:\n\n[2.1.x] Refs #29514 -- Added test for get_default_timezone()/timezone.utc equality.\n\nBackport of f4ef71c689b7bf3b0237d12c634fe5557f646a79 from master"
+    ],
+    "fetched_at": "2026-11-26T16:43:31.300Z"
+  },
+  {
+    "ticket": "PR#10104",
+    "source": "github",
+    "title": "Fixed #29514 -- Fixed get_default_timezone()/utc equality.",
+    "body": "https://code.djangoproject.com/ticket/29514",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:43:31.300Z"
+  },
+  {
+    "ticket": "PR#9484",
+    "source": "github",
+    "title": "Used datetime.timezone.utc instead of pytz.utc for better performance.",
+    "body": "Before:\r\n```\r\nIn [2]: %timeit django.utils.timezone.now()\r\n2.77 µs ± 57.8 ns per loop (mean ± std. dev. of 7 runs, 100000 loops each)\r\n```\r\nAfter:\r\n```\r\nIn [2]: %timeit django.utils.timezone.now()\r\n937 ns ± 5.35 ns per loop (mean ± std. dev. of 7 runs, 1000000 loops each)\r\n```",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:43:31.300Z"
+  }
+]

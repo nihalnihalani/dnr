@@ -1,0 +1,18 @@
+[
+  {
+    "ticket": "#24369",
+    "source": "trac",
+    "title": "flush requires migrations",
+    "body": "./manage flush\r\n\r\nraises\r\n\r\nRuntimeError: Error creating new content types. Please make sure contenttypes is migrated before trying to migrate apps individually.\r\n\r\nif migrations have not been applied or the database does not yet exist.\r\n\r\nI think it should just exit normally in this case.",
+    "comments": [
+      "Claude Paroz: component, stage, type changed; keywords set component\n        Uncategorized → Core (Management commands)\n          \n          keywords\n        flush added\n          \n          stage\n        Unreviewed → Accepted\n          \n          type\n        Uncategorized → Cleanup/optimization\n          \n        \n        \nSuggested change:\n\n  \n    \n      \n        django/core/management/commands/flush.py\n      \n      diff --git a/django/core/management/commands/flush.py b/django/core/management/commands/flush.py\nindex 97c9450..eceb873 100644\n      \n        \n          \n        \n        \n          \n            \n              a\n            \n            \n              b\n            \n            \n               class Command(BaseCommand):\n               \n            \n          \n        \n        \n\n          \n            4646        sql_list = sql_flush(self.style, connection, only_django=True,\n          \n          \n            4747                             reset_sequences=reset_sequences,\n          \n          \n            4848                             allow_cascade=allow_cascade)\n          \n        \n        \n\n          \n             49        if not sql_list:\n          \n          \n             50            raise CommandError(\n          \n          \n             51                \"No commands to proceed with, maybe the database is still empty?\"\n          \n          \n             52            )\n          \n        \n        \n\n          \n            4953\n          \n          \n            5054        if interactive:\n          \n          \n            5155            confirm = input(\"\"\"You have requested a flush of the database.\n          \n        \n      \n\n    \n  \n\nI'm not absolutely convinced about the need to write a test for that...",
+      "tanner: looks good. thank you",
+      "Claude Paroz: has_patch changed has_patch\n        set",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        new → closed\n          \n        \n        \nIn 9f1dbe29c0dbae57ff7950f3f64a0d083177cca8:\n\nFixed #24369 -- Prevented crash when flushing before db migration\n\nThanks Thomas Tanner for the report.",
+      "In 90ab6ee6123f2b378a068988526b409854ddec77:\n\nRevert \"Fixed #24369 -- Prevented crash when flushing before db migration\"\n\nThis reverts commit 9f1dbe29c0dbae57ff7950f3f64a0d083177cca8.\n\nThe proposed solution does not pass the test suite.",
+      "Claude Paroz: status changed; resolution deleted resolution\n        fixed\n          \n          status\n        closed → new",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        new → closed\n          \n        \n        \nIn 767c33d1fa9827908192e8ed1ac7f281f56bd811:\n\nFixed #24369 -- Prevented crash when flushing before db migration\n\nThanks Thomas Tanner for the report and Tim Graham for the review."
+    ],
+    "fetched_at": "2026-11-26T16:42:04.857Z"
+  }
+]

@@ -1,0 +1,29 @@
+[
+  {
+    "ticket": "#24474",
+    "source": "trac",
+    "title": "Make display for null fields in Django admin configurable through settings",
+    "body": "Display value for null fields is '-' now. It would be nice if this is configurable in settings. '-' can be a bit hard to click if you use it in a list filter.\r\n\r\nThis relates to changes made in https://code.djangoproject.com/ticket/24226.\r\n\r\n​http://stackoverflow.com/questions/18324030/how-to-change-empty-changelist-value-in-django-admin\r\n​http://stackoverflow.com/questions/28174881/in-the-django-admin-changelist-how-do-i-display-a-blank-space-instead-of-the-de?noredirect=1#comment44719629_28174881",
+    "comments": [
+      "Loek van Gent: owner, status changed owner\n        changed from nobody to Loek van Gent\n          \n          status\n        new → assigned",
+      "Loek van Gent: component changed component\n        Uncategorized → contrib.admin",
+      "Tim Graham: stage, type, version changed stage\n        Unreviewed → Accepted\n          \n          type\n        Uncategorized → New feature\n          \n          version\n        1.7 → master\n          \n        \n        \nBy settings, I think attributes of ModelAdmin and AdminSite would probably be the way to go.",
+      "Loek van Gent: needs_docs, needs_tests changed needs_docs\n        set\n          \n          needs_tests\n        set",
+      "Loek van Gent: has_patch, needs_docs, needs_tests changed has_patch\n        set\n          \n          needs_docs\n        unset\n          \n          needs_tests\n        unset",
+      "Tim Graham: needs_better_patch changed needs_better_patch\n        set\n          \n        \n        \nReviewed PR.",
+      "Loek van Gent: Applied suggested changes. PR ready for new review.",
+      "Tim Graham: needs_better_patch changed needs_better_patch\n        unset",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        assigned → closed\n          \n        \n        \nIn 72f769f4:\n\nFixed #24474 -- Allowed configuring the admin's empty change list value.",
+      "In 1273a7a0:\n\nRevert \"Fixed #24474 -- Allowed configuring the admin's empty change list value.\"\n\nThis reverts commit 72f769f494822981db6df9524b92a2d86f8e69fe.\n\nThere are several test failures that need to be fixed.",
+      "Tim Graham: needs_better_patch, status changed; resolution deleted needs_better_patch\n        set\n          \n          resolution\n        fixed\n          \n          status\n        closed → new",
+      "Loek van Gent: I see the failing tests now. I'll look into this.",
+      "Loek van Gent: Django Sprint Cardiff! I'm continuing this ticket now.",
+      "Loek van Gent: status changed status\n        new → assigned",
+      "Tim Graham: needs_better_patch, stage changed needs_better_patch\n        unset\n          \n          stage\n        Accepted → Ready for checkin\n          \n        \n        \nLooks good, pending a cosmetic comment.",
+      "Loek van Gent: Do you mean this one?\n​https://github.com/gannetson/django/commit/fcb527df09a8087763725e123255eebca2474e76",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        assigned → closed\n          \n        \n        \nIn 0207bdd:\n\nFixed #24474 -- Allowed configuring the admin's empty change list value.",
+      "In 67a1ae6:\n\nRefs #24474 -- Changed AdminSite.empty_value_display property to an attribute.\n\nThis was implemented with a property getter and setter when introduced\n\nin 0207bdd2d4157c542c981264c86706b78ca246e9.\n\nThere is nothing special occurring here though - a simple read from and\n\nassign to the underlying private attribute."
+    ],
+    "fetched_at": "2026-11-26T16:42:12.376Z"
+  }
+]

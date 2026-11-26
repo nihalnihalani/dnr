@@ -1,0 +1,211 @@
+[
+  {
+    "django": "1.5",
+    "tag": "1.5",
+    "pythons": [
+      "3.2",
+      "3.3"
+    ],
+    "source": "setup.py"
+  },
+  {
+    "django": "1.6",
+    "tag": "1.6",
+    "pythons": [
+      "3.2",
+      "3.3"
+    ],
+    "source": "setup.py"
+  },
+  {
+    "django": "1.7",
+    "tag": "1.7",
+    "pythons": [
+      "3.2",
+      "3.3",
+      "3.4"
+    ],
+    "source": "setup.py"
+  },
+  {
+    "django": "1.8",
+    "tag": "1.8",
+    "pythons": [
+      "3.2",
+      "3.3",
+      "3.4"
+    ],
+    "source": "setup.py"
+  },
+  {
+    "django": "1.9",
+    "tag": "1.9",
+    "pythons": [
+      "3.4",
+      "3.5"
+    ],
+    "source": "setup.py"
+  },
+  {
+    "django": "1.10",
+    "tag": "1.10",
+    "pythons": [
+      "3.4",
+      "3.5"
+    ],
+    "source": "setup.py"
+  },
+  {
+    "django": "1.11",
+    "tag": "1.11",
+    "pythons": [
+      "3.4",
+      "3.5",
+      "3.6"
+    ],
+    "source": "setup.py"
+  },
+  {
+    "django": "2.0",
+    "tag": "2.0",
+    "pythons": [
+      "3.4",
+      "3.5",
+      "3.6"
+    ],
+    "source": "setup.py"
+  },
+  {
+    "django": "2.1",
+    "tag": "2.1",
+    "pythons": [
+      "3.5",
+      "3.6",
+      "3.7"
+    ],
+    "source": "setup.py"
+  },
+  {
+    "django": "2.2",
+    "tag": "2.2",
+    "pythons": [
+      "3.5",
+      "3.6",
+      "3.7"
+    ],
+    "source": "setup.py"
+  },
+  {
+    "django": "3.0",
+    "tag": "3.0",
+    "pythons": [
+      "3.6",
+      "3.7",
+      "3.8"
+    ],
+    "source": "setup.py"
+  },
+  {
+    "django": "3.1",
+    "tag": "3.1",
+    "pythons": [
+      "3.6",
+      "3.7",
+      "3.8"
+    ],
+    "source": "setup.cfg"
+  },
+  {
+    "django": "3.2",
+    "tag": "3.2",
+    "pythons": [
+      "3.6",
+      "3.7",
+      "3.8",
+      "3.9"
+    ],
+    "source": "setup.cfg"
+  },
+  {
+    "django": "4.0",
+    "tag": "4.0",
+    "pythons": [
+      "3.8",
+      "3.9",
+      "3.10"
+    ],
+    "source": "setup.cfg"
+  },
+  {
+    "django": "4.1",
+    "tag": "4.1",
+    "pythons": [
+      "3.8",
+      "3.9",
+      "3.10"
+    ],
+    "source": "setup.cfg"
+  },
+  {
+    "django": "4.2",
+    "tag": "4.2",
+    "pythons": [
+      "3.8",
+      "3.9",
+      "3.10",
+      "3.11"
+    ],
+    "source": "setup.cfg"
+  },
+  {
+    "django": "5.0",
+    "tag": "5.0",
+    "pythons": [
+      "3.10",
+      "3.11",
+      "3.12"
+    ],
+    "source": "setup.cfg"
+  },
+  {
+    "django": "5.1",
+    "tag": "5.1",
+    "pythons": [
+      "3.10",
+      "3.11",
+      "3.12"
+    ],
+    "source": "pyproject.toml"
+  },
+  {
+    "django": "5.2",
+    "tag": "5.2",
+    "pythons": [
+      "3.10",
+      "3.11",
+      "3.12",
+      "3.13"
+    ],
+    "source": "pyproject.toml"
+  },
+  {
+    "django": "6.0",
+    "tag": "6.0",
+    "pythons": [
+      "3.12",
+      "3.13",
+      "3.14"
+    ],
+    "source": "pyproject.toml"
+  },
+  {
+    "django": "6.1",
+    "tag": "6.1",
+    "pythons": [
+      "3.12",
+      "3.13",
+      "3.14"
+    ],
+    "source": "pyproject.toml"
+  }
+]

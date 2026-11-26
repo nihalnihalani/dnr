@@ -1,0 +1,83 @@
+[
+  {
+    "ticket": "#33955",
+    "source": "trac",
+    "title": "AttributeError in admindocs ViewDetailView",
+    "body": "In Django 4.1, the admindocs `ViewDetailView` raises an `AttributeError`. I'm not clear on why `_active` is missing the `local_value` attribute when `_is_callback` is called.\r\n\r\nReproduction steps:\r\n\r\n1. Create a new project with Django 4.1\r\n2. Include `django.contrib.admindocs` in your installed apps\r\n3. Add the urls to your urlconf: `path(\"admindocs/\", include(\"django.contrib.admindocs.urls\"))`\r\n4. Run `manage.py migrate` and `manage.py createsuperuser`\r\n5. Go to `localhost:8000/admindocs/views/` and click on any view to go to the `ViewDetailView`\r\n\r\nQuick and dirty fix in `django/contrib/admindocs/utils.py`:\r\n\r\n{{{\r\n#!div style=\"font-size: 80%\"\r\nCode highlighting:\r\n  {{{#!python\r\n  def _is_callback(name, urlresolver=None):\r\n      if not hasattr(_active, \"local_value\"):\r\n          _active.local_value = _callback_strs\r\n      if urlresolver and not urlresolver._populated:\r\n          register_callback(urlresolver, _active.local_value)\r\n      return name in _active.local_value\r\n  }}}\r\n}}}",
+    "comments": [
+      "Greg Kaleka: description changed description\n        modified (diff)",
+      "Greg Kaleka: description changed description\n        modified (diff)",
+      "Greg Kaleka: description changed description\n        modified (diff)",
+      "Greg Kaleka: description changed description\n        modified (diff)",
+      "Greg Kaleka: description changed description\n        modified (diff)",
+      "Mariusz Felisiak: has_patch, severity, stage changed; cc set cc\n        Carlton Gibson Alokik Roy added\n          \n          has_patch\n        unset\n          \n          severity\n        Normal → Release blocker\n          \n          stage\n        Unreviewed → Accepted\n          \n        \n        \nThanks for the report.\n\nRegression in 7f3cfaa12b28d15c0ca78bb692bfd6e59d17bff1.",
+      "Mariusz Felisiak: has_patch, owner, status changed has_patch\n        set\n          \n          owner\n        changed from nobody to Greg Kaleka\n          \n          status\n        new → assigned\n          \n        \n        \n​PR",
+      "Carlton Gibson: needs_tests changed needs_tests\n        set",
+      "Mariusz Felisiak: needs_tests, owner changed needs_tests\n        unset\n          \n          owner\n        changed from Greg Kaleka to Mariusz Felisiak\n          \n        \n        \n​Alternative PR",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        assigned → closed\n          \n        \n        \nIn 974942a7:\n\nFixed #33955, Fixed #33971 -- Reverted \"Fixed #32565 -- Moved internal URLResolver view-strings mapping to admindocs.\"\n\nThis reverts commit 7f3cfaa12b28d15c0ca78bb692bfd6e59d17bff1.\n\nThanks Tom Carrick and Greg Kaleka for reports.",
+      "In a108380:\n\n[4.1.x] Fixed #33955, Fixed #33971 -- Reverted \"Fixed #32565 -- Moved internal URLResolver view-strings mapping to admindocs.\"\n\nThis reverts commit 7f3cfaa12b28d15c0ca78bb692bfd6e59d17bff1.\n\nThanks Tom Carrick and Greg Kaleka for reports.\n\nBackport of 974942a75039ba43e618f6a5ff95e08b5d5176fd from main"
+    ],
+    "fetched_at": "2026-11-26T16:45:03.413Z"
+  },
+  {
+    "ticket": "#33971",
+    "source": "trac",
+    "title": "admindocs breaks the admin if it appears before the admin in INSTALLED_APPS",
+    "body": "",
+    "comments": [
+      "Tom Carrick: summary changed summary\n        admindocs doesn't work if it appears before the admin in INSTALLED_APPS → admindocs breaks the admin if it appears before the admin in INSTALLED_APPS",
+      "Tom Carrick: description changed description\n        modified (diff)",
+      "Mariusz Felisiak: severity, stage, version changed; cc set cc\n        Carlton Gibson Alokik Roy added\n          \n          severity\n        Normal → Release blocker\n          \n          stage\n        Unreviewed → Accepted\n          \n          version\n        dev → 4.1\n          \n        \n        \nThanks for the report! Unfortunately ​the proposed solution doesn't fix this for me, so we need to handle it separately.\n\nRegression in 7f3cfaa12b28d15c0ca78bb692bfd6e59d17bff1.",
+      "Mariusz Felisiak: has_patch, owner, status changed has_patch\n        set\n          \n          owner\n        changed from nobody to Mariusz Felisiak\n          \n          status\n        new → assigned\n          \n        \n        \n​PR",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        assigned → closed\n          \n        \n        \nIn 974942a7:\n\nFixed #33955, Fixed #33971 -- Reverted \"Fixed #32565 -- Moved internal URLResolver view-strings mapping to admindocs.\"\n\nThis reverts commit 7f3cfaa12b28d15c0ca78bb692bfd6e59d17bff1.\n\nThanks Tom Carrick and Greg Kaleka for reports.",
+      "In a108380:\n\n[4.1.x] Fixed #33955, Fixed #33971 -- Reverted \"Fixed #32565 -- Moved internal URLResolver view-strings mapping to admindocs.\"\n\nThis reverts commit 7f3cfaa12b28d15c0ca78bb692bfd6e59d17bff1.\n\nThanks Tom Carrick and Greg Kaleka for reports.\n\nBackport of 974942a75039ba43e618f6a5ff95e08b5d5176fd from main",
+      "Maxim Danilov: description changed description\n        modified (diff)\n          \n        \n        \nThis patch war unnecessary.\nwith the same Effect we can remove method ready from class AdminDocsConfig(AppConfig) from django.contrib.admindocs.apps\n\nFor topik starter:\nI use many times admindocs in my projects and it was easy solution: to redefine AdminDocsConfig with empty ready method.",
+      "Mariusz Felisiak: Replying to Maxim Danilov:\n\nThis patch war unnecessary.\nwith the same Effect we can remove method ready from class AdminDocsConfig(AppConfig) from django.contrib.admindocs.apps\n\nFor topik starter:\nI use many times admindocs in my projects and it was easy solution: to redefine AdminDocsConfig with empty ready method. \n\nRemoving ready() was not a proper solution because admindocs views wouldn't work without it as callbacks wouldn't be registered."
+    ],
+    "fetched_at": "2026-11-26T16:45:03.413Z"
+  },
+  {
+    "ticket": "#32565",
+    "source": "trac",
+    "title": "Extract URL resolver view strings mapping to admindocs",
+    "body": "From discussion with Nick Pope: https://github.com/django/django/pull/14138#discussion_r595911054\r\n\r\n`URLResolver._is_callback()` , `URLResolver._callback_strs`, and `URLPattern.lookup_str` all exist only to power `django.contrib.admindocs` functionality, and are all private attributes. The functionality they provide could be extracted into `admindocs` to avoid the overhead of storing extra strings per URL in projects not using admindocs (in my experience, that is most projects).",
+    "comments": [
+      "Carlton Gibson: Hmmm 🤔 — internally these are only used by admindocs. I wonder if they're not being used by tooling somewhere… (​asked ref PyCharm for an initial data point.)",
+      "Adam Johnson: I had the thought that, at the very least, we could make generation lazy.",
+      "Carlton Gibson: stage changed stage\n        Unreviewed → Accepted\n          \n        \n        \nNegative from PyCharm: they are not using these attributes. And if they’re not I’m inclined to punt on no-one really is.",
+      "Alokik Roy: Hi everyone, I would like to work on this ticket and already have started the process too. But I had one doubt while I was trying to solve the issue, URLreslove._is_callback() functionality also gets used in tests too. I am new to contributions and wanted to know should I also work on fixing tests too or just admindocs.py file and resolve.py file only.",
+      "Alokik Roy: owner, status changed owner\n        changed from nobody to Alokik Roy\n          \n          status\n        new → assigned",
+      "Alokik Roy: PR \n​https://github.com/django/django/pull/15510",
+      "Alokik Roy: has_patch changed has_patch\n        set",
+      "Mariusz Felisiak: needs_better_patch changed needs_better_patch\n        set",
+      "Alokik Roy: needs_better_patch changed needs_better_patch\n        unset\n          \n        \n        \nSuggested Changes Implemented!",
+      "Carlton Gibson: needs_better_patch, needs_docs changed needs_better_patch\n        set\n          \n          needs_docs\n        set\n          \n        \n        \n​Small comments on PR",
+      "Alokik Roy: needs_better_patch, needs_docs changed needs_better_patch\n        unset\n          \n          needs_docs\n        unset\n          \n        \n        \nUpdated the patch and documented the changes.",
+      "Carlton Gibson: stage changed stage\n        Accepted → Ready for checkin",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        assigned → closed\n          \n        \n        \nIn 7f3cfaa1:\n\nFixed #32565 -- Moved internal URLResolver view-strings mapping to admindocs.\n\nMoved the functionality of URLResolver._is_callback(),\n\nURLResolver._callback_strs, URLPattern.lookup_str() to\n\ndjango.contrib.admindocs.",
+      "In 974942a7:\n\nFixed #33955, Fixed #33971 -- Reverted \"Fixed #32565 -- Moved internal URLResolver view-strings mapping to admindocs.\"\n\nThis reverts commit 7f3cfaa12b28d15c0ca78bb692bfd6e59d17bff1.\n\nThanks Tom Carrick and Greg Kaleka for reports.",
+      "In a108380:\n\n[4.1.x] Fixed #33955, Fixed #33971 -- Reverted \"Fixed #32565 -- Moved internal URLResolver view-strings mapping to admindocs.\"\n\nThis reverts commit 7f3cfaa12b28d15c0ca78bb692bfd6e59d17bff1.\n\nThanks Tom Carrick and Greg Kaleka for reports.\n\nBackport of 974942a75039ba43e618f6a5ff95e08b5d5176fd from main",
+      "Mariusz Felisiak: has_patch, stage, status changed; resolution deleted has_patch\n        unset\n          \n          resolution\n        fixed\n          \n          stage\n        Ready for checkin → Accepted\n          \n          status\n        closed → new\n          \n        \n        \nPatch was reverted.",
+      "nonock: owner, status changed owner\n        changed from Alokik Roy to nonock\n          \n          status\n        new → assigned",
+      "nonock: has_patch changed has_patch\n        set",
+      "blighj: needs_better_patch changed needs_better_patch\n        set"
+    ],
+    "fetched_at": "2026-11-26T16:45:03.413Z"
+  },
+  {
+    "ticket": "PR#16024",
+    "source": "github",
+    "title": "Fixed #33955, Fixed #33971 -- Reverted \"Fixed #32565 -- Moved internal URLResolver view-strings mapping to admindocs.\"",
+    "body": "This reverts commit 7f3cfaa12b28d15c0ca78bb692bfd6e59d17bff1.\r\n\r\nThanks Tom Carrick and Greg Kaleka for reports.\r\n\r\nUnfortunately, without regression tests as they would be very complicated (involving threading, mocking, apps initialization etc.) :disappointed: ",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:45:03.413Z"
+  },
+  {
+    "ticket": "PR#15510",
+    "source": "github",
+    "title": "Fixed #32565 -- URLResolver._is_callback, URLResolver._callback_strs, URLPattern.lookup_str moved to django.contrib.admindocs",
+    "body": "[Ticket - 32565](https://code.djangoproject.com/ticket/32565)\r\n\r\nMoved the functionality of `URLResolver._is_callback()`,\r\n`URLResolver._callback_strs`, `URLPattern.lookup_str()` to\r\n`django.contrib.admindocs.utils`",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:45:03.413Z"
+  }
+]

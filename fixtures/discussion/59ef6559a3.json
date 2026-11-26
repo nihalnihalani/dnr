@@ -1,0 +1,22 @@
+[
+  {
+    "ticket": "#25961",
+    "source": "trac",
+    "title": "remove handling of thread-non-safe GEOS functions",
+    "body": "All supported GEOS versions provide thread-safe API that means that handling of GEOS functions could be simplified.",
+    "comments": [
+      "Sergey Fedoseev: has_patch, owner, status changed has_patch\n        set\n          \n          owner\n        changed from nobody to Sergey Fedoseev\n          \n          status\n        new → assigned\n          \n        \n        \nPR -- ​https://github.com/django/django/pull/5849",
+      "Tim Graham: stage changed stage\n        Unreviewed → Accepted",
+      "Claude Paroz: Feel free to go ahead, this is going above my head :-)",
+      "Sergey Fedoseev: Replying to claudep:\n\nFeel free to go ahead, this is going above my head :-)\n\nActually changes in my PR are quite trivial (maybe I did too much in a single commit):\n\nGEOSFunc from django/contrib/gis/geos/prototypes/threadsafe.py  is simplified because we know that GEOS always have thread-safe API\nGEOSFunc is merged with GEOSFuncFactory from django/contrib/gis/geos/libgeos.py\nthe rest stuff from django/contrib/gis/geos/prototypes/threadsafe.py is moved in django/contrib/gis/geos/libgeos.py",
+      "Tim Graham: stage changed stage\n        Accepted → Ready for checkin",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        assigned → closed\n          \n        \n        \nIn 312fc1af:\n\nFixed #25961 -- Removed handling of thread-non-safe GEOS functions.",
+      "Tim Graham: has_patch, severity, stage, status changed; resolution deleted has_patch\n        unset\n          \n          resolution\n        fixed\n          \n          severity\n        Normal → Release blocker\n          \n          stage\n        Ready for checkin → Accepted\n          \n          status\n        closed → new\n          \n        \n        \nWe've seen occasional segmentation faults in the GIS tests on Jenkins after this commit. apollo13 and knbk have been investigating (IRC discussion and on ​a pull request which seems to reproduce the segfault more regularly than on master.",
+      "Sergey Fedoseev: As this change is cleanup only I think it should be reverted until I or someone else will have a good understanding why it's broken and how to fix it.",
+      "Tim Graham: severity changed severity\n        Release blocker → Normal\n          \n        \n        \nThe error seems to come from GEOSContextHandle.__del__(). Will revert for now.",
+      "Tim Graham: In 59ef6559a31c175c1f52668ef0ffe9b8d87aa5a5:\n\nReverted #25961 -- Removed handling of thread-non-safe GEOS functions.\n\nThis reverts commit [312fc1a] as it seems\nto cause segmentation faults as described in the ticket.",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        new → closed\n          \n        \n        \nIn 8b5a2980:\n\nFixed #25961 -- Removed handling of non-thread safe GEOS functions."
+    ],
+    "fetched_at": "2026-11-26T16:42:32.922Z"
+  }
+]

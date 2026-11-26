@@ -1,0 +1,33 @@
+[
+  {
+    "ticket": "#20939",
+    "source": "trac",
+    "title": "Convert QuerySet to Query when filtering",
+    "body": "The current ORM coding has very similar, yet not equivalent paths for using QuerySet and the internal Query when doing filter(something=queryset_or_query). It seems that converting a QuerySet to Query early on would lead to cleaner implementation. Proof of concept here: https://github.com/akaariai/django/tree/queryset_to_query_in_filter\r\n\r\nThere are two problems in the current implementation:\r\n  - The way user-defined .values() and Django issued .values() in build_filter() is detected is ugly\r\n  - There is no multidb protection (test_subquery in multiple_database.tests.QueryTestCase) fails).\r\n\r\nI'll mark this as accepted directly in the sense of \"worth doing if above problems can be addressed).\r\n",
+    "comments": [
+      "Tim Graham: I rebased and updated this to see if it's still worth doing and to learn something in the process. It's still incomplete and tests aren't passing: ​PR.",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        new → closed\n          \n        \n        \nIn 1bc249c:\n\nFixed #20939 -- Simplified query generation by converting QuerySet to Query.\n\nThanks Anssi Kääriäinen for the initial patch and Anssi, Simon Charette,\n\nand Josh Smeaton for review.",
+      "In ec50937:\n\nRefs #20939 -- Removed the Query._forced_pk hack.",
+      "In c9159a08:\n\nRefs #20939 -- Removed the Query._prepare_as_filter_value() hack.",
+      "In e62ea0bb:\n\nRefs #20939 -- Moved subquery ordering clearing optimization to the in lookup.\n\nQueries could potentially be resolved in cases where ordering matter.",
+      "In eb4724a0:\n\nReverted \"Refs #20939 -- Moved subquery ordering clearing optimization to the in lookup.\"\n\nThis reverts commit e62ea0bb9cbb54c1eef848871fe3eab2bad268dc since it\n\nbroke multi-column in lookups and _meta.order_wrt on Oracle."
+    ],
+    "fetched_at": "2026-11-26T16:43:15.538Z"
+  },
+  {
+    "ticket": "PR#8433",
+    "source": "github",
+    "title": "Revert \"Refs #20939 -- Moved subquery ordering clearing optimization to the __in lookup.\"",
+    "body": "This reverts commit e62ea0bb9cbb54c1eef848871fe3eab2bad268dc.\r\n\r\nThis ended up breaking multi-column __in lookups and _meta.order_wrt on Oracle.\r\n\r\nLooks like I somehow didn't run #8417 against Oracle... I have an idea of how to fix this but in the mean time I want to avoid making Oracle CI unusable.",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:43:15.538Z"
+  },
+  {
+    "ticket": "PR#8417",
+    "source": "github",
+    "title": "Refs #20939 -- Moved subquery ordering clearing optimization to the _in lookup.",
+    "body": "@timgraham I'm working on making `sql.Query` completely implement the Expression API so we can remove a lot of the boiler plate in `expression.Subquery` and it made me realize some changes I made in c9159a082ebe41a1f735f8d01720e746fb43c41e should have been made in `In.process_rhs()` instead.\r\n\r\nIt only makes sense to clear ordering of a queryset when it's used in a `__in` lookup.\r\n\r\nSorry for the back and forth here. This should settle, `#20939`'s case :)",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:43:15.538Z"
+  }
+]

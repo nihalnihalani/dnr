@@ -1,0 +1,33 @@
+[
+  {
+    "ticket": "#34024",
+    "source": "trac",
+    "title": "'WhereNode' object has no attribute 'is_summary' when counting a queryset with annotation from a subquery",
+    "body": "I reproduced on a blank project (4.0 and 4.1 with a Postgres database) using this use case:\r\n\r\n`models.py`\r\n{{{\r\nclass School(models.Model):\r\n    \"\"\"A school\"\"\"\r\n\r\nclass Director(models.Model):\r\n    school = models.ForeignKey(School, on_delete=models.CASCADE)                        \r\n    speciality = models.CharField(max_length=200)\r\n}}}\r\n\r\nIt is not possible to run this code:\r\n{{{#!python\r\n>>> School.objects.annotate(\r\n>>>     speciality=Subquery(Director.objects.values('speciality')[:1]),\r\n>>>     has_speciality=Q(speciality__isnull=False)\r\n>>> ).count()\r\n…\r\nAttributeError: 'WhereNode' object has no attribute 'is_summary'\r\n}}}\r\n\r\nReverting this precise commit seems to fix the issue : https://github.com/django/django/commit/b64db05b9cedd96905d637a2d824cbbf428e40e7\r\n\r\nThe request is a bit exotic, I don't know if it should be supported.\r\nThis is the first ticket I open, I can clarify/submit a merge request if needed.",
+    "comments": [
+      "David Sanders: Confirmed on latest main.\n\nFull traceback from ipython:\n\n[ins] In [1]: School.objects.annotate(\n         ...:     speciality=Subquery(Director.objects.values('speciality')[:1]),\n         ...:     has_speciality=Q(speciality__isnull=False)\n         ...: ).count()\n---------------------------------------------------------------------------\nAttributeError                            Traceback (most recent call last)\nCell In [1], line 4\n      1 School.objects.annotate(\n      2     speciality=Subquery(Director.objects.values('speciality')[:1]),\n      3     has_speciality=Q(speciality__isnull=False)\n----> 4 ).count()\n\nFile ~/projects/django/django/db/models/query.py:621, in QuerySet.count(self)\n    618 if self._result_cache is not None:\n    619     return len(self._result_cache)\n--> 621 return self.query.get_count(using=self.db)\n\nFile ~/projects/django/django/db/models/sql/query.py:554, in Query.get_count(self, using)\n    552 obj = self.clone()\n    553 obj.add_annotation(Count(\"*\"), alias=\"__count\", is_summary=True)\n--> 554 return obj.get_aggregation(using, [\"__count\"])[\"__count\"]\n\nFile ~/projects/django/django/db/models/sql/query.py:503, in Query.get_aggregation(self, using, added_aggregate_names)\n    501 for alias, expression in list(inner_query.annotation_select.items()):\n    502     annotation_select_mask = inner_query.annotation_select_mask\n--> 503     if expression.is_summary:\n    504         expression, col_cnt = inner_query.rewrite_cols(expression, col_cnt)\n    505         outer_query.annotations[alias] = expression.relabeled_clone(\n    506             relabels\n    507         )\n\nAttributeError: 'WhereNode' object has no attribute 'is_summary'",
+      "Simon Charette: stage changed stage\n        Unreviewed → Accepted",
+      "David Sanders: cc set cc\n        David Sanders added",
+      "David Sanders: FYI: none of the original tests from the PR introducing WhereNode.is_summary were testing with Q\n\nHere's a simplified failing test case to go alongside those added with the PR:\n\ndiff --git a/tests/aggregation_regress/tests.py b/tests/aggregation_regress/tests.py\nindex e15e7e41d9..cc92029135 100644\n--- a/tests/aggregation_regress/tests.py\n+++ b/tests/aggregation_regress/tests.py\n@@ -554,6 +554,10 @@ class AggregationTests(TestCase):\n             325,\n         )\n\n+    def test_q_annotation_aggregate(self):\n+        # Ensure aggregation works with annotations using Q objects\n+        Book.objects.annotate(has_pk=~Q(pk=None)).count()\n+\n     def test_decimal_aggregate_annotation_filter(self):\n         \"\"\"\n         Filtering on an aggregate annotation with Decimal values should work.",
+      "David Wobrock: cc, has_patch, owner, status changed cc\n        David Wobrock added\n          \n          has_patch\n        set\n          \n          owner\n        changed from nobody to David Sanders\n          \n          status\n        new → assigned",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        assigned → closed\n          \n        \n        \nIn 1674c705:\n\nFixed #34024 -- Fixed crash when aggregating querysets with Q objects annotations.\n\nThis reverts b64db05b9cedd96905d637a2d824cbbf428e40e7.\n\nIt was reasonable to assume it was unnecessary code as there were\n\nno failing tests upon its removal. This commit adds the necessary\n\nregression tests for the failing condition identified in #34024\n\nalongside the original tests added in the PR for which\n\nWhereNode.is_summary was introduced."
+    ],
+    "fetched_at": "2026-11-26T16:45:19.346Z"
+  },
+  {
+    "ticket": "PR#16078",
+    "source": "github",
+    "title": "Fixed #34024 -- Fixed crash when aggregating querysets with Q objects annotations.",
+    "body": "[Fixes 34024](https://code.djangoproject.com/ticket/34024)\r\n\r\nTest added alongside those added with the original PR by Josh.",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:45:19.346Z"
+  },
+  {
+    "ticket": "PR#14747",
+    "source": "github",
+    "title": "Removed unnecessary WhereNode.is_summary.",
+    "body": "Unnecessary since its introduction in 1df89a60c5b7a28d7fda4c9ba7c07f02fd7de0fa.",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:45:19.346Z"
+  }
+]

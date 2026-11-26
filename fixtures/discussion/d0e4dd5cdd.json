@@ -1,0 +1,72 @@
+[
+  {
+    "ticket": "#36572",
+    "source": "trac",
+    "title": "Deprecation of constant_time_compare broke usage with mixed-type arguments.",
+    "body": "The deprecation of `constant_time_compare` in #36546 (0246f478882c26bc1fe293224653074cd46a90d0) removed the `force_bytes` conversion of the arguments passed to the function. The function now raises an error if passed arguments of different types, e.g. `bytes` and `str`. Test:\r\n\r\n\r\n{{{#!diff\r\ndiff --git a/tests/utils_tests/test_crypto.py b/tests/utils_tests/test_crypto.py\r\nindex bbedb3080d..4ed8167150 100644\r\n--- a/tests/utils_tests/test_crypto.py\r\n+++ b/tests/utils_tests/test_crypto.py\r\n@@ -21,6 +21,8 @@ class TestUtilsCryptoMisc(SimpleTestCase):\r\n         self.assertFalse(constant_time_compare(b\"spam\", b\"eggs\"))\r\n         self.assertTrue(constant_time_compare(\"spam\", \"spam\"))\r\n         self.assertFalse(constant_time_compare(\"spam\", \"eggs\"))\r\n+        self.assertTrue(constant_time_compare(b\"spam\", \"spam\"))\r\n+        self.assertFalse(constant_time_compare(\"spam\", b\"eggs\"))\r\n\r\n     def test_constant_time_compare_deprecated(self):\r\n         msg = (\r\n}}}\r\n\r\nThe fix on my side is trivial (ensure both arguments are the same type), but I'm not sure if this was intentional for the deprecation process. If it were intentional, I'm happy to close this as a wontfix. Otherwise, I'm also happy to send a PR that adds the `force_bytes` back in.",
+    "comments": [
+      "Sarah Boyce: This was mentioned in the ticket description #36546\n\nconstant_time_compare() does call force_bytes() on its arguments but this was a workaround for Python 2.7 (7e3cf3cfd27e53ced0a1fc65a02849f78a292d3d) and no tests in Django's test suite fail with those calls removed.\n\nIs this something you spotted and made you concerned or has this broken something on a project?",
+      "Sarah Boyce: cc set cc\n        Tim Graham added",
+      "Sage Abdullah: Is this something you spotted and made you concerned or has this broken something on a project?\n\nI spotted this in Wagtail (ref: ​https://github.com/wagtail/wagtail/pull/13363) because apparently our use of the function involves passing mixed-type arguments to the function, which likely was unintentional.\n\nHowever, I can see another issue with leaving out force_bytes: the str vs. str use of hmac.compare_digest() ​only works with ASCII characters. This means the following test now also errors:\n\n  \n    \n      \n        tests/utils_tests/test_crypto.py\n      \n      diff --git a/tests/utils_tests/test_crypto.py b/tests/utils_tests/test_crypto.py\nindex bbedb3080d..e1795c766e 100644\n      \n        \n          \n        \n        \n          \n            \n              a\n            \n            \n              b\n            \n            \n               class TestUtilsCryptoMisc(SimpleTestCase):\n               \n            \n          \n        \n        \n\n          \n            2121        self.assertFalse(constant_time_compare(b\"spam\", b\"eggs\"))\n          \n          \n            2222        self.assertTrue(constant_time_compare(\"spam\", \"spam\"))\n          \n          \n            2323        self.assertFalse(constant_time_compare(\"spam\", \"eggs\"))\n          \n        \n        \n\n          \n             24        self.assertTrue(constant_time_compare(b\"spam\", \"spam\"))\n          \n          \n             25        self.assertFalse(constant_time_compare(\"spam\", b\"eggs\"))\n          \n          \n             26        self.assertTrue(constant_time_compare(\"ありがとう\", \"ありがとう\"))\n          \n          \n             27        self.assertFalse(constant_time_compare(\"ありがとう\", \"おはよう\"))\n          \n        \n        \n\n          \n            2428\n          \n          \n            2529    def test_constant_time_compare_deprecated(self):\n          \n          \n            2630        msg = (\n          \n        \n      \n\n    \n  \n\nIf developers use the utility function to e.g. compare passwords, and they just pass plain strings to the function, it no longer works if the string contains non-ASCII characters.",
+      "Tim Graham: I hadn't noticed that the original patch changed the implementation of constant_time_compare() (removing force_bytes()). With this new information, that's certainly inappropriate.\n\nI suppose there's a larger question of whether we keep the constant_time_compare() API since we now learned it provides genuinely different functionality that third-party code is relying on (comparing strings with non-ASCII characters and arguments of different type) than hmac.compare_digest(). In argument against keeping it, it forces third-parties to identify these areas and add their own casting rather than imposing a casting penalty where it's unneeded.\n\nAs far as I see, Django itself doesn't need to use constant_time_compare() internally since in always compares digests. Well, hmac.compare_digest(request.session.get(HASH_SESSION_KEY, \"\"), session_auth_hash) looks like the empty string needs to become a bytestring.\n\nAt this point in the release cycle, probably it's best to revert the deprecation to consider this more carefully. A later first step could be to replace internal usage of constant_time_compare() with compare_digest() (part of the original patch, but checked more carefully to make sure a str/bytes comparison can't happen).",
+      "Jake Howard: cc changed cc\n        Jake Howard added\n          \n        \n        \nI agree with reverting #36546 and reviewing each case more closely. An alternative would be to explicitly state using force_bytes in the deprecation message, but that ends up quite verbose)\n\nGiven the complexities around using compare_digest with the correct types, I'd be in favour of keeping constant_time_compare around to hide those from users, even if we slowly port Django's internal uses to compare_digest separately.",
+      "Sarah Boyce: has_patch, severity, stage, status changed; owner set has_patch\n        set\n          \n          owner\n        set to Sarah Boyce\n          \n          severity\n        Normal → Release blocker\n          \n          stage\n        Unreviewed → Accepted\n          \n          status\n        new → assigned",
+      "JaeHyuckSa: cc changed cc\n        JaeHyuckSa added",
+      "Sarah Boyce: stage changed stage\n        Accepted → Ready for checkin",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        assigned → closed\n          \n        \n        \nIn d0e4dd5c:\n\nFixed #36572 -- Revert \"Fixed #36546 -- Deprecated django.utils.crypto.constant_time_compare() in favor of hmac.compare_digest().\"\n\nThis reverts commit 0246f478882c26bc1fe293224653074cd46a90d0."
+    ],
+    "fetched_at": "2026-11-26T16:46:53.442Z"
+  },
+  {
+    "ticket": "#36546",
+    "source": "trac",
+    "title": "Deprecate django.utils.crypto.constant_time_compare()",
+    "body": "Historically it was a bespoke implementation (added in 45c7f427ce830dd1b2f636fb9c244fda9201cadb) before the stdlib implementation was preferred (58176dee88ac7c1038c7f685af023e634b143d02). Now it's just alias of `secrets.compare_digest` (which itself is [https://github.com/python/cpython/blob/dd079db4b96fa474b8e6d71ae9db662c4ce28caf/Lib/secrets.py#L17 an alias] of `hmac.compare_digest`, which was used before 1d0bab0bfd77edcf1228d45bf654457a8ff1890d).\r\n\r\n`constant_time_compare()` does call `force_bytes()` on its arguments but this was a workaround for Python 2.7 (7e3cf3cfd27e53ced0a1fc65a02849f78a292d3d) and no tests in Django's test suite fail with those calls removed.",
+    "comments": [
+      "suhail vs: what about adding a warning in function constant_time_compare in file django.utils.crypto.py\n\nimport warnings\nfrom django.utils.deprecation import RemovedInNextVersionWarning\n\ndef constant_time_compare(val1, val2):\n    \"\"\"Return True if the two strings are equal, False otherwise.\"\"\"\n    warnings.warn(\n        \"constant_time_compare(val1, val2) is deprecated and will be removed in Django 6.0. \"\n        \"`import secrets` from python standard library, then run secrets.compare_digest(val1,val2) instead.\",\n        RemovedInNextVersionWarning,\n        stacklevel=2\n    )\n    return secrets.compare_digest(force_bytes(val1), force_bytes(val2))\n\n`",
+      "Sarah Boyce: stage changed stage\n        Unreviewed → Accepted",
+      "JaeHyuckSa: status changed; owner set owner\n        set to JaeHyuckSa\n          \n          status\n        new → assigned",
+      "JaeHyuckSa: has_patch changed has_patch\n        set",
+      "JaeHyuckSa: needs_better_patch changed needs_better_patch\n        set",
+      "JaeHyuckSa: needs_better_patch changed needs_better_patch\n        unset",
+      "Sarah Boyce: needs_better_patch changed needs_better_patch\n        set",
+      "JaeHyuckSa: needs_better_patch changed needs_better_patch\n        unset",
+      "Sarah Boyce: stage changed stage\n        Accepted → Ready for checkin",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        assigned → closed\n          \n        \n        \nIn 0246f47:\n\nFixed #36546 -- Deprecated django.utils.crypto.constant_time_compare() in favor of hmac.compare_digest().\n\nSigned-off-by: SaJH <wogur981208@…>",
+      "In d0e4dd5c:\n\nFixed #36572 -- Revert \"Fixed #36546 -- Deprecated django.utils.crypto.constant_time_compare() in favor of hmac.compare_digest().\"\n\nThis reverts commit 0246f478882c26bc1fe293224653074cd46a90d0.",
+      "Sarah Boyce: has_patch, stage, status changed; resolution deleted has_patch\n        unset\n          \n          resolution\n        fixed\n          \n          stage\n        Ready for checkin → Someday/Maybe\n          \n          status\n        closed → new\n          \n        \n        \nReopening following revert. See discussion in #36572\n\nA later first step could be to replace internal usage of constant_time_compare() with compare_digest()\n\nThe deprecation itself needs more consideration",
+      "JaeHyuckSa: There are quite a few points that need further discussion, so it’s difficult to move this forward right now. I’ll unassign myself for the time being",
+      "JaeHyuckSa: status changed; owner deleted owner\n        JaeHyuckSa removed\n          \n          status\n        new → assigned",
+      "JaeHyuckSa: cc set cc\n        JaeHyuckSa added",
+      "Pravin: What is current state, Can i work on this ?",
+      "Simon Charette: Pravin, refer to the discussion on the revert commit in comment:12. Looks like we first want to stop using it internally.",
+      "Pravin: cc changed cc\n        Pravin added",
+      "Pravin: @Simon Thanks for the more context.\n\nI'm going to start working on this , First I will remove internal dependency on constant_time_compare.",
+      "Pravin: owner set owner\n        set to Pravin",
+      "Pravin: just confirming the technical approach for the internal dependency removal:\n\n I will be using secrets.compare_digest() for the replacement.\n The implementation at the call site will include force_bytes() on both arguments to ensure type safety: secrets.compare_digest(force_bytes(val1), force_bytes(val2)).\n The definition of constant_time_compare() itself will not be modified to avoid breaking third-party applications that rely on its current type-coercion logic.\n\nExample of the change:\n\nOld internal Django code:constant_time_compare(val1, val2)\nNew internal Django code: secrets.compare_digest(force_bytes(val1), force_bytes(val2))\n\nI am proceeding with the internal refactoring now.",
+      "Tim Graham: No, the force_bytes() is not needed in Django's use of constant_time_compare(), see ticket:36572#comment:4. The problem is only with third-party users of the function.",
+      "Pravin: Hi Tim, \nI was in that dilema and I was not so confident in removing force_bytes. But Since you confirmed it I can safely proceed ( i will no use force_bytes ). Thanks.",
+      "Pravin: has_patch changed has_patch\n        set",
+      "Pravin: can i make triage stage to \"Accepted\" ?",
+      "Pravin: stage changed stage\n        Someday/Maybe → Accepted",
+      "JaeHyuckSa: stage changed stage\n        Accepted → Someday/Maybe\n          \n        \n        \nPlease make it so that only the ticket classifier can change the ticket statu"
+    ],
+    "fetched_at": "2026-11-26T16:46:53.442Z"
+  },
+  {
+    "ticket": "PR#19778",
+    "source": "github",
+    "title": "Fixed #36572 -- Revert \"Fixed #36546 -- Deprecated django.utils.crypto.constant_time_compare() in favor of hmac.compare_digest().\"",
+    "body": "This reverts commit 0246f478882c26bc1fe293224653074cd46a90d0.\r\n\r\n#### Trac ticket number\r\n\r\nticket-36572",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:46:53.442Z"
+  },
+  {
+    "ticket": "PR#19745",
+    "source": "github",
+    "title": "Fixed #36546 -- Deprecated `django.utils.crypto.constant_time_compare()` in favor of `hmac.compare_digest()`.",
+    "body": "#### Trac ticket number\r\n<!-- Replace XXXXX with the corresponding Trac ticket number, or delete the line and write \"N/A\" if this is a trivial PR. -->\r\n\r\nticket-36546\r\n\r\n#### Branch description\r\ndjango.utils.crypto.constant_time_compare() is now just a duplicate wrapper around the standard library’s hmac.compare_digest(), so it is being deprecated in favor of using the standard function directly.\r\n\r\n\r\n#### Checklist\r\n- [x] This PR targets the `main` branch. <!-- Backports will be evaluated and done by mergers, when necessary. -->\r\n- [x] The commit message is written in past tense, mentions the ticket number, and ends with a period.\r\n- [x] I have checked the \"Has patch\" ticket flag in the Trac system.\r\n- [x] I have added or updated relevant tests.\r\n- [x] I have added or updated relevant docs, including release notes if applicable.\r\n- [ ] I have attached screenshots in both light and dark modes for any UI changes.\r\n",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:46:53.442Z"
+  }
+]

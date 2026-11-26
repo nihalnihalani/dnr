@@ -1,0 +1,46 @@
+[
+  {
+    "ticket": "#31877",
+    "source": "trac",
+    "title": "TemplateView.get_context_data()'s kwargs returns SimpleLazyObjects that causes a crash when filtering.",
+    "body": "Example Code that works in 3.0, but not in 3.1:\r\n\r\n\r\n{{{\r\nclass OfferView(TemplateView):\r\n    template_name = \"offers/offer.html\"\r\n\r\n    def get_context_data(self, **kwargs):\r\n        offer_slug = kwargs.get(\"offer_slug\", \"\")\r\n\r\n        offer = get_object_or_404(Account, slug=offer_slug)\r\n\r\n        return {\"offer\": offer, \"offer_slug\": offer_slug}\r\n}}}\r\n\r\n\r\nIn order to make this work in 3.1, you have to explicitly convert the result of kwargs.get() to a string to get the SimpleLazyObject to resolve:\r\n\r\n\r\n{{{\r\nclass OfferView(TemplateView):\r\n    template_name = \"offers/offer.html\"\r\n\r\n    def get_context_data(self, **kwargs):\r\n        offer_slug = kwargs.get(\"offer_slug\", \"\")\r\n\r\n        offer = get_object_or_404(Account, slug=str(offer_slug))\r\n\r\n        return {\"offer\": offer, \"offer_slug\": offer_slug}\r\n}}}\r\n\r\n\r\nThe error generated if you don't is:\r\n\r\n**Error binding parameter 0 - probably unsupported type**\r\n\r\nfrom **django/db/backends/sqlite3/operations.py**, line 144, in _quote_params_for_last_executed_query\r\n\r\n\r\nIn both cases, the urls.py looks like:\r\n\r\n\r\n{{{\r\npath(\r\n        \"/offers/<slug:offer_slug>/\",\r\n        OfferView.as_view(),\r\n        name=\"offer_view\",\r\n    ),\r\n}}}\r\n\r\n\r\n\r\nWhen debugging, I found that offer_slug (coming in from kwargs.get) was of type '**SimpleLazyObject**' in Django 3.1, and when I explicitly converted it to a string, get_object_or_404 behaved as expected.\r\n\r\nThis is using Python 3.7.8 with SQLite.\r\n",
+    "comments": [
+      "Tim L. White: summary changed summary\n        In Django 3.1, get_object_or_404 does not resolve SimpleLazyObjects, and throws Error binding parameter 0 - probably unsupported type from SQLite → In Django 3.1, get_object_or_404 does not resolve SimpleLazyObjects, and throws \"Error binding parameter 0 - probably unsupported type\" from SQLite",
+      "Mariusz Felisiak: component, severity, stage, summary changed; cc set; keywords deleted cc\n        Adam Johnson added\n          \n          component\n        Database layer (models, ORM) → Generic views\n          \n          keywords\n        SQLite removed\n          \n          severity\n        Normal → Release blocker\n          \n          stage\n        Unreviewed → Accepted\n          \n          summary\n        In Django 3.1, get_object_or_404 does not resolve SimpleLazyObjects, and throws \"Error binding parameter 0 - probably unsupported type\" from SQLite → TemplateView.get_context_data()'s kwargs returns SimpleLazyObjects that causes a crash when filtering.\n          \n        \n        \nThanks for the report. get_object_or_404() and QuerySet.filter() with SimpleLazyObject throw the same exception in Django 2.2 or 3.0.\n\nTemplateView.get_context_data()'s kwargs returns SimpleLazyObjects in Django 3.1 which causes a crash. Passing URL kwargs into context is deprecated (see #19878) but should still work in Django 3.1 and 3.2.\n\nRegression in 4ed534758cb6a11df9f49baddecca5a6cdda9311.\nReproduced at 60626162f76f26d32a38d18151700cb041201fb3.",
+      "Adam Johnson: owner, status changed owner\n        changed from nobody to Adam Johnson\n          \n          status\n        new → assigned",
+      "Adam Johnson: Using lazy() instead of SimpleLazyObject() fixes this - PR is up.",
+      "Mariusz Felisiak: has_patch changed has_patch\n        set\n          \n        \n        \n​PR",
+      "Mariusz Felisiak: stage changed stage\n        Accepted → Ready for checkin",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        assigned → closed\n          \n        \n        \nIn 20799cc0:\n\nFixes #31877 -- Used lazy() for TemplateView kwarg deprecation warning.\n\nSimpleLazyObjects cause a crash when filtering.\n\nThanks Tim L. White for the report.\n\nRegression in 4ed534758cb6a11df9f49baddecca5a6cdda9311.",
+      "In 9ae40d81:\n\n[3.1.x] Fixes #31877 -- Used lazy() for TemplateView kwarg deprecation warning.\n\nSimpleLazyObjects cause a crash when filtering.\n\nThanks Tim L. White for the report.\n\nRegression in 4ed534758cb6a11df9f49baddecca5a6cdda9311.\n\nBackport of 20799cc0a6d98816b9ef0577e24691bd26b80d7d from master",
+      "Mariusz Felisiak: status changed; resolution deleted resolution\n        fixed\n          \n          status\n        closed → new\n          \n        \n        \nPassing deprecated keyword arguments to a queryset with lookups, e.g. Artist.objects.get(name__iexact=artist_name), still crashes on PostgreSQL:\n\ndjango.db.utils.ProgrammingError: can't adapt type '__proxy__'\n\nThanks Mohit Solanki for the report.",
+      "Adam Johnson: 😟 Hmm this is a tough one.\n\npsycopg2 uses type(obj) to look for its \"adapter\" - in its C extension: ​https://github.com/psycopg/psycopg2/blob/e14e3385b4809ec4223894f8c7a009b1560eb41d/psycopg/microprotocols.c#L151 . So this \"proxy\" approach may not be feasible.\n\nI know of a more accurate proxy wrapper that proxies more attributes than Django's lazy objects - wrapt.ObjectProxy - ​https://wrapt.readthedocs.io/en/latest/wrappers.html#object-proxy. But docs there acknowledge that it can't even make type() work, whilst it makes isinstance() work.\n\nAny ideas of alternative approaches?",
+      "Mariusz Felisiak: has_patch, stage changed has_patch\n        unset\n          \n          stage\n        Ready for checkin → Accepted",
+      "Tom Forbes: There isn't really a general purpose way of wrapping primitive/arbitrary types like this in Python that won't hit some corner cases. You can make an object appear to be a duck by adapting it's quacking dynamically (i.e wrapt.ObjectProxy), but if someone looks close enough they can always see that it's actually dog. And on the whole that's a good thing, IMO.\n\nOur use of kwargs makes this harder as we lose the ability to construct a container that can trigger the deprecation warning which would be the typical easy approach. There is no way to control what lands on the other side of get_context_data() (it's always a plain kwargs dict), and there is no way to construct a wrapper value that looks _exactly_ like the value it's wrapping.\n\nThat basically leaves only \"crazy\" approaches, some of which are fun to consider but none of which are suitable. Here's one that uses settrace() to do what we need:\n\nimport sys\n\nclass DeprecatedWrapper(dict):\n    def __getitem__(self, key):\n        warnings.warn(\"stop right there, scoundrel!\")\n        return super().__getitem__(key)\n\ndef wrap_kwargs(frame, *args):\n    frame.f_locals['kwargs'] = DeprecatedWrapper(frame['kwargs'])\n    sys.settrace(None)\n\nclass TemplateView(...):\n    def get(...):\n        ...\n        sys.settrace(wrap_kwargs)\n        context = self.get_context_data(**context_kwargs)\n        return self.render_to_response(context)\n\nGiven these issues, I'm not sure if we can go ahead with deprecating this.",
+      "Tom Forbes: cc changed cc\n        Tom Forbes added",
+      "Mariusz Felisiak: has_patch changed has_patch\n        set\n          \n        \n        \nAgreed, we should revert it since we don't have a clear deprecation path.\n\n​PR",
+      "Adam Johnson: I agree too.",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        new → closed\n          \n        \n        \nIn 04e87e79:\n\nRefs #31877 -- Reverted \"Fixes #31877 -- Used lazy() for TemplateView kwarg deprecation warning.\"\n\nThis reverts commit 20799cc0a6d98816b9ef0577e24691bd26b80d7d.",
+      "In bb8f6693:\n\nFixed #31877 -- Reverted \"Fixed #19878 -- Deprecated TemplateView passing URL kwargs into context.\"\n\nThis reverts commit 4ed534758cb6a11df9f49baddecca5a6cdda9311.",
+      "In f247c66b:\n\n[3.1.x] Refs #31877 -- Reverted \"Fixes #31877 -- Used lazy() for TemplateView kwarg deprecation warning.\"\n\nThis reverts commit 20799cc0a6d98816b9ef0577e24691bd26b80d7d.\n\nBackport of 04e87e79a0bd2b1b9fdc30f884a637a3268733f0 from master",
+      "In e81aa7a:\n\n[3.1.x] Fixed #31877 -- Reverted \"Fixed #19878 -- Deprecated TemplateView passing URL kwargs into context.\"\n\nThis reverts commit 4ed534758cb6a11df9f49baddecca5a6cdda9311.\n\nBackport of bb8f66934d93faf80cd1a2dda65aaedce21a6fc5 from master"
+    ],
+    "fetched_at": "2026-11-26T16:44:39.563Z"
+  },
+  {
+    "ticket": "PR#13341",
+    "source": "github",
+    "title": "Fixed #31877 -- Reverted \"Fixed #19878 -- Deprecated TemplateView passing URL kwargs into context.\"",
+    "body": "ticket-31877\r\nticket-19878\r\n\r\nI think we should revert it because we don't have a clear deprecation path, and close ticket-19878 as wontfix.",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:44:39.563Z"
+  },
+  {
+    "ticket": "PR#13297",
+    "source": "github",
+    "title": "Fixes #31877 -- Used lazy() for TemplateView kwarg deprecation warning.",
+    "body": "[ticket](https://code.djangoproject.com/ticket/31877)",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:44:39.563Z"
+  }
+]

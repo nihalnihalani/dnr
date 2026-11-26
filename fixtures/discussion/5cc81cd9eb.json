@@ -1,0 +1,36 @@
+[
+  {
+    "ticket": "#29324",
+    "source": "trac",
+    "title": "Change Settings to raise ImproperlyConfigured on SECRET_KEY; not initialization",
+    "body": "Since ticket #17800, initializing settings without a `SECRET_KEY` raises a an `ImproperlyConfigured` during settings initialization.\r\n\r\nInstead, I think the error should be raised when the setting is ''accessed'' as `Settings.SECRET_KEY`.\r\n\r\nMy use case, my project has a number of management commands that run in a non-production, minimally configured environment. These management commands do not require `SECRET_KEY`, however, the environment is forced to provide one.\r\n\r\nAs a workaround this environment has been generating a random secret key each run. If Django were to instead raise the error on `SECRET_KEY` access, this workaround would not be necessary.\r\n",
+    "comments": [
+      "Jon Dufresne: has_patch changed has_patch\n        set\n          \n        \n        \n​PR",
+      "Tim Graham: needs_better_patch, stage changed needs_better_patch\n        set\n          \n          stage\n        Unreviewed → Accepted",
+      "Jon Dufresne: needs_better_patch changed needs_better_patch\n        unset\n          \n        \n        \nUpdated PR to address feedback. Thanks.",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        new → closed\n          \n        \n        \nIn b3cffde5:\n\nFixed #29324 -- Made Settings raise ImproperlyConfigured if SECRET_KEY is accessed and not set.",
+      "Marten Kenbeek: severity, status changed; resolution deleted resolution\n        fixed\n          \n          severity\n        Normal → Release blocker\n          \n          status\n        closed → new\n          \n        \n        \nThis causes a regression when using settings.configure(). UserSettingsHolder does not handle the missing SECRET_KEY attribute, and raises an AttributeError instead of ImproperlyConfigured. \n\n(Discovered by bukensik in #django)",
+      "Tim Graham: has_patch, version changed has_patch\n        unset\n          \n          version\n        master → 2.1",
+      "Tim Graham: has_patch changed has_patch\n        set\n          \n        \n        \n​PR for the regression.",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        new → closed\n          \n        \n        \nIn 5cc81cd9:\n\nReverted \"Fixed #29324 -- Made Settings raise ImproperlyConfigured if SECRET_KEY is accessed and not set.\"\n\nThis reverts commit b3cffde5559c4fa97625512d7ec41a674be26076 due to\n\na regression and performance concerns.",
+      "In 483f5d6c:\n\n[2.1.x] Reverted \"Fixed #29324 -- Made Settings raise ImproperlyConfigured if SECRET_KEY is accessed and not set.\"\n\nThis reverts commit b3cffde5559c4fa97625512d7ec41a674be26076 due to\n\na regression and performance concerns.\n\nBackport of 5cc81cd9eb69f5f7a711412c02039b435c393135 from master",
+      "Tim Graham: has_patch, severity, status changed; resolution deleted has_patch\n        unset\n          \n          resolution\n        fixed\n          \n          severity\n        Release blocker → Normal\n          \n          status\n        closed → new\n          \n        \n        \nI reverted the original patch for now as Claude expressed some concerns, \"I'm not sure to like the additional test for every setting access, for a corner-case use case. I think we should consider reverting the initial patch instead.\"\n\nI'll leave the ticket open for Jon to provide an alternative patch or to close the ticket as wontfix.",
+      "Jon Dufresne: has_patch changed has_patch\n        set\n          \n        \n        \n​PR",
+      "Tim Graham: needs_better_patch changed needs_better_patch\n        set",
+      "Jon Dufresne: status changed; resolution set resolution\n        → wontfix\n          \n          status\n        new → closed\n          \n        \n        \nAfter researching the code necessary to handle the edge cases, I don't think the complexity is worth it to include in Django. I'll stick with my local project workaround instead.",
+      "Florian Apolloner: status changed; resolution deleted resolution\n        wontfix\n          \n          status\n        closed → new\n          \n        \n        \nReopening after recent ML discussion: ​https://groups.google.com/g/django-developers/c/CIPgeTetYpk",
+      "Mariusz Felisiak: needs_better_patch, owner, status changed needs_better_patch\n        unset\n          \n          owner\n        changed from nobody to Florian Apolloner\n          \n          status\n        new → assigned\n          \n        \n        \n​PR",
+      "Carlton Gibson: stage changed stage\n        Accepted → Ready for checkin",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        assigned → closed\n          \n        \n        \nIn 948a8744:\n\nFixed #29324 -- Made SECRET_KEY validation lazy (on first access)."
+    ],
+    "fetched_at": "2026-11-26T16:43:23.388Z"
+  },
+  {
+    "ticket": "PR#9876",
+    "source": "github",
+    "title": "Fixed #29324 -- Made Settings raise ImproperlyConfigured on SECRET_KEY access; not in init.",
+    "body": "https://code.djangoproject.com/ticket/29324",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:43:23.388Z"
+  }
+]

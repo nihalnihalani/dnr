@@ -1,0 +1,410 @@
+[
+  {
+    "sha": "04e87e79a0bd2b1b9fdc30f884a637a3268733f0",
+    "subject": "Refs #31877 -- Reverted \"Fixes #31877 -- Used lazy() for TemplateView kwarg deprecation warning.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "070cbac0dbf6a09b55aad322137ab168b75bf56b",
+    "subject": "Restored multiprocessing concurrency on coverage.py settings",
+    "matched_form": "body-this-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "0756c61f2ada56e4ae625589099c0141a77737eb",
+    "subject": "Fixed #33893 -- Reverted \"Fixed #28889 -- Prevented double submission of admin forms.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "0c1518ee429b01c145cf5b34eab01b0b92f8c246",
+    "subject": "Fixed #34590 -- Reverted \"Refs #33308 -- Improved adapting DecimalField values to decimal.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "0e444e84f87d174713a2aef0c4f9704ce2865586",
+    "subject": "Fixed #34515 -- Made LocaleMiddleware prefer language from paths when i18n patterns are used.",
+    "matched_form": "body-this-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "0f182558484ec7964413fc93f6361f0842135b2b",
+    "subject": "Reverted \"Reduced time.sleep() in cache touch() tests.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "12385b4fa7059aab8e4f671853cc09ae8509501f",
+    "subject": "Fixed #36283 -- Reverted \"Fixed #35798, Refs #31641 -- Prevented admin navigation sidebar loading flicker.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "1586a09b7949bbb7b0d84cb74ce1cadc25cbb355",
+    "subject": "Fixed #34544 -- Avoided DBMS_LOB.SUBSTR() wrapping with IS NULL condition on Oracle.",
+    "matched_form": "body-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "166a3b32632c141541d1c3f0eff18e1d8b389404",
+    "subject": "Fixed #33953 -- Reverted \"Fixed #33201 -- Made RenameModel operation a noop for models with db_table.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "1674c70525bc370132a1db27617e468081920d11",
+    "subject": "Fixed #34024 -- Fixed crash when aggregating querysets with Q objects annotations.",
+    "matched_form": "body-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "173034b00589c083793d495e8b07e35be2cb1cf0",
+    "subject": "Refs #34482 -- Reverted \"Fixed #32969 -- Fixed pickling HttpResponse and subclasses.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "1a03a984ab3728253f964ba16cd8d806f76bddf9",
+    "subject": "Fixed #36380 -- Deferred SQL formatting when running tests with --debug-sql.",
+    "matched_form": "body-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "1bc805e23b73a580b82a1d416ab0fb59a1073047",
+    "subject": "Fixed #36331 -- Reverted \"Fixed #36055 -- Prevented overlap of object-tools buttons and page header in the admin.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "258c88a913fe1e7704cdb6f61c6ceb7493f6092a",
+    "subject": "Refs #5691 -- Made cache keys independent of USE_L10N.",
+    "matched_form": "body-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "280ca147af9cdfce1ca9cb14cc3c5527ff6c7a02",
+    "subject": "Fixed #34484, Refs #34482 -- Reverted \"Fixed #29186 -- Fixed pickling HttpRequest and subclasses.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "28e2077148f7602d29165e90965974698819cbba",
+    "subject": "Refs #32433 -- Reallowed calling QuerySet.delete() after distinct().",
+    "matched_form": "body-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "3d4ffd1ff0eb9343ee41de77caf6ae427b6e873c",
+    "subject": "Fixed #32065 -- Restored leading dot to CSRF_COOKIE_DOMAIN examples.",
+    "matched_form": "body-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "3dac3271d286f2790780e89d31ddbb7197f8defa",
+    "subject": "Reverted \"Fixed #28646 -- Prevented duplicate index when unique is set to True on PostgreSQL.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "424e0d86973d88b402b55f20884938715aad740b",
+    "subject": "Fixed #36520 -- Reverted \"Fixed #35440 -- Simplified parse_header_parameters by leveraging stdlid's Message.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "4372233ebf9acef606f3d2f7be4d6ba73b168084",
+    "subject": "Refs #32355 -- Restored PY36 and PY37 version constants.",
+    "matched_form": "body-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "43933a1dca07047e95ec990d9289d0212668009e",
+    "subject": "Reverted \"Fixed #26434 -- Removed faulty clearing of ordering field when missing from explicit grouping.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "45f530ffc4bb775ce838889992133193296a812b",
+    "subject": "Reverted release notes for bdd76c4c3817d8e3ed5b0450d5e18e4eae096f16.",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "47c837a1ff96ef1b10b44477a7a9f72283d12e83",
+    "subject": "Refs #23919 -- Removed Python 2 workaround in fixtures_regress.",
+    "matched_form": "body-this-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "4b97f698db91854eebbed32f2ac210221a24f440",
+    "subject": "Reverted \"Disabled caching in GitHub actions for Windows tests.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "51faf4bd172cd4cb219a9793facbfa00246c9f3c",
+    "subject": "Fixed #34148 -- Reverted \"Fixed #32901 -- Optimized BaseForm.__getitem__().\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "5424151f96252e1289e9a6f7eb842cd1dc87850a",
+    "subject": "Fixed #35655 -- Reverted \"Fixed #35295 -- Used INSERT with multiple rows on Oracle 23c.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "549445519ce90cc5c1e3f981853cc0c67725f3ed",
+    "subject": "Reverted \"Fixed #30565 -- Closed HttpResponse when wsgi.file_wrapper closes file-like object.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "54a902c6e81214462388f79a7c42f1c88c863dfd",
+    "subject": "Reverted \"Refs #35803 -- Added support for __coveredby GIS lookup on MariaDB 11.7+.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "55bcbd8d172b689811fae17cde2f09218dd74e9c",
+    "subject": "Fixed #34378 -- Made QuerySet.in_bulk() not clear odering when id_list is passed.",
+    "matched_form": "body-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "578b3046e3b4adc43655bb5dd955054b7bf19f89",
+    "subject": "Reverted \"Refs #23919 -- Removed obsolete __init__.py files in management command directories.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "5b05a45c62f4702a6039cd3de290320c232cb808",
+    "subject": "Corrected wrapping in 3.2 release notes.",
+    "matched_form": "body-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "5e0aa362d91d000984995ce374c2d7547d8d107f",
+    "subject": "Fixed #33984 -- Reverted \"Fixed #32980 -- Made models cache related managers.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "5e68bffba53625fe3ddbb461d0611060346f8ba3",
+    "subject": "Reverted \"Pinned flake8 == 3.9.2 in GitHub actions.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "5f2f12f61c8e9bc0323efea391ee56e721ce14c6",
+    "subject": "Reverted \"Fixed #34830 -- Added request to csrf_failure view's template context.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "66f30dbf253f89a3803aebbcee2675ce3e186b00",
+    "subject": "Refs #27236 -- Reverted \"Refs #27236 -- Refactored out DeprecationForHistoricalMigrationMixin.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "7330408ac36f893a4a11c668ba230b440ec09f41",
+    "subject": "Reverted \"Refs #31949 -- Enabled @sensitive_variables to work with async functions.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "75daea2fc24da1c987d4fd979adb31a2c5a29d22",
+    "subject": "Refs #27604 -- Fixed loading of legacy cookie hashes when CookieStorage.key_salt is changed.",
+    "matched_form": "body-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "78da5ca0c1f2ab3201f8f6cd629e80d805ea023d",
+    "subject": "Reverted \"Fixed #33213 -- Doc'd testing code coverage in parallel and used it.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "79ab0993d0f2253e10ea638bcefc98ec2d890a47",
+    "subject": "Fixed #36829 -- Reverted value of ClearableFileInput.use_fieldset to True.",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "83339d2103f447377fedb3bd145b52c3ef2b667c",
+    "subject": "Fixed #34523 -- Fixed TransactionManagementError in QuerySet.update_or_create() with MyISAM storage engine.",
+    "matched_form": "body-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "895f28f9cbed817c00ab68770433170d83132d90",
+    "subject": "Reverted \"Pinned asgiref == 3.2.5 in test requirements.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "8cfcf9a30edd3ec0447af6a493b16d21e298e4e0",
+    "subject": "Reverted \"Fixed #35564 -- Improved readability of subclass identification.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "8d6a20b656ff3fa18e36954668a44a831c2f6ddd",
+    "subject": "Fixed #35604, Refs #35326 -- Made FileSystemStorage.exists() behaviour independent from allow_overwrite.",
+    "matched_form": "body-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "903aaa35e5ceaa33bfc9b19b7f6da65ce5a91dd4",
+    "subject": "Fixed #33159 -- Reverted \"Fixed #32970 -- Changed WhereNode.clone() to create a shallow copy of children.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "974942a75039ba43e618f6a5ff95e08b5d5176fd",
+    "subject": "Fixed #33955, Fixed #33971 -- Reverted \"Fixed #32565 -- Moved internal URLResolver view-strings mapping to admindocs.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "a1e9e9abc592b8f44fa798c6e4e225b1a04f757c",
+    "subject": "Refs #27236 -- Reverted \"Refs #27236 -- Added generic mechanism to handle the deprecation of migration operations.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "aade2b461acafd16cfc82449b3df88a0f1c1c197",
+    "subject": "Fixed #32223 -- Removed strict=True in Path.resolve() in autoreloader.",
+    "matched_form": "body-this-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "abfdb4d7f384fb06ed9b7ca37b548542df7b5dda",
+    "subject": "Reverted \"Fixed forms_tests.tests.test_renderers with Jinja 3.1.0+.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "ad811335bdd57d65dddbc05375ec3a70b59c96fb",
+    "subject": "Refs #29000 -- Restored delayed model rendering of RenameField.",
+    "matched_form": "body-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "ba9ced3e9a643a05bc521f0a2e6d02e3569de374",
+    "subject": "Fixed #33253 -- Reverted \"Fixed #32319 -- Added ES module support to ManifestStaticFilesStorage.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "bb8f66934d93faf80cd1a2dda65aaedce21a6fc5",
+    "subject": "Fixed #31877 -- Reverted \"Fixed #19878 -- Deprecated TemplateView passing URL kwargs into context.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "bcacc6321ae819965f478bfee2072a796801f298",
+    "subject": "Refs #34517 -- Restored skipping ImageFileField.update_dimension_fields without width/height fields.",
+    "matched_form": "body-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "c773d5794eb425c4836c726bdf6e1e742c94e9c0",
+    "subject": "Refs #27236 -- Reverted AlterIndexTogether deprecation.",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "cb06f5ef8c80fc6a610db0fc36fb9dc7c625335a",
+    "subject": "Reverted \"Fixed #30711 -- Doc'd django.contrib.postgres.fields.hstore.KeyTransform().\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "d0e4dd5cdd743a5c43c4ccc2c8fa29d3982eaa71",
+    "subject": "Fixed #36572 -- Revert \"Fixed #36546 -- Deprecated django.utils.crypto.constant_time_compare() in favor of hmac.compare_digest().\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "d569c1dcfeb26ca9ee391e5dfeadedf2b5ed4253",
+    "subject": "Fixed #34639 -- Reverted \"Fixed #32682 -- Made admin changelist use Exists() instead of distinct() for preventing duplicates.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "da8fa764134980ee1079f790cda6616f32cf9c44",
+    "subject": "Fixed #34081 -- Reverted \"Fixed #33994 -- Corrected position of extrastyle and extrahead blocks in admin base template.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "de4884b114534f43c49cf8c5b7f10181e737f4e9",
+    "subject": "Reverted \"Refs #30446, Refs #34944 -- Fixed crash when adding GeneratedField with string Value().\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "dfd63ff43408e7901cc214b0482a7f844244d439",
+    "subject": "Refs #35506 -- Reverted \"global URLconf\" to \"root URLconf\" in tutorial 1.",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "e07609a0d1cac573890380ee32b85d7743632650",
+    "subject": "Refs #32858, Refs #32392 -- Restored using :: shortcut syntax in Cast() on PostgreSQL.",
+    "matched_form": "body-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "e36028fb9c0c3b6d402fef2cdabe06ebb90f6d3a",
+    "subject": "Reverted \"Pinned asgiref == 3.2.7 in test requirements.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "e4c4a178aa642f8493b7ae2c0ad58527af51f67e",
+    "subject": "Reverted \"Fixed #36620 -- Added coverage workflow to summarize coverage in pull requests.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "e78420c2b8ef62acb6b7a37b71e3aa6833d630fb",
+    "subject": "Refs #36680 -- Avoided manipulating PATH in AdminScriptTestCase.",
+    "matched_form": "body-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "e7d62e97eb40ab441778d1dff9885b5d892d0f80",
+    "subject": "Refs #22426 -- Removed pre-Django 1.5 messages compatibility code and test.",
+    "matched_form": "body-this-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "eb70aafdba18ac30e53056162c32ee6c21dea0b4",
+    "subject": "Reverted \"Fixed #35803 -- Added support for Collect, GeoHash, and IsValid on MariaDB 11.7+.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "f2a725fba3abfef28503600e2fdaab6c30482e56",
+    "subject": "Fixed #30274 -- Prevented segmentation fault on LineString iteration.",
+    "matched_form": "body-this-reverts",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "fac662f4798f7e4e0ed9be6b4fb4a87a80810a68",
+    "subject": "Fixed #33598 -- Reverted \"Removed unnecessary reuse_with_filtered_relation argument from Query methods.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  },
+  {
+    "sha": "ff55adbd0da6618abaf265d16196bf54f81aa77a",
+    "subject": "Reverted \"Fixed #30300 -- Allowed migrations to be loaded from directories without __init__.py file.\"",
+    "matched_form": "subject",
+    "confirmed_by": "unconfirmed:auto-form-match"
+  }
+]

@@ -1,0 +1,46 @@
+[
+  {
+    "ticket": "#34148",
+    "source": "trac",
+    "title": "Removing a field from form.fields previously added to _bound_fields_cache has no effect",
+    "body": "The fix for issue \"`BaseForm.__getitem__()` does unneeded work in the happy path\" (#32901) added to main in https://github.com/django/django/commit/edde2a069929c93e37835dc3f7c9a229040058e2, A shortcut was added to retrieve bound fields from `form._bound_fields_cache`.\r\n\r\nIf a form removes a field after the cache entry for that field was created, the field can be still retrieved from the cache, even though the field is not in `form.fields` anymore:\r\n\r\n{{{\r\nimport django\r\nfrom django import forms\r\nfrom django.test import SimpleTestCase\r\n\r\nclass Form(forms.Form):\r\n    action = forms.CharField()\r\n\r\n    def __init__(self, *args, **kwargs):\r\n        super().__init__(*args, **kwargs)\r\n\r\n        # The form was iterated (in my case, separating basic and advanced fields)\r\n        [field for field in self if getattr(field, 'advanced', False)]\r\n\r\n        # After that, we remove a field (i.e. because it is not relevant for admins)\r\n        del self.fields[\"action\"]\r\n\r\n\r\nclass FormTestCase(SimpleTestCase):\r\n    def test_form(self):\r\n        \"\"\"\r\n        The field should be removed from the instance,\r\n        but it can be still retrieved from self._bound_fields_cache.\r\n        \"\"\"\r\n        print(\"django version\", django.VERSION)\r\n        form = Form()\r\n\r\n        with self.assertRaises(KeyError):\r\n            form[\"action\"]\r\n}}}\r\n\r\nThis succeeds with `django==3.2`:\r\n\r\n\r\n\r\n{{{\r\npip install django==3.2.16\r\n...\r\n./manage.py test tests\r\nSystem check identified no issues (0 silenced).\r\ndjango version (3, 2, 16, 'final', 0)\r\n.\r\n----------------------------------------------------------------------\r\nRan 1 test in 0.000s\r\n\r\nOK\r\n}}}\r\n\r\n\r\n\r\nBut fails with `django==4.0.8` (and `django==4.1.3`):\r\n\r\n{{{\r\npip install django==4.0.8\r\n...\r\n./manage test tests\r\nFound 1 test(s).\r\nSystem check identified no issues (0 silenced).\r\ndjango version (4, 0, 8, 'final', 0)\r\nF\r\n======================================================================\r\nFAIL: test_form (test_forms.FormTestCase)\r\nThe field should be removed from the instance,\r\n----------------------------------------------------------------------\r\nTraceback (most recent call last):\r\n  File \"/Users/jieter/workspace/django-test/tests/test_forms.py\", line 27, in test_form\r\n    form[\"action\"]\r\nAssertionError: KeyError not raised\r\n\r\n----------------------------------------------------------------------\r\nRan 1 test in 0.000s\r\n\r\nFAILED (failures=1)\r\n}}}\r\n\r\n",
+    "comments": [
+      "Carlton Gibson: stage changed; cc set cc\n        Chris Jerdonek added\n          \n          stage\n        Unreviewed → Accepted\n          \n        \n        \nThanks for the report. \n\nLooks like a bug yes. I think likely we just need to revert edde2a069929c93e37835dc3f7c9a229040058e2. 🤔\n(with added regression test for this case.)",
+      "Francesco Panico: owner, status changed owner\n        changed from nobody to Francesco Panico\n          \n          status\n        new → assigned",
+      "Francesco Panico: has_patch changed has_patch\n        set\n          \n        \n        \n​PR",
+      "Mariusz Felisiak: stage changed stage\n        Accepted → Ready for checkin",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        assigned → closed\n          \n        \n        \nIn 51faf4bd:\n\nFixed #34148 -- Reverted \"Fixed #32901 -- Optimized BaseForm.getitem().\"\n\nThis reverts commit edde2a069929c93e37835dc3f7c9a229040058e2.\n\nThanks Jan Pieter Waagmeester for the report."
+    ],
+    "fetched_at": "2026-11-26T16:45:27.136Z"
+  },
+  {
+    "ticket": "#32901",
+    "source": "trac",
+    "title": "BaseForm.__getitem__() does unneeded work in the happy path",
+    "body": "I noticed that in the \"happy path,\" `BaseForm.__getitem__()` does unneeded work: https://github.com/django/django/blob/fa35c8bdbc6aca65d94d6280fa463d5bc7baa5c0/django/forms/forms.py#L150-L164\r\n\r\nIt can just return `self._bound_fields_cache[name]` at the beginning and handle `KeyError`, instead of accessing `self.fields` followed by checking for the presence of `name` in `self._bound_fields_cache` before doing so each time.\r\n",
+    "comments": [
+      "Mariusz Felisiak: stage changed stage\n        Unreviewed → Accepted",
+      "Chris Jerdonek: has_patch changed has_patch\n        set\n          \n        \n        \nPR: ​https://github.com/django/django/pull/14596",
+      "Mariusz Felisiak: stage changed stage\n        Accepted → Ready for checkin",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        assigned → closed\n          \n        \n        \nIn edde2a0:\n\nFixed #32901 -- Optimized BaseForm.getitem().",
+      "In 51faf4bd:\n\nFixed #34148 -- Reverted \"Fixed #32901 -- Optimized BaseForm.getitem().\"\n\nThis reverts commit edde2a069929c93e37835dc3f7c9a229040058e2.\n\nThanks Jan Pieter Waagmeester for the report."
+    ],
+    "fetched_at": "2026-11-26T16:45:27.136Z"
+  },
+  {
+    "ticket": "PR#16306",
+    "source": "github",
+    "title": "Fixed #34148 -- Reverted \"Fixed #32901 -- Optimized BaseForm.__getitem__().\"",
+    "body": "Clearing a form field after it was cached had no effect. Thanks to @jieter for the report",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:45:27.136Z"
+  },
+  {
+    "ticket": "PR#14596",
+    "source": "github",
+    "title": "Fixed #32901 -- Optimized BaseForm.__getitem__().",
+    "body": "https://code.djangoproject.com/ticket/32901\r\n",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:45:27.136Z"
+  }
+]

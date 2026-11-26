@@ -1,0 +1,56 @@
+[
+  {
+    "ticket": "#35655",
+    "source": "trac",
+    "title": "Oracle > 23.3 does not support bulk insert with multiple rows",
+    "body": "The recent optimisation  in Django for multi-row insert in case of Oracle db version greater than 23+ is crashing with specific db versions. The issue is being reported [https://github.com/oracle/python-oracledb/issues/356]. The upcoming version 5.1 release have this changes and may cause crashes with database versions greater than 23.3.\r\nLink to the PR which added this optimisation - [https://github.com/django/django/pull/17969/]",
+    "comments": [
+      "Suraj Shaw: summary changed summary\n        Django crashes with oracle_db_version > 23.3 → Django crashes with Oracle database Version > 23.3",
+      "Suraj Shaw: The issue is reproducible.\n\nProbable Fixes:\n\n1 -> Switch to earlier version for multi-row insert (using select-union combination) till the issue is being resolved.\n2-> Migrate to ExecuteMany() instead of Execute() for multi-row insert. When the number of bind variables are higher ExecuteMany() will be performing much better. So yet another reason for migration.\n3-> Migrate from NVARCHAR2  to VARCHAR2 as it also resolves the issue with multi-row insert.",
+      "Suraj Shaw: easy changed easy\n        unset",
+      "Suraj Shaw: description changed description\n        modified (diff)",
+      "Sarah Boyce: cc changed cc\n        Csirmaz Bendegúz Mariusz Felisiak added",
+      "Mariusz Felisiak: As for me, it's an issue in Oracle not in Django itself. (2) and (3) are not doable (at least on this stage of our release cycle, (3) probably never, TBH). I'm not sure it's worth keeping 175b04942afaff978013db61495f3b39ea12989b for 23.3 > Oracle >= 23.0. Let's revert it, we can also close #35295 as \"wontfix\" (waiting for Oracle to make it work as promised).",
+      "Sarah Boyce: Thank you, I will do the revert and backport shortly",
+      "Sarah Boyce: has_patch, owner, stage, summary changed has_patch\n        set\n          \n          owner\n        changed from Suraj Shaw to Sarah Boyce\n          \n          stage\n        Unreviewed → Accepted\n          \n          summary\n        Django crashes with Oracle database Version > 23.3 → Oracle > 23.3 does not support bulk insert with multiple rows\n          \n        \n        \n​PR",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        assigned → closed\n          \n        \n        \nIn 5424151:\n\nFixed #35655 -- Reverted \"Fixed #35295 -- Used INSERT with multiple rows on Oracle 23c.\"\n\nThis reverts commit 175b04942afaff978013db61495f3b39ea12989b due to a crash when Oracle > 23.3.",
+      "In 03051db:\n\n[5.1.x] Fixed #35655 -- Reverted \"Fixed #35295 -- Used INSERT with multiple rows on Oracle 23c.\"\n\nThis reverts commit 175b04942afaff978013db61495f3b39ea12989b due to a crash when Oracle > 23.3.\n\nBackport of 5424151f96252e1289e9a6f7eb842cd1dc87850a from main."
+    ],
+    "fetched_at": "2026-11-26T16:46:41.644Z"
+  },
+  {
+    "ticket": "#35295",
+    "source": "trac",
+    "title": "Use INSERT with multiple rows on Oracle 23c+",
+    "body": "Oracle 23c finally allows to `INSERT` multiple rows into a table in a single step without a `UNION`-`SELECT` workaround 🎉 \r\n\r\nhttps://oracle-base.com/articles/23c/table-values-constructor-23c#insert",
+    "comments": [
+      "Mariusz Felisiak: has_patch changed has_patch\n        set\n          \n        \n        \n​PR",
+      "David Smith: stage changed stage\n        Unreviewed → Accepted",
+      "Mariusz Felisiak: needs_better_patch changed needs_better_patch\n        set\n          \n        \n        \nThe current patch fails on field_defaults.tests.DefaultTests.test_bulk_create_mixed_db_defaults_function:\n\ndjango.db.utils.DatabaseError: ORA-01797: this operator must be followed by ANY or ALL",
+      "In 33c06ca0:\n\nRefs #32673, Refs #35295 -- Avoided wrapping rhs direct values in lookups.",
+      "Mariusz Felisiak: needs_better_patch changed needs_better_patch\n        unset",
+      "In 912f72a:\n\nRefs #35295 -- Added BaseDatabaseOperations.bulk_insert_sql().\n\nCo-authored-by: Nick Pope <nick@…>",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        assigned → closed\n          \n        \n        \nIn 175b049:\n\nFixed #35295 -- Used INSERT with multiple rows on Oracle 23c.",
+      "In 5424151:\n\nFixed #35655 -- Reverted \"Fixed #35295 -- Used INSERT with multiple rows on Oracle 23c.\"\n\nThis reverts commit 175b04942afaff978013db61495f3b39ea12989b due to a crash when Oracle > 23.3.",
+      "In 03051db:\n\n[5.1.x] Fixed #35655 -- Reverted \"Fixed #35295 -- Used INSERT with multiple rows on Oracle 23c.\"\n\nThis reverts commit 175b04942afaff978013db61495f3b39ea12989b due to a crash when Oracle > 23.3.\n\nBackport of 5424151f96252e1289e9a6f7eb842cd1dc87850a from main.",
+      "Sarah Boyce: resolution changed resolution\n        fixed → wontfix\n          \n        \n        \nSee comment."
+    ],
+    "fetched_at": "2026-11-26T16:46:41.644Z"
+  },
+  {
+    "ticket": "PR#18440",
+    "source": "github",
+    "title": "Fixed #35655 -- Reverted \"Fixed #35295 -- Used INSERT with multiple rows on Oracle 23c.\"",
+    "body": "This reverts commit 175b04942afaff978013db61495f3b39ea12989b due to a crash when Oracle > 23.3.\r\n\r\n----\r\n\r\n@csirmazbendeguz can you confirm this fixes https://github.com/oracle/python-oracledb/issues/356 for you?\r\n",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:46:41.644Z"
+  },
+  {
+    "ticket": "PR#17969",
+    "source": "github",
+    "title": "Fixed #35295 -- Used INSERT with multiple rows on Oracle 23c.",
+    "body": "ticket-35295",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:46:41.644Z"
+  }
+]

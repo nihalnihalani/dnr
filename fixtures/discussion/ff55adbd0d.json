@@ -1,0 +1,43 @@
+[
+  {
+    "ticket": "#30300",
+    "source": "trac",
+    "title": "Allow migrations directories without __init__.py files",
+    "body": "Background: In python 3 a package with no `__init__.py` is implicitly a namespace package, so it has no `__file__` attribute. \r\n\r\nThe migrate command currently checks for existence of a `__file__` attribute on the `migrations` package. This check was introduced in #21015, because the `__file__` attribute was used in migration file discovery. \r\n\r\nHowever, in #23406 migration file discovery was changed to use `pkgutil.iter_modules ()`, instead of direct filesystem access. `pkgutil. iter_modules()` uses the package's `__path__` list, which exists on implicit namespace packages.\r\n\r\nAs a result, the `__file__` check is no longer needed, and in fact prevents `migrate` from working on namespace packages (implicit or otherwise). \r\n\r\nRelated work: #29091",
+    "comments": [
+      "Benjy Weinberger: owner, status changed owner\n        changed from nobody to Benjy Weinberger\n          \n          status\n        new → assigned",
+      "Benjy Weinberger: Proposed fix in ​https://github.com/django/django/pull/11141 \n(branch ​https://github.com/benjyw/django/tree/ticket_30300)/",
+      "Carlton Gibson: stage, type changed stage\n        Unreviewed → Accepted\n          \n          type\n        Bug → New feature\n          \n        \n        \nHi Benjy. Thanks for the report — and the test case in the PR! Unless something comes up in review, this seems reasonable to me. \n\nI'm going to call it a new feature, since this behaviour will never have worked I think.  \n\n... (implicit or otherwise)\n\nI don't quite follow the or otherwise there?",
+      "Carlton Gibson: summary changed summary\n        migrate silently ignores apps whose migrations directory doesn't have an __init__.py → Allow migrations directories without __init__.py files.",
+      "Tim Graham: description, summary changed description\n        modified (diff)\n          \n          summary\n        Allow migrations directories without __init__.py files. → Allow migrations directories without __init__.py files\n          \n        \n        \nWhat's the use case? When makemigrations generates the first migration, it adds an __init__.py file. There was some concern about encouraging namespace packages in ticket:23919#comment:102.",
+      "Benjy Weinberger: The \"or otherwise\" refers to namespace packages being either implicit (lacking an __init__.py) or explicit (an __init__.py containing an old-style namespace package incantation).",
+      "Benjy Weinberger: Re the use case: \n\nIt seems unnecessary to insist on an empty __init__.py just to preserve a (stale) check for __file__, when they are otherwise not required in Python 3. \n\nAnd #29091 implies that this should be allowed.\n\nContext is: We've just finished migrating our codebase to all-python 3, and nuked all our __init__py files. We are now upgrading to Django 2.1, and noticing the various places where they're still de-facto required by Django. This particular case seemed unnecessary and easy to fix.",
+      "Václav Řehák: We had a similar issue with test discovery. One of our developers read an article that __init__.py files are not required on Python3 and started removing them. Everything seemingly worked but some tests were not discovered and did not run in CI (which made it difficult to spot).\n\nI think Django should not required them if technically possible or at least it should be made clear in the documentation (sorry if I overlooked it).",
+      "Benjy Weinberger: Friendly nudge?",
+      "Mariusz Felisiak: has_patch, version changed has_patch\n        set\n          \n          version\n        2.1 → master\n          \n        \n        \n​PR",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        assigned → closed\n          \n        \n        \nIn 3cd3bebe:\n\nFixed #30300 -- Allowed migrations to be loaded from directories without init.py file.",
+      "Tim Graham: I raised this issue ​on the mailing list as there was a thread that concluded that Django shouldn't promote use of implicit namespace packages.",
+      "Tim Graham: severity, status, version changed; resolution deleted resolution\n        fixed\n          \n          severity\n        Normal → Release blocker\n          \n          status\n        closed → new\n          \n          version\n        master → 3.1\n          \n        \n        \nThus far there haven't been any mailing list replies in favor this change. I created a ​PR to revert it and modify the test accordingly.",
+      "status changed; resolution set resolution\n        → fixed\n          \n          status\n        new → closed\n          \n        \n        \nIn ff55adbd:\n\nReverted \"Fixed #30300 -- Allowed migrations to be loaded from directories without init.py file.\"\n\nThis reverts commit 3cd3bebe8921e14b911b36b2a1cbceef8fb6294e.",
+      "In d004bce:\n\n[3.1.x] Reverted \"Fixed #30300 -- Allowed migrations to be loaded from directories without init.py file.\"\n\nThis reverts commit 3cd3bebe8921e14b911b36b2a1cbceef8fb6294e.\n\nBackport of ff55adbd0da6618abaf265d16196bf54f81aa77a from master",
+      "Mariusz Felisiak: resolution, stage changed resolution\n        fixed → wontfix\n          \n          stage\n        Accepted → Unreviewed"
+    ],
+    "fetched_at": "2026-11-26T16:44:31.747Z"
+  },
+  {
+    "ticket": "PR#13218",
+    "source": "github",
+    "title": "Reverted \"Fixed #30300 -- Allowed migrations to be loaded from directories without __init__.py file.\"",
+    "body": "This reverts commit 3cd3bebe8921e14b911b36b2a1cbceef8fb6294e.\r\n\r\nhttps://groups.google.com/g/django-developers/c/GVHMH2ciAnk/m/vbIPbZuSBQAJ",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:44:31.747Z"
+  },
+  {
+    "ticket": "PR#11141",
+    "source": "github",
+    "title": "Fixed #30300 -- Allowed migrations to be loaded from directories without __init__.py files.",
+    "body": "Addresses https://code.djangoproject.com/ticket/30300",
+    "comments": [],
+    "fetched_at": "2026-11-26T16:44:31.747Z"
+  }
+]
