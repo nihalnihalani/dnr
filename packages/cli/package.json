@@ -1,0 +1,9 @@
+{
+  "name": "@dnr/cli",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The dnr command",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {"@dnr/core":"workspace:*","@dnr/grammar":"workspace:*","@dnr/git":"workspace:*","@dnr/store":"workspace:*","@dnr/hook":"workspace:*","@dnr/mcp":"workspace:*","@dnr/trial":"workspace:*","@dnr/schemas":"workspace:*"}
+}

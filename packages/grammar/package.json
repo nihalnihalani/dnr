@@ -1,0 +1,9 @@
+{
+  "name": "@dnr/grammar",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Node and browser loaders for the vendored tree-sitter grammars",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {"web-tree-sitter":"0.27.2","tree-sitter-python":"0.25.0","tree-sitter-typescript":"0.23.2"}
+}

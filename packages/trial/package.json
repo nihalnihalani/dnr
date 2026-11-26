@@ -1,0 +1,9 @@
+{
+  "name": "@dnr/trial",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Trial harness: mine, assign, envs, prepare, run, label, score, report",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {"@dnr/core":"workspace:*","@dnr/git":"workspace:*","@dnr/store":"workspace:*","@dnr/schemas":"workspace:*","@dnr/grammar":"workspace:*"}
+}

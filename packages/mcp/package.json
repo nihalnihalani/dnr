@@ -1,0 +1,9 @@
+{
+  "name": "@dnr/mcp",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Read-only MCP server: explain_function, list_orders_for_file",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {"@modelcontextprotocol/sdk":"1.32.2","@dnr/core":"workspace:*","@dnr/store":"workspace:*","@dnr/grammar":"workspace:*"}
+}

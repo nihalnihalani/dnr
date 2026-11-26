@@ -1,0 +1,9 @@
+{
+  "name": "@dnr/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "One React app (graveyard board, play, trial explorer) with local-API and localStorage adapters",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {"react":"19.3.1","react-dom":"19.3.1","codemirror":"6.0.2","@codemirror/view":"6.44.1","@codemirror/merge":"6.13.0","@codemirror/lang-python":"6.2.1","@dnr/core":"workspace:*","@dnr/schemas":"workspace:*"}
+}

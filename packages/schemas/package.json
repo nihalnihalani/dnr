@@ -1,0 +1,9 @@
+{
+  "name": "@dnr/schemas",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Zod schemas for orders, grants, sessions, events, decisions, trial records (plan §7)",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {"zod":"4.6.7"}
+}

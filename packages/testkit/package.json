@@ -1,0 +1,9 @@
+{
+  "name": "@dnr/testkit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "fast-check arbitraries and the AST mutation generator (mutate.ts)",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": {"fast-check":"4.11.0","@dnr/core":"workspace:*","@dnr/grammar":"workspace:*"}
+}
