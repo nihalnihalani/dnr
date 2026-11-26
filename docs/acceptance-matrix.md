@@ -267,8 +267,8 @@ Run with `DNR_ORDERS=$ROOT/reports/orders`, `cwd=DEMO`.
 
 | ID | Ph | Check | Proof | Owner | Class | Status |
 |---|---|---|---|---|---|---|
-| P9-01 | 9 | `dnr trial run --wave 1 --dry-run --only <revert>`: truncated repo, HOME seeded with agent config in `$HOME/.kiro/agents/`, HOME hash with S8 exclusions, `manifest.jsonl` | the command exits 0 ; `jq . $TR/manifest.jsonl` | trial | needs-kiro | open |
-| P9-02 | 9 | Truncated repo: `git log --all` shows nothing newer than R | `git -C $TR/repos/<R> log --all --format=%cI \| sort \| tail -1` ≤ R date | trial | local | open |
+| P9-01 | 9 | `dnr trial run --wave 1 --dry-run --only <revert>`: truncated repo, HOME seeded with agent config in `$HOME/.kiro/agents/`, HOME hash with S8 exclusions, `manifest.jsonl` | the command exits 0 ; `jq . $TR/manifest.jsonl` | trial | needs-kiro | partial — `harness.test.ts` › P9-01 dry run (agent not run); live run needs kiro-cli |
+| P9-02 | 9 | Truncated repo: `git log --all` shows nothing newer than R | `git -C $TR/repos/<R> log --all --format=%cI \| sort \| tail -1` ≤ R date | trial | local | **proven** — `harness.test.ts` › P9-02 |
 | P9-03 | 9 | Run packet round-trips through `dnr-labeling` (generated, labeled by labeler 2, pushed, read back) | round-trip log in `docs/spikes.md` | user | needs-user | open |
 | P9-04 | 9 | R+Δ dry run | `dnr trial prepare --stratum rdelta && dnr trial run --namespace rdelta --dry-run --only <sha>` | trial | needs-kiro | open |
 | P9-05 | 9 | SYN pipeline in §9.10 order (clone, ancestor check, build, approve, envs, draft, prepare) + dry run | the six commands in 08 Phase 9 ; `dnr trial run --namespace syn --dry-run --only <sha>` | user | needs-user | open |
@@ -277,10 +277,10 @@ Run with `DNR_ORDERS=$ROOT/reports/orders`, `cwd=DEMO`.
 | P9-08 | 9 | Probe dry run | `dnr trial probe --dry-run --only <sha>` | trial | needs-kiro | open |
 | P9-09 | 9 | Two-file `session_patch` dry run: second event's patch contains both files; Q packet shows both | `DNR_MODE=record dnr check --file <a> …; dnr check --file <b> …` on `two-file-order.json`; `jq -r .session_patch \| grep -c '^diff --git'` = 2 | trial | local | open |
 | P9-10 | 9 | Agent configs `trial/agents/trial-{T,U,B,S,H,L,probe}.json`: pinned model, file + shell tools only, no web | `jq -e '.model and (.tools\|index("web")\|not)' trial/agents/*.json` ; probe has `tools: []` | trial | needs-kiro | **fails** — trial agent configs pin `{{pins.model}}` (H1); tools file+shell ok |
-| P9-11 | 9 | Packet generation incl. probe packets; 6-char codes; shuffle seed 2026 | `pnpm test -t 'packets:'` | trial | local | open |
-| P9-12 | 9 | 600 s limit kills the process group (no GNU `timeout`) | `pnpm test -t 'run: timeout'` with a sleeping fake CLI | trial | local | open |
-| P9-13 | 9 | Saved per run: stream-json transcript, `meta.json` (config sha256, order-set size), diff with `:!.kiro :!.dnr :!.gitignore`, `events.jsonl` | dry-run output dir listing | trial | needs-kiro | open |
-| P9-14 | 9 | `shell_route` flag (non-empty diff, no write-tool calls) and history-use flags | `pnpm test -t 'run: flags'` on recorded transcripts | trial | local | open |
+| P9-11 | 9 | Packet generation incl. probe packets; 6-char codes; shuffle seed 2026 | `pnpm test -t 'packets:'` | trial | local | **proven** — `scoring.test.ts` › P9-11 packets |
+| P9-12 | 9 | 600 s limit kills the process group (no GNU `timeout`) | `pnpm test -t 'run: timeout'` with a sleeping fake CLI | trial | local | **proven** — `harness.test.ts` › P9-12 run timeout |
+| P9-13 | 9 | Saved per run: stream-json transcript, `meta.json` (config sha256, order-set size), diff with `:!.kiro :!.dnr :!.gitignore`, `events.jsonl` | dry-run output dir listing | trial | needs-kiro | partial — `harness.test.ts` › P9-13 diff; transcript/meta need a live run |
+| P9-14 | 9 | `shell_route` flag (non-empty diff, no write-tool calls) and history-use flags | `pnpm test -t 'run: flags'` on recorded transcripts | trial | local | partial — `harness.test.ts` › P9-14 flags; out-of-tree misses relative paths and $VARs (see review-wave3-trial-crew T1) |
 
 ## Phase 10: Tuning, gate, pre-registration
 
@@ -305,7 +305,7 @@ Results in `reports/gate.md`.
 | P10-08 | 10 | `trial prepare` re-run and Phase 9 dry runs repeated after relocation | repeat P9-01…P9-08 | trial | needs-kiro | open |
 | P10-09 | 10 | Demo runs `demo/{T,L,LU,U,CE}` r1–r3 on both demo reverts | `dnr trial prepare --namespace demo && dnr trial run --namespace demo` ; 30 `ok` rows in manifest | trial | needs-kiro | open |
 | P10-10 | 10 | Practice runs `practice/T`, `practice/H` on the 2 tune reverts (excluded from counts) | `dnr trial run --namespace practice` | trial | needs-kiro | open |
-| P10-11 | 10 | ast-grep baseline rules generated and hashed with `gen.ts` | `dnr trial baseline --generate && ls scripts/baseline/rules/` | trial | local | open |
+| P10-11 | 10 | ast-grep baseline rules generated and hashed with `gen.ts` | `dnr trial baseline --generate && ls scripts/baseline/rules/` | trial | local | partial — `cohorts.test.ts` › P10-11 rule generation; ast-grep run pending |
 | P10-12 | 10 | Credit check repeated before the tag | `docs/spikes.md` "Budget (Phase 10)" | user | needs-user | open |
 | P10-13 | 10 | `prereg-v1` tagged with all §9.7 hashes (drafts, agent configs, frozen config, build SHA, L bundle, fixtures, baseline rules, caches); pushed; hash posted publicly | `git ls-remote --tags origin prereg-v1` ; link to the public post in `preregistration.md` | user | needs-user | open |
 
@@ -316,18 +316,18 @@ Results in `reports/gate.md`.
 | P11-01 | 11 | Waves 1–3 complete incl. rdelta, syn, repo2; manifest all `ok` or listed | `dnr trial run --wave 1` … `--wave 3` ; `dnr trial run … --resume` exits 0 | trial | needs-trial-data | open |
 | P11-02 | 11 | L starts only after Phase 6 acceptance | first L `started_at` > Phase 6 acceptance commit time | trial | needs-trial-data | open |
 | P11-03 | 11 | The tag predates the first run | `git log -1 --format=%cI prereg-v1` < min `started_at` in manifest | trial | needs-trial-data | open |
-| P11-04 | 11 | No run repo has commits newer than its `start_sha` | per run: `git -C $TR/runs/<id> rev-list <start_sha>..--all` empty | trial | needs-trial-data | open |
-| P11-05 | 11 | HOME hashes match (S8 exclusions) | `meta.json` pre/post hashes equal for every run | trial | needs-trial-data | open |
+| P11-04 | 11 | No run repo has commits newer than its `start_sha` | per run: `git -C $TR/runs/<id> rev-list <start_sha>..--all` empty | trial | needs-trial-data | **proven** (logic) — `harness.test.ts` › P11-04; needs trial data |
+| P11-05 | 11 | HOME hashes match (S8 exclusions) | `meta.json` pre/post hashes equal for every run | trial | needs-trial-data | partial — `harness.test.ts` › P11-05 logic; real run proceeds without S8 (see review-wave3-trial-crew T4) |
 | P11-06 | 11 | Probe run | `dnr trial probe` | trial | needs-trial-data | open |
 | P11-07 | 11 | Baseline scored with the hashed rules | `dnr trial baseline --score && test -s reports/baseline.json` | trial | needs-trial-data | open |
-| P11-08 | 11 | Both labelers covered every packet, incl. `--blocked` Q packets and probe grades; adjudicated | `dnr trial label --freeze` exits 0 | user | needs-user | open |
-| P11-09 | 11 | Packet key's sha256 equals the one committed before labeling | checked inside `label --freeze` ; `git log` order of the two commits | trial | needs-trial-data | open |
+| P11-08 | 11 | Both labelers covered every packet, incl. `--blocked` Q packets and probe grades; adjudicated | `dnr trial label --freeze` exits 0 | user | needs-user | **proven** (logic) — `scoring.test.ts` › P11-08; real labels need the user |
+| P11-09 | 11 | Packet key's sha256 equals the one committed before labeling | checked inside `label --freeze` ; `git log` order of the two commits | trial | needs-trial-data | **proven** (logic) — `scoring.test.ts` › P11-09 |
 | P11-10 | 11 | Replay from sealed events; false-alarm scan `--role trial` | `dnr trial replay && dnr trial falsealarm --role trial` | trial | needs-trial-data | open |
 | P11-11 | 11 | `trial.json` written; `secondary` holds rdelta, syn, repo2, probe, baseline, human_reproposals | `dnr trial score --unseal && jq -e '.secondary \| [.rdelta,.syn,.repo2,.probe,.baseline,.human_reproposals] \| all(. != null)' reports/trial.json` | trial | needs-trial-data | open |
-| P11-12 | 11 | `rescore --check` reproduces every count | `dnr trial rescore --check` exits 0 | trial | needs-trial-data | open |
+| P11-12 | 11 | `rescore --check` reproduces every count | `dnr trial rescore --check` exits 0 | trial | needs-trial-data | partial — `scoring.test.ts` › TH14 compareResults; `score()` itself untested (see review-wave3-trial-crew T2) |
 | P11-13 | 11 | L runs with `error_open` listed; results with and without | section in `reports/trial.md` | trial | needs-trial-data | open |
 | P11-14 | 11 | `trial.md` and `video/numbers.json` written | `dnr trial report` | trial | needs-trial-data | open |
-| P11-15 | 11 | `reports/decision.md` applies §9.8 rows in order D1, D6, D2, D3, D4, D5 | `jq -r .row,.via_d6 reports/trial.json` matches `decision.md` | trial | needs-trial-data | open |
+| P11-15 | 11 | `reports/decision.md` applies §9.8 rows in order D1, D6, D2, D3, D4, D5 | `jq -r .row,.via_d6 reports/trial.json` matches `decision.md` | trial | needs-trial-data | **proven** (logic) — `scoring.test.ts` › P11-15 (all rows) |
 | P11-16 | 11 | Touch the Plan result final before Phase 11 labeling begins | `git log -1 --format=%cI -- reports/touch-the-plan-study.md` < first label commit | user | needs-user | open |
 
 ## Phase 12: Local board, MCP, power, TypeScript, Crew
@@ -346,12 +346,12 @@ Results in `reports/gate.md`.
 | P12-10 | 12 | TS versions of all six mutation operators | `pnpm -F @dnr/testkit test -t 'mutate: ts'` | engine | local | **proven** — `mutate.test.ts` (py-pricing and ts-pricing fixtures, all families) |
 | P12-11 | 12 | Product mode on the TS demo repo: `dnr init && dnr scan && dnr orders build` (defaults to `.dnr/candidates.json`) → orders; after approval a scripted re-application is blocked | script in `scripts/demo/product-mode.sh` exits 0 | hook | local | open |
 | P12-12 | 12 | `dnr scan`: language globs, no trial E-rules, `--branch` default from `origin/HEAD` | `pnpm test -t 'scan:'` | mining | local | open |
-| P12-13 | 12 | `dnr-crew`: reusable workflow, install composite action, `dnr init --crew` writes the caller; `v1` tag moved | `gh api repos/<you>/dnr-crew/git/refs/tags/v1` ; `dnr init --crew && cat .github/workflows/dnr.yml` | kiro | needs-user | open |
-| P12-14 | 12 | Crew acceptance: scripted Crew session re-applying `43933a1dca` → `dnr` check fails; one bot comment naming `dnr-43933a1dca` | `gh pr checks <pr> -R <you>/django-demo-crew` ; `gh pr view <pr> --comments` | kiro | needs-user | open |
-| P12-15 | 12 | Write-access human's `/dnr allow dnr-43933a1dca` turns the check green on the head SHA | `gh pr checks` after the comment | kiro | needs-user | open |
-| P12-16 | 12 | Non-Crew human PR reports `dnr` success | `gh pr checks` on a human PR | kiro | needs-user | open |
-| P12-17 | 12 | Spoofing: other-App comment rejected; non-write PR editing `.github/**` or `.dnr/**` fails; a `dnr` check from another App doesn't satisfy protection | three scripted PRs ; results in `reports/crew-load.md` | kiro | needs-user | open |
-| P12-18 | 12 | Crew load test: false-alarm corpus replayed as PRs; latency + outcome per PR | `bash scripts/crew/load-test.sh && test -s reports/crew-load.md` | kiro | needs-user | open |
+| P12-13 | 12 | `dnr-crew`: reusable workflow, install composite action, `dnr init --crew` writes the caller; `v1` tag moved | `gh api repos/<you>/dnr-crew/git/refs/tags/v1` ; `dnr init --crew && cat .github/workflows/dnr.yml` | kiro | needs-user | partial — reusable workflow, action and caller exist; `OWNER/` and stale pin (see review-wave3-trial-crew C2) |
+| P12-14 | 12 | Crew acceptance: scripted Crew session re-applying `43933a1dca` → `dnr` check fails; one bot comment naming `dnr-43933a1dca` | `gh pr checks <pr> -R <you>/django-demo-crew` ; `gh pr view <pr> --comments` | kiro | needs-user | **fails** (claim) — acceptance.sh records A1 PASS without a Crew session (see review-wave3-trial-crew C1); live pending |
+| P12-15 | 12 | Write-access human's `/dnr allow dnr-43933a1dca` turns the check green on the head SHA | `gh pr checks` after the comment | kiro | needs-user | partial — HMAC grant logic tested (dnr-crew `grant.test.ts`); live pending |
+| P12-16 | 12 | Non-Crew human PR reports `dnr` success | `gh pr checks` on a human PR | kiro | needs-user | open — live pending (acceptance.sh A3) |
+| P12-17 | 12 | Spoofing: other-App comment rejected; non-write PR editing `.github/**` or `.dnr/**` fails; a `dnr` check from another App doesn't satisfy protection | three scripted PRs ; results in `reports/crew-load.md` | kiro | needs-user | partial — rules tested (dnr-crew `rules.test.ts`); live S1–S3 pending |
+| P12-18 | 12 | Crew load test: false-alarm corpus replayed as PRs; latency + outcome per PR | `bash scripts/crew/load-test.sh && test -s reports/crew-load.md` | kiro | needs-user | partial — `scripts/load-test.sh` exists; needs the App and repo |
 | P12-19 | 12 | Regression gate: `.before` at start of Phase 12 and `.after` at end are byte-identical for every run | the `dnr check --replay … --canonical` command in 08 Phase 12 ; `diff -r` of `reports/regression/*.{before,after}` | trial | needs-trial-data | open |
 
 ## Phase 13: `/trial` and hardening
@@ -429,8 +429,8 @@ P6 was dropped (jsdiff). All fast-check, 500 runs locally, 2,000 nightly.
 | REQ-R11 | 10 | Missing unit → fingerprint lookup; else warn, unless `kind=removed`/`added` (score with `[]`) | `pnpm test -t 'R11:'` | engine | local | partial — `engine.test.ts` › a missing modified unit falls to warn; fingerprint tests; missing cap not pinned (H6) |
 | REQ-R12 | 5 | Match + `ask` → exit 0, `permissionDecision: "ask"` with same reason, `pending_ask` recorded | `pnpm test -t 'R12:'` | hook | local | **proven** — `prewrite.test.ts` › R12; live |
 | REQ-R13 | 6 | `ask`-approved write → `session confirm` creates grant; neither Stop nor pre-commit blocks the re-land | `pnpm test -t 'R13:'` + P6-18 live | hook | local | **proven** — `session.test.ts` › R13; live |
-| REQ-R14 | 12 | Crew PR with a crossing → `dnr` fails; bot comment with order, reason, original/revert/ticket links, order file at base SHA (via `/orders/view?src=`) | = P12-14 | kiro | needs-user | open |
-| REQ-R15 | 12 | `/dnr allow <id>` → blob-matched, HMAC-signed grant, check re-run, override in `audit.jsonl` artifact | = P12-15 | kiro | needs-user | open |
+| REQ-R14 | 12 | Crew PR with a crossing → `dnr` fails; bot comment with order, reason, original/revert/ticket links, order file at base SHA (via `/orders/view?src=`) | = P12-14 | kiro | needs-user | partial — scan and comment logic tested with the real CLI; live pending |
+| REQ-R15 | 12 | `/dnr allow <id>` → blob-matched, HMAC-signed grant, check re-run, override in `audit.jsonl` artifact | = P12-15 | kiro | needs-user | partial — signed grants and audit tested; live pending |
 
 ## Schemas (03 §7)
 
@@ -486,7 +486,7 @@ Each row: valid example parses, one invalid example per constraint fails. Proof 
 | EXIT-02 | 5 | Hook `ask`: always 0 | `pnpm test -t 'exit: ask'` | hook | local | **proven** — live 0 |
 | EXIT-03 | 6 | `--hook stop`: always 0 (forced turn via JSON) | `pnpm test -t 'exit: stop'` | hook | local | **proven** — live 0 |
 | EXIT-04 | 5 | Other commands: 0 clean, 1 findings, 64 usage, 65 Zod-invalid, 69 dependency missing, 70 internal | `pnpm test -t 'exit: codes'` | hook | local | partial — 1 and 64 seen; `trial mine --help` gives 70 (L1) |
-| EXIT-05 | 9 | `dnr trial *` exits 1 when any run is not `ok`, listing them on stderr | `pnpm test -t 'exit: trial'` | trial | local | open |
+| EXIT-05 | 9 | `dnr trial *` exits 1 when any run is not `ok`, listing them on stderr | `pnpm test -t 'exit: trial'` | trial | local | **proven** — `harness.test.ts` › EXIT-05 |
 | CFG-01 | 2 | `.dnr/config.json` defaults exactly as §7 | `pnpm -F @dnr/schemas test -t 'config:'` | engine | local | **proven** — `schemas.test.ts` › DnrConfig fills the §7 defaults and is strict |
 | CFG-02 | 5 | Lookup: `DNR_CONFIG` → `<repo>/.dnr/config.json` → defaults; `DNR_MODE` overrides `mode`; `DNR_THRESHOLD` overrides threshold | `pnpm test -t 'config: lookup'` | hook | local | **proven** — `prewrite.test.ts` › config lookup |
 | CFG-03 | 5 | Env vars `DNR_ORDERS`, `DNR_STATE_DIR`, `DNR_RECORD_PATH`, `DNR_NOW`, `DNR_DEBUG` honored | `pnpm test -t 'env:'` | hook | local | **proven** — `prewrite.test.ts` › env |
@@ -585,26 +585,26 @@ Each command exists, prints help, and returns 64 on bad usage. Behavioural check
 | KIRO-09 | 1 | `agents/dnr-gate-1b.json` registers the always-block hook via agent config (S10 key shape) | file + S10 | kiro | needs-kiro | **fails** — literal `{{pins.model}}` (H1); S10 pending |
 | KIRO-10 | 12 | `settings/mcp.json` runs `dnr mcp` | `jq . .kiro/settings/mcp.json` | kiro | local | partial — present; `dnr mcp` not built (M6) |
 | KIRO-11 | 12 | `powers/dnr/plugin.json` verified fields (`$schema`, name, version, description, author.name, keywords; license/repository only if S9 confirms), `mcp.json`, `skills/dnr-guard/SKILL.md`, `POWER.md` fallback | `jq -e '."$schema" and .name and .author.name' powers/dnr/plugin.json` | kiro | local | partial — fields present, `{{builder_handle}}`/`{{repo_url}}` placeholders (H1) |
-| KIRO-12 | 12 | `dnr-crew/.kiro/specs/crew-check/` exists | `git -C dnr-crew ls-files .kiro/specs/crew-check` | kiro | needs-user | open |
+| KIRO-12 | 12 | `dnr-crew/.kiro/specs/crew-check/` exists | `git -C dnr-crew ls-files .kiro/specs/crew-check` | kiro | needs-user | **proven** — `dnr-crew/.kiro/specs/crew-check/` |
 | KIRO-13 | 14 | `.kiro` not in `.gitignore` | `git check-ignore .kiro/steering/product.md` exits 1 | kiro | local | **proven** — `git check-ignore .kiro/steering/product.md` exits 1 |
 
 ## Trial integrity (06 §9)
 
 | ID | Ph | Check | Proof | Owner | Class | Status |
 |---|---|---|---|---|---|---|
-| TRIAL-01 | 9 | `$TRIAL_ROOT` absolute, not inside `$ROOT` and not a sibling of it | `pnpm test -t 'trial: root'` asserts `realpath` relations at startup | trial | local | open |
-| TRIAL-02 | 11 | `chmod 000` on discussion, sealed, labeling, `$DJ`, `$SECOND_SRC`, syn-src during waves; restored after | harness log lines ; `stat` during a run | trial | needs-trial-data | open |
-| TRIAL-03 | 11 | Runs whose transcript touches a path outside working copy and HOME excluded and listed | `reports/trial.md` exclusion table | trial | needs-trial-data | open |
-| TRIAL-04 | 9 | Per-run order set holds only ancestors of R; built for every revert passing E1–E5, E7; size in `meta.json`; hashed before/after | `pnpm test -t 'trial: order set'` | trial | local | open |
+| TRIAL-01 | 9 | `$TRIAL_ROOT` absolute, not inside `$ROOT` and not a sibling of it | `pnpm test -t 'trial: root'` asserts `realpath` relations at startup | trial | local | **proven** — `harness.test.ts` › TRIAL-01 |
+| TRIAL-02 | 11 | `chmod 000` on discussion, sealed, labeling, `$DJ`, `$SECOND_SRC`, syn-src during waves; restored after | harness log lines ; `stat` during a run | trial | needs-trial-data | **fails** — lockdown misses `$ROOT`, other runs and later repos (see review-wave3-trial-crew T1) |
+| TRIAL-03 | 11 | Runs whose transcript touches a path outside working copy and HOME excluded and listed | `reports/trial.md` exclusion table | trial | needs-trial-data | **fails** — relative paths and `$DNR_ORDERS` evade detection (see review-wave3-trial-crew T1) |
+| TRIAL-04 | 9 | Per-run order set holds only ancestors of R; built for every revert passing E1–E5, E7; size in `meta.json`; hashed before/after | `pnpm test -t 'trial: order set'` | trial | local | partial — `harness.test.ts` › TRIAL-04; but `$DNR_ORDERS` is readable by the agent (see review-wave3-trial-crew T1) |
 | TRIAL-05 | 9 | Only arm S gets a file in the working copy (its steering) | `git -C <run> status --porcelain` before agent start | trial | local | open |
-| TRIAL-06 | 9 | `DNR_CONFIG` is the frozen copy; its sha256 in every `meta.json`; `rescore --check` asserts it matches `prereg-v1` | `jq -r .config_sha256 $TR/runs/*/meta.json \| sort -u \| wc -l` = 1 | trial | needs-trial-data | open |
-| TRIAL-07 | 9 | Retry only infra failures before the first tool call, ≤ 2; concurrency 4 | `pnpm test -t 'run: retry'` | trial | local | open |
+| TRIAL-06 | 9 | `DNR_CONFIG` is the frozen copy; its sha256 in every `meta.json`; `rescore --check` asserts it matches `prereg-v1` | `jq -r .config_sha256 $TR/runs/*/meta.json \| sort -u \| wc -l` = 1 | trial | needs-trial-data | partial — config sha checked by substring (see review-wave3-trial-crew T5) |
+| TRIAL-07 | 9 | Retry only infra failures before the first tool call, ≤ 2; concurrency 4 | `pnpm test -t 'run: retry'` | trial | local | **proven** — `harness.test.ts` › TRIAL-07 |
 | TRIAL-08 | 11 | Version change of kiro-cli stops the trial; auto-update off | `pnpm test -t 'run: version drift'` | trial | local | open |
 | TRIAL-09 | 11 | Packet key sha256 committed before labeling, key after freeze | git history order | trial | needs-trial-data | open |
-| TRIAL-10 | 11 | κ per labeling session; session < 0.4 re-labeled after adjudication; raw agreement, binary + 6-class κ, PABAK, AC1, bootstrap CIs; builder-vs-outside reported | `reports/kappa.md` | trial | needs-trial-data | open |
-| TRIAL-11 | 11 | Wilson 95% on every rate; exact McNemar T/S, T/L, S/L labeled underpowered; non-prereg = "exploratory" | `pnpm test -t 'stats:'` (golden values: 2/8 → 7–59%, 0/30 → 0–11.4%, 7/30 → 12–41%) | trial | local | open |
-| TRIAL-12 | 10 | `reports/preregistration.md` contains every §9.7 item, incl. §9.8 table verbatim | `node scripts/check-prereg.mjs` diffing the §9.8 table text | trial | local | open |
-| TRIAL-13 | 11 | SYN auto-labels: FULL = restored test passes; CORE = contiguous critical-edit token sequence after weight-0 drop, inside target unit | `pnpm test -t 'syn: oracle'` | trial | local | open |
+| TRIAL-10 | 11 | κ per labeling session; session < 0.4 re-labeled after adjudication; raw agreement, binary + 6-class κ, PABAK, AC1, bootstrap CIs; builder-vs-outside reported | `reports/kappa.md` | trial | needs-trial-data | **proven** (logic) — `scoring.test.ts` › TRIAL-10 |
+| TRIAL-11 | 11 | Wilson 95% on every rate; exact McNemar T/S, T/L, S/L labeled underpowered; non-prereg = "exploratory" | `pnpm test -t 'stats:'` (golden values: 2/8 → 7–59%, 0/30 → 0–11.4%, 7/30 → 12–41%) | trial | local | partial — `stats.test.ts` golden Wilson values; `score()` untested (see review-wave3-trial-crew T2) |
+| TRIAL-12 | 10 | `reports/preregistration.md` contains every §9.7 item, incl. §9.8 table verbatim | `node scripts/check-prereg.mjs` diffing the §9.8 table text | trial | local | **proven** — `scoring.test.ts` › TRIAL-12; review diff byte-identical incl. wordings |
+| TRIAL-13 | 11 | SYN auto-labels: FULL = restored test passes; CORE = contiguous critical-edit token sequence after weight-0 drop, inside target unit | `pnpm test -t 'syn: oracle'` | trial | local | **proven** (logic) — `cohorts.test.ts` › TRIAL-13 |
 | TRIAL-14 | 11 | Pilot results never enter `trial.json` | `jq 'paths' reports/trial.json \| grep -c pilot` = 0 | trial | local | open |
 | TRIAL-15 | 3 | Ticket text never reaches a trial agent (only labelers and drafter) | `grep -r discussion $TR/homes $TR/runs` empty | trial | local | open |
 
@@ -653,16 +653,16 @@ Each command exists, prints help, and returns 64 on bad usage. Behavioural check
 
 (Counted with `awk '/^## Row counts/{exit} 1' docs/acceptance-matrix.md | grep -oE '[|] (local|needs-kiro|needs-user|needs-trial-data) [|] [^|]* [|]$' | awk '{print $2}' | sort | uniq -c`; re-run after edits.)
 
-**Status after the wave-3 security re-attack (`292e43b`, Nov 26):**
+**Status after the wave-3 trial and Crew review (`2b86e58`, dnr-crew `766fc03`, Nov 27):**
 
 | Status | Rows |
 |---|---:|
-| proven | 101 |
-| partial (incl. 1 proven in review only) | 35 |
-| fails | 6 |
-| open | 305 |
+| proven (some "logic only", pending real data) | 115 |
+| partial (incl. 1 proven in review only) | 50 |
+| fails | 9 |
+| open | 273 |
 
-All wave-2 critical reproductions are fixed except the human-guard escape: the grant is now flagged suspect but still applies. New gaps are in [docs/review-wave3-security.md](review-wave3-security.md): a broken `.git/HEAD` makes every hook fail open, DNR's own bundle is writable, a tamper is laundered into the next session or into a commit, and an agent's re-land commit downgrades the order. Earlier reviews: [wave 2](review-wave2.md), [wave 1](review-wave1.md).
+New failures: TRIAL-02 and TRIAL-03 (run isolation and leak detection), and P12-14 (the Crew acceptance script overclaims A1). Details are in [docs/review-wave3-trial-crew.md](review-wave3-trial-crew.md). Earlier reviews: [wave-3 security](review-wave3-security.md), [wave 2](review-wave2.md), [wave 1](review-wave1.md).
 
 ---
 
