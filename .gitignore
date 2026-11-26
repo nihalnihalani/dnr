@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.turbo/
+coverage/
+*.log
+.dnr/allow/
+.dnr/sessions/
+.dnr/cache/
+.dnr/hook.log
+work/
+playwright-report/
+test-results/
+.DS_Store
