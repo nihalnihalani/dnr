@@ -9,9 +9,9 @@ Tasks follow the build phases in plan §13.1, in dependency order. Run them one 
   - [x] 0.2 Write steering (`tech`, `hook-contracts`, `trial-integrity`; the shipped `dnr.md` lives at `packages/cli/templates/steering/dnr.md`), the drafter prompt, `dnr-drafter` and `dnr-gate-1b` agents, `.kiro/settings/mcp.json`, and the power skeleton
     - _Requirements: DC19, DC20_
     - commit: 59f5040
-  - [x] 0.3 CI on Node 24 (lint, typecheck, test, build) and the Kiro-artifact validation job (workflow committed; first green run pending the C1 clean-clone fix)
+  - [ ] 0.3 `.github/workflows/ci.yml`: CI on Node 24 and 26 (lint, typecheck, test, build) and the Kiro-artifact validation job. Not done until CI has a green run (the repo has no remote yet).
     - _Plan: Phase 0 Workspace_
-    - commit: 59f5040
+    - commit:
   - [x] 0.4 Vendor the grammars into `vendor/grammars/` with `PROVENANCE.md`; `node scripts/check-grammar.mjs` passes
     - _Plan: §4 pins_
     - commit: 59f5040
@@ -76,7 +76,7 @@ Tasks follow the build phases in plan §13.1, in dependency order. Run them one 
     - commit:
   - [x] 3.3 `dnr orders build` (keeps status, reason, history on rebuild) and `dnr orders show [--tokens]`; build is deterministic
     - _Requirements: DC4_
-    - commit: pending
+    - commit: b6f3a09 (CLI; engine `buildOrder` in 59f5040, fixed in 53bb4d7)
   - [ ] 3.4 `testkit/mutate.ts` with six AST operators and the seed ranges (tune 1000–1004, held-out 2000–2004, split 3000–3004, move-to-file 3100–3104 and 3105–3109)
     - _Properties: P3, P11, P15, P16_
     - commit:
@@ -87,80 +87,89 @@ Tasks follow the build phases in plan §13.1, in dependency order. Run them one 
 - [ ] 4. Phase 5: Hook path
   - [x] 4.1 Store with atomic writes and locks; sessions with the temp-index baseline
     - _Requirements: R4, DC8_
-    - commit: pending
-  - [x] 4.2 Tool adapters from the S2 captures
+    - commit: b6f3a09
+  - [ ] 4.2 Tool adapters from the S2 captures. Provisional adapters with field aliases are in 59f5040; this task stays open until S2 captures exist.
     - _Requirements: DC9, R11_
-    - commit: pending
+    - commit:
   - [x] 4.3 Tiers (protect, match, warn, allow), grants, both output formats, the §6 stderr text with the 1,200-character cap
     - _Requirements: R1, R2, R3, R6, R9, R12, DC1_
-    - commit: pending
+    - commit: b6f3a09
   - [ ] 4.4 Fast path and blob-SHA cache; tsup bundle linked globally
     - _Requirements: R8_
     - commit:
   - [x] 4.5 Fail-open wrapper and `hook.log` for every entry point
     - _Requirements: R7_
-    - commit: pending
+    - commit: b6f3a09
   - [x] 4.6 Record mode (`DNR_MODE=record` and config `mode`) with `proposed_text` and `session_patch`
     - _Requirements: DC12_
-    - commit: pending
+    - commit: b6f3a09
   - [x] 4.7 `dnr check --commit`, `dnr check --file`, `dnr check --replay [--canonical]`, `dnr allow <id>`, `dnr session start|confirm|show|end|gc`
     - _Requirements: DC6, R9_
-    - commit: pending
+    - commit: b6f3a09
   - [x] 4.8 Minimal `dnr init --hooks pre-write` (for gate check 1b)
     - _Requirements: DC16_
-    - commit: pending
+    - commit: b6f3a09
   - [ ] 4.9 Golden fixtures from S2 (`reapply-43933a1dca.json`, `hardneg-typehints.json`, `uncovered.json`, one per tool), `two-file-order.json`, the five gate hard negatives and both demo hard negatives
     - _Requirements: R1, R2_
     - commit:
   - [x] 4.10 Golden, warn-once, P3 accumulation, P10 grant scope, record mode and fail-open tests pass
     - _Properties: P3, P10_
-    - commit: pending
-  - [x] 4.11 Latency: hyperfine + `scripts/p95.mjs`; match p95 < 300 ms, fast path < 80 ms, first Django write < 2 s; results in `reports/perf.md`
+    - commit: b6f3a09
+  - [x] 4.11 `node scripts/bench-hook.mjs` (hyperfine-shaped JSON; hyperfine is not installed) + `scripts/p95.mjs`; match p95 < 300 ms, fast path < 80 ms, first Django write < 2 s; results in `reports/perf.md` (macOS only so far; a Linux CI run is still to do)
     - _Requirements: R8_
-    - commit: pending
+    - commit: b6f3a09
 
 - [ ] 5. Phase 6: Shell, Stop, post-write, init
   - [x] 5.1 guard-shell GS-R1 … GS-R7 with the PreToolUse tree snapshot; table of 40 or more commands passes
     - _Requirements: DC10_
-    - commit: pending
+    - commit: b6f3a09
   - [x] 5.2 Process-ancestry and Kiro-variable check in every GS-R6 subcommand
     - _Requirements: DC10, DC17_
-    - commit: pending
+    - commit: b6f3a09
   - [x] 5.3 `dnr session shell-after` (post-shell) adding changed files to `touched`
     - _Requirements: DC10, DC11_
-    - commit: pending
+    - commit: b6f3a09
   - [x] 5.4 Stop backstop: touched files only, grants honored, at most 2 forced turns, order-set hash, exit 0 on crash
     - _Requirements: DC11, R7, R13_
-    - commit: pending
+    - commit: b6f3a09
   - [x] 5.5 `dnr session confirm` turning an approved `ask` into a grant
     - _Requirements: R13_
-    - commit: pending
+    - commit: b6f3a09
   - [x] 5.6 Pre-commit `dnr check --staged` with the crossing rule and blob-matched grants
     - _Requirements: DC6_
-    - commit: pending
+    - commit: b6f3a09
   - [x] 5.7 `warn-only` and `commit-enforce` modes and `dnr init --mode`; each mode writes a Zod-valid `EventRecord`
     - _Requirements: DC12_
-    - commit: pending
+    - commit: b6f3a09
   - [ ] 5.8 Full idempotent `dnr init`, `dnr doctor`, `dnr orders verify`; re-run `make-demo-checkout.sh`, `dnr doctor` green in `../django-demo`
     - _Requirements: DC15, DC16_
     - commit:
   - [x] 5.9 P12, P13, P15 and P10's pre-commit blob clause pass
     - _Properties: P10, P12, P13, P15_
-    - commit: pending
+    - commit: b6f3a09
   - [ ] 5.10 Live checks: headless cherry-pick denied; `sed` re-application undone by a forced turn with human edits intact; `python -c` write caught; interactive `ask` confirmed
     - _Requirements: DC10, DC11, R13_
     - commit:
+  - [ ] 5.11 R7 amendment: invalid or tampered DNR state (config, sessions, orders, hooks) never fails open; fall back to safe defaults or the committed state and report tampering (review wave 2, C1)
+    - _Requirements: R7_
+    - commit:
+  - [ ] 5.12 Case-insensitive file systems: fold path case before comparing order files and `touched` (review wave 2, C2), with a regression test
+    - _Requirements: R1, DC11_
+    - commit:
+  - [ ] 5.13 Flag grants and approvals created while an agent session is active (`suspect`), and keep the board launch nonce out of argv (review wave 2, C3, H4)
+    - _Requirements: DC10, DC17_
+    - commit:
 
 - [ ] 6. Phase 7: Playground `/play`
-  - [ ] 6.1 Shared `packages/ui` with the localStorage adapter and session simulator
+  - [x] 6.1 Shared `packages/ui` with the localStorage adapter and session simulator
+    - _Requirements: DC18_
+    - commit: 2a25cff
+  - [ ] 6.2 `dnr export-case` for both demo reverts with the five defined presets (half-of-two-file omitted with a reason when `c_file_count < 2`). Open: the `43933a1dca` bundle has no held-out paraphrase yet and does not record why half-of-two-file is omitted (export-case: 5b62bb3).
     - _Requirements: DC18_
     - commit:
-  - [ ] 6.2 `dnr export-case` for both demo reverts with the five defined presets (half-of-two-file omitted with a reason when `c_file_count < 2`)
-    - _Requirements: DC18_
-    - commit:
-  - [ ] 6.3 Routes `/`, `/play/:case` (presets and free edit), `/graveyard`, `/orders/:id`, `/orders/view` with Zod validation and error state
+  - [x] 6.3 Routes `/`, `/play/:case` (presets and free edit), `/graveyard`, `/orders/:id`, `/orders/view` with Zod validation and error state
     - _Requirements: DC18, R14_
-    - commit:
+    - commit: 2a25cff
   - [ ] 6.4 Deploy to Cloudflare Pages from `main` (GitHub Pages mirror); smoke test passes on the preview URL
     - _Requirements: DC18_
     - commit:
@@ -174,7 +183,7 @@ Tasks follow the build phases in plan §13.1, in dependency order. Run them one 
     - commit:
   - [x] 7.2 `dnr steering generate`; template checked with `--out /tmp/check.md`
     - _Requirements: DC21_
-    - commit: pending
+    - commit: b6f3a09
   - [ ] 7.3 Copy drafted, approved demo orders into `fixtures/demo-orders/`; re-run `make-demo-checkout.sh`; both show `approved` with `reason_source: drafter`
     - _Requirements: DC20_
     - commit:
@@ -227,7 +236,7 @@ Tasks follow the build phases in plan §13.1, in dependency order. Run them one 
     - commit:
   - [x] 10.5 `dnr init` refuses npx cache paths; `dnr doctor` confirms the hook command resolves
     - _Requirements: DC16_
-    - commit: pending
+    - commit: b6f3a09
   - [ ] 10.6 Board deep links (four cases) and every empty state in Playwright on three engines
     - _Requirements: DC17, DC18_
     - commit:

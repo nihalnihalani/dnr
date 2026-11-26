@@ -20,9 +20,9 @@ Tasks follow plan §13.1 in dependency order. Run them one at a time in Kiro spe
     - commit:
 
 - [ ] 1. Phase 3: mining, environments, labeling inputs
-  - [ ] 1.1 Shared revert-discovery engine (§9.1 steps 1–2) used by `trial mine` and `dnr scan`; patch-id silent reverts
+  - [x] 1.1 Shared revert-discovery engine (§9.1 steps 1–2) used by `trial mine` and `dnr scan`; patch-id silent reverts
     - _Requirements: TH1, TH2_
-    - commit:
+    - commit: d1e3e97
   - [ ] 1.2 `dnr trial label --reasons` and `--critical-edits`
     - _Requirements: TH4, TH12_
     - commit:

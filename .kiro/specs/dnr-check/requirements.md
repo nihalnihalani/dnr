@@ -88,14 +88,17 @@ _Plan: §5.5. Properties: P4, P5._
 
 _Plan: §5.4, §6._
 
-### Requirement R7: fail open
+### Requirement R7: fail open on errors, never on tampered state
+
+Amended after the wave-2 review (finding C1, lead decision): failing open on every error let one invalid config value or garbled session file switch off every layer.
 
 #### Acceptance Criteria
 
-1. IF the hook hits an internal error or timeout THEN it SHALL allow the write (exit 0) and append the error to `$DNR_STATE_DIR/hook.log`, logged as `error_open`.
-2. WHILE in Stop mode the process SHALL always exit 0, through a top-level handler that catches every error.
+1. WHEN DNR hits an internal error or timeout THEN it SHALL allow the write and log it (`error_open` in `$DNR_STATE_DIR/hook.log`).
+2. Invalid or tampered DNR state (config, sessions, orders, hooks) SHALL NOT fail open: DNR SHALL fall back to safe defaults or the committed state and SHALL report the tampering.
+3. WHILE in Stop mode the process SHALL always exit 0, through a top-level handler that catches every error. Tampered state found at Stop SHALL be reported through the order-set hash check (DC11), not by crashing.
 
-_Plan: §5.11, §5.12._
+_Plan: §5.11, §5.12, amended._
 
 ### Requirement R8: latency
 

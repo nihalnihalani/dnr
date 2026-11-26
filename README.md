@@ -4,9 +4,9 @@
 
 DNR turns a repo's reverts into do-not-resurrect orders. Each order is generated from git and the original ticket, approved by a maintainer, and kept in a graveyard you can browse.
 
-When a Kiro agent's write would bring a reverted change back, a PreToolUse hook is designed to stop it before the file changes. It shows the reason and links to the original commit, the revert, and the ticket. Re-landing a fixed version takes one approval. The known gaps are listed in the [threat model](docs/threat-model.md).
+When a Kiro agent's write would bring a reverted change back, a PreToolUse hook stops it before the file changes. It shows the reason and links to the original commit, the revert, and the ticket. Re-landing a fixed version takes one approval. The known gaps are listed in the [threat model](docs/threat-model.md).
 
-**Status: under construction.** The hook path is being built, and the trial has not run yet: its pre-registration is in progress, and no result is claimed here. The hosted Playground URL is added when it is deployed (Phase 7).
+**Status: hook path built; trial not run.** The PreToolUse hook, CLI, order store and MCP server are built. They block the real Django re-application end to end: re-applying the change reverted in `43933a1dca` exits 2 with edit 1.00 in `Query.clear_ordering` (see below). The pre-registered trial has not run yet, and its pre-registration is in progress, so no trial result is claimed here. The hosted Playground URL is added when it is deployed (Phase 7).
 
 Built for Kiroween 2026 (Frankenstein category) with Kiro: specs, hooks, steering, custom agents, MCP and a power. See [how Kiro built it](docs/kiro-usage.md).
 
@@ -24,15 +24,15 @@ dnr draft --all     # one-sentence reason per order, from the revert and ticket
 dnr board           # review and approve; only approved orders are enforced
 ```
 
-When an agent's write would re-apply an approved order, the hook refuses it. **Example output format** (illustrative, from plan §6; it is replaced with real `dnr check` output once the hook ships):
+When an agent's write would re-apply an approved order, the hook refuses it. This is the real stderr (705 characters, exit 2) from `dnr check --stdin --hook kiro < fixtures/hook-events/reapply-43933a1dca.json` on a Django checkout at the revert `43933a1dca`, with the order approved and its reason still the placeholder revert subject (from [reports/orders/README.md](reports/orders/README.md); also the `R1:` test in `packages/hook/test/golden.test.ts`):
 
 ```
-DNR: <reason> <revert URL>
-DNR order dnr-43933a1dca matched (edit <score> ≥ <threshold>) in Query.clear_ordering. Original: <url>. Ticket: <url>.
-This change was tried and reverted. Do not re-apply it or route around this block. Tell the user. ...
+DNR: Reverted "Fixed #26434 -- Removed faulty clearing of ordering field when missing from explicit grouping." https://github.com/django/django/commit/43933a1dca07047e95ec990d9289d0212668009e
+DNR order dnr-43933a1dca matched (edit 1.00 ≥ 0.60) in Query.clear_ordering. Original: https://github.com/django/django/commit/ea3a71c2d09f8281d8a50ed20e40e1fb13db5cd9. Ticket: https://code.djangoproject.com/ticket/26434.
+This change was tried and reverted. Do not re-apply it or route around this block. Tell the user. Only a human maintainer, not the agent, can approve a re-land: `dnr board --open dnr-43933a1dca` or `dnr allow dnr-43933a1dca`, which both need a terminal and refuse inside an agent session.
 ```
 
-A human recovers with `dnr board --open <order_id>` or `dnr allow <order_id>`, from a terminal.
+A human recovers with `dnr board --open <order_id>` or `dnr allow <order_id>`, from a terminal. The human-only check stops a careless agent; it is not a boundary against a hostile process running as the same user (see the [threat model](docs/threat-model.md)).
 
 ## Testing
 

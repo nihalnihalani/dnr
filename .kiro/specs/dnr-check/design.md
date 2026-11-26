@@ -67,7 +67,13 @@ Hook stdin fields beyond `hook_event_name`, `cwd`, `session_id`, `tool_name`, `t
 7. **Decide.** Grants first (an applying grant turns the match into `allow_grant` and switches the warn tier off); then match (`block` / `ask`), warn (`warn_block` once per order per session, then `warn_pass`), allow. Mode adjustments from §5.14 apply last.
 8. **Emit.** Deny format: stderr in the §6 format, capped at 1,200 characters, exit 2. Ask format: stdout JSON, exit 0. Append one `EventRecord` with `session_patch` and `proposed_text` on block, `warn_block` and `ask`.
 
-Any exception at any step → `error_open`, exit 0, `hook.log` entry.
+Any internal error or timeout at any step → `error_open`, exit 0, `hook.log` entry. Invalid or tampered DNR state is not an internal error (R7 as amended):
+
+- an unreadable or Zod-invalid config falls back to the §7 defaults;
+- a garbled session file is replaced by a new session with a fresh baseline;
+- orders and hooks are checked against the committed state.
+
+In each case DNR reports the tampering (event and stderr) and keeps enforcing.
 
 ### Core engine (`packages/core`)
 
@@ -115,10 +121,13 @@ All records are the Zod schemas in plan §7 (`packages/schemas`): `Order`, `Orde
 
 | Situation                               | Behavior                                                                                           |
 | --------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Any internal error in a hook            | allow, `error_open`, `hook.log` (R7)                                                               |
+| Any internal error or timeout in a hook | allow, `error_open`, `hook.log` (R7) |
+| Invalid or tampered config | the §7 defaults (`enforce`, `deny`, τ 0.6); tampering reported; never fail open (R7) |
+| Garbled or Zod-invalid session file | new session with a fresh baseline; tampering reported (R7) |
+| Order or hook files differ from the committed state | the committed state is used; tampering reported; Stop forces a reporting turn (R7, DC11) |
 | Stop handler error                      | exit 0, no forced turn (R7)                                                                        |
 | Hook timeout                            | assumed allow (S7 confirms)                                                                        |
-| Zod-invalid order file                  | skipped by the hook and logged; `dnr orders verify` exits 65; board shows the invalid-order banner |
+| Zod-invalid order file | the committed version (`git show HEAD:<file>`) is used if valid, otherwise it is reported as tampering; `dnr orders verify` exits 65; the board shows the invalid-order banner |
 | Unknown tool shape                      | warn tier if a path is present, else allow                                                         |
 | `str_replace` with 0 or several matches | allow (the tool will fail)                                                                         |
 | Missing git or grammar                  | non-hook commands exit 69; hooks fail open                                                         |
