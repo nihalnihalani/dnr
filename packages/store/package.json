@@ -4,6 +4,14 @@
   "private": true,
   "type": "module",
   "description": "Order store, grants, sessions, events.jsonl with atomic writes and locks",
-  "exports": { ".": "./src/index.ts" },
-  "dependencies": {"ulid":"3.0.2","@dnr/schemas":"workspace:*"}
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "ulid": "3.0.2",
+    "@dnr/schemas": "workspace:*"
+  },
+  "scripts": {
+    "test": "vitest run --root ../.. --project unit packages/store"
+  }
 }

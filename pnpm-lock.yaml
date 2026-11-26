@@ -114,6 +114,10 @@ importers:
       diff:
         specifier: 9.0.0
         version: 9.0.0
+    devDependencies:
+      '@dnr/grammar':
+        specifier: workspace:*
+        version: link:../grammar
 
   packages/git: {}
 
@@ -188,6 +192,12 @@ importers:
       '@dnr/grammar':
         specifier: workspace:*
         version: link:../grammar
+      '@dnr/schemas':
+        specifier: workspace:*
+        version: link:../schemas
+      diff:
+        specifier: 9.0.0
+        version: 9.0.0
       fast-check:
         specifier: 4.11.0
         version: 4.11.0

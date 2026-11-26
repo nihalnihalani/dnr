@@ -1,0 +1,10 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "dnr",
+  "version": "0.1.0",
+  "description": "Blocks agent writes that re-apply reverted changes, with the revert's reason and links.",
+  "author": { "name": "{{builder_handle}}" },
+  "keywords": ["revert", "regression", "do not resurrect", "git history", "guard", "hooks"],
+  "license": "MIT",
+  "repository": "{{repo_url}}"
+}

@@ -1,0 +1,12 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "dnr-session-start",
+      "trigger": "SessionStart",
+      "action": { "type": "command", "command": "dnr session start --stdin" },
+      "timeout": 10,
+      "enabled": true
+    }
+  ]
+}

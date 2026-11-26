@@ -1,0 +1,13 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "dnr-guard-shell",
+      "trigger": "PreToolUse",
+      "matcher": "shell",
+      "action": { "type": "command", "command": "dnr guard-shell --stdin" },
+      "timeout": 10,
+      "enabled": true
+    }
+  ]
+}

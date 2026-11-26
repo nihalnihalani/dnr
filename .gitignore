@@ -3,10 +3,10 @@ dist/
 .turbo/
 coverage/
 *.log
-.dnr/allow/
-.dnr/sessions/
-.dnr/cache/
-.dnr/hook.log
+# DNR runtime state: only .dnr/orders/ and .dnr/config.json are committed
+.dnr/*
+!.dnr/orders/
+!.dnr/config.json
 work/
 playwright-report/
 test-results/

@@ -1,0 +1,1 @@
+Removed faulty clearing of ordering field when missing from explicit grouping.

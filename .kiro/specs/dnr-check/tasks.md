@@ -1,0 +1,238 @@
+# Implementation Plan: dnr-check
+
+Tasks follow the build phases in plan §13.1, in dependency order. Run them one at a time in Kiro spec mode. When a task is done, tick it and fill its `commit:` slot with the SHA that completed it. Trial-only work (mining, harness, gate, trial waves) is in `.kiro/specs/trial-harness/tasks.md`.
+
+- [ ] 0. Phase 0: Kiro artifacts and workspace
+  - [ ] 0.1 Write the six DNR hook files and the dev hook exactly as §6 specifies (`.kiro/hooks/`)
+    - _Requirements: R1, R6, R13, DC10, DC11_
+    - commit:
+  - [ ] 0.2 Write steering (`tech`, `hook-contracts`, `trial-integrity`, `dnr`), the drafter prompt, `dnr-drafter` and `dnr-gate-1b` agents, `.kiro/settings/mcp.json`, and the power skeleton
+    - _Requirements: DC19, DC20_
+    - commit:
+  - [ ] 0.3 CI on Node 24 (lint, typecheck, test, build) and the Kiro-artifact validation job
+    - _Plan: Phase 0 Workspace_
+    - commit:
+  - [ ] 0.4 Vendor the grammars into `vendor/grammars/` with `PROVENANCE.md`; `node scripts/check-grammar.mjs` passes
+    - _Plan: §4 pins_
+    - commit:
+  - [ ] 0.5 `scripts/demo/make-demo-checkout.sh` and `scripts/demo/prompts/{write,direct,cleanup}.txt`; the script runs and the demo env passes `aggregation_regress`
+    - _Plan: Phase 0 Django, §10_
+    - commit:
+
+- [ ] 1. Phase 1: Spikes S1–S16 (results in `docs/spikes.md`, captures in `fixtures/hook-events/` and `fixtures/crew/`)
+  - [ ] 1.1 S1 always-block write hook headless under `--trust-all-tools`, under both registrations (hook file and `dnr-gate-1b`); also `--sandbox`. Failure is provisional D1
+    - _Requirements: R1_
+    - commit:
+  - [ ] 1.2 S2 exact `tool_input` fields per write tool; S12 shell command field; S15 PostToolUse stdin per write tool, including an approved `ask`
+    - _Requirements: DC9, R13_
+    - commit:
+  - [ ] 1.3 S3 `session_id` stability; S4 SessionStart/SessionEnd/Stop headless and Stop forced turns (exit 1 and JSON)
+    - _Requirements: DC8, DC11_
+    - commit:
+  - [ ] 1.4 S5 `deny`/`ask`/`allow` behavior, `ask` under `--trust-all-tools` and `--no-interactive`; S7 hook timeout; S13 output over 3,000 characters
+    - _Requirements: R1, R7, R12_
+    - commit:
+  - [ ] 1.5 S8 credential file, PATH and env inheritance, Kiro's own writes under `$HOME/.kiro`, Kiro-only env variables (Terminal.app and IDE terminal diff)
+    - _Requirements: DC10, DC16_
+    - commit:
+  - [ ] 1.6 S9 power format and bundling; S10 agent-config hook key shape, dedupe, `--agent` resolution from `$HOME/.kiro/agents/`, and whether custom agents load workspace steering
+    - _Requirements: DC19, DC20_
+    - commit:
+  - [ ] 1.7 S11 T task with no hook on `../django-demo`, record credits per run; S14 hooks on Web and in the IDE, file-trigger matcher is a regex; S16 Crew integration
+    - _Requirements: R14, R15_
+    - commit:
+  - [ ] 1.8 Freeze `.kiro/steering/hook-contracts.md` from the spike results
+    - commit:
+
+- [ ] 2. Phase 2: Core foundations
+  - [ ] 2.1 `packages/schemas`: every §7 schema including `CaseBundle` and the strict fixture schemas; `pnpm -F @dnr/schemas test` passes
+    - _Requirements: DC15, DC16_
+    - commit:
+  - [ ] 2.2 `@dnr/grammar` node and browser loaders for the vendored WASM grammars
+    - _Requirements: DC2, DC18_
+    - commit:
+  - [ ] 2.3 `tokenize` with weight-0 sets and degraded-parse detection
+    - _Requirements: DC2_
+    - commit:
+  - [ ] 2.4 `qualname` with all unit cases (methods, nested classes, decorators, `#2`, `<body>`, `<module>`, closures)
+    - _Requirements: DC3_
+    - commit:
+  - [ ] 2.5 `diffArrays` wrapper, unit extraction and `w()` (needed by mining rule E5)
+    - _Requirements: DC4, R5_
+    - commit:
+  - [ ] 2.6 `testkit` arbitraries
+    - _Properties: P1–P5_
+    - commit:
+  - [ ] 2.7 `packages/cli` scaffold built with tsup, linked with `pnpm link --global`; `dnr --version` runs
+    - _Requirements: DC16_
+    - commit:
+
+- [ ] 3. Phase 4: Scoring and orders
+  - [ ] 3.1 `multiset` and the edit score with two-sided, small-order and whole-order rules
+    - _Requirements: R5, DC5_
+    - commit:
+  - [ ] 3.2 `stale` and re-landed derivation
+    - _Requirements: R10_
+    - commit:
+  - [ ] 3.3 `dnr orders build` (keeps status, reason, history on rebuild) and `dnr orders show [--tokens]`; build is deterministic
+    - _Requirements: DC4_
+    - commit:
+  - [ ] 3.4 `testkit/mutate.ts` with six AST operators and the seed ranges (tune 1000–1004, held-out 2000–2004, split 3000–3004, move-to-file 3100–3104 and 3105–3109)
+    - _Properties: P3, P11, P15, P16_
+    - commit:
+  - [ ] 3.5 Properties P1, P2, P4, P5, P7, P8 pass (500 runs locally, 2,000 nightly)
+    - _Properties: P1, P2, P4, P5, P7, P8_
+    - commit:
+
+- [ ] 4. Phase 5: Hook path
+  - [ ] 4.1 Store with atomic writes and locks; sessions with the temp-index baseline
+    - _Requirements: R4, DC8_
+    - commit:
+  - [ ] 4.2 Tool adapters from the S2 captures
+    - _Requirements: DC9, R11_
+    - commit:
+  - [ ] 4.3 Tiers (protect, match, warn, allow), grants, both output formats, the §6 stderr text with the 1,200-character cap
+    - _Requirements: R1, R2, R3, R6, R9, R12, DC1_
+    - commit:
+  - [ ] 4.4 Fast path and blob-SHA cache; tsup bundle linked globally
+    - _Requirements: R8_
+    - commit:
+  - [ ] 4.5 Fail-open wrapper and `hook.log` for every entry point
+    - _Requirements: R7_
+    - commit:
+  - [ ] 4.6 Record mode (`DNR_MODE=record` and config `mode`) with `proposed_text` and `session_patch`
+    - _Requirements: DC12_
+    - commit:
+  - [ ] 4.7 `dnr check --commit`, `dnr check --file`, `dnr check --replay [--canonical]`, `dnr allow <id>`, `dnr session start|confirm|show|end|gc`
+    - _Requirements: DC6, R9_
+    - commit:
+  - [ ] 4.8 Minimal `dnr init --hooks pre-write` (for gate check 1b)
+    - _Requirements: DC16_
+    - commit:
+  - [ ] 4.9 Golden fixtures from S2 (`reapply-43933a1dca.json`, `hardneg-typehints.json`, `uncovered.json`, one per tool), `two-file-order.json`, the five gate hard negatives and both demo hard negatives
+    - _Requirements: R1, R2_
+    - commit:
+  - [ ] 4.10 Golden, warn-once, P3 accumulation, P10 grant scope, record mode and fail-open tests pass
+    - _Properties: P3, P10_
+    - commit:
+  - [ ] 4.11 Latency: hyperfine + `scripts/p95.mjs`; match p95 < 300 ms, fast path < 80 ms, first Django write < 2 s; results in `reports/perf.md`
+    - _Requirements: R8_
+    - commit:
+
+- [ ] 5. Phase 6: Shell, Stop, post-write, init
+  - [ ] 5.1 guard-shell GS-R1 … GS-R7 with the PreToolUse tree snapshot; table of 40 or more commands passes
+    - _Requirements: DC10_
+    - commit:
+  - [ ] 5.2 Process-ancestry and Kiro-variable check in every GS-R6 subcommand
+    - _Requirements: DC10, DC17_
+    - commit:
+  - [ ] 5.3 `dnr session shell-after` (post-shell) adding changed files to `touched`
+    - _Requirements: DC10, DC11_
+    - commit:
+  - [ ] 5.4 Stop backstop: touched files only, grants honored, at most 2 forced turns, order-set hash, exit 0 on crash
+    - _Requirements: DC11, R7, R13_
+    - commit:
+  - [ ] 5.5 `dnr session confirm` turning an approved `ask` into a grant
+    - _Requirements: R13_
+    - commit:
+  - [ ] 5.6 Pre-commit `dnr check --staged` with the crossing rule and blob-matched grants
+    - _Requirements: DC6_
+    - commit:
+  - [ ] 5.7 `warn-only` and `commit-enforce` modes and `dnr init --mode`; each mode writes a Zod-valid `EventRecord`
+    - _Requirements: DC12_
+    - commit:
+  - [ ] 5.8 Full idempotent `dnr init`, `dnr doctor`, `dnr orders verify`; re-run `make-demo-checkout.sh`, `dnr doctor` green in `../django-demo`
+    - _Requirements: DC15, DC16_
+    - commit:
+  - [ ] 5.9 P12, P13, P15 and P10's pre-commit blob clause pass
+    - _Properties: P10, P12, P13, P15_
+    - commit:
+  - [ ] 5.10 Live checks: headless cherry-pick denied; `sed` re-application undone by a forced turn with human edits intact; `python -c` write caught; interactive `ask` confirmed
+    - _Requirements: DC10, DC11, R13_
+    - commit:
+
+- [ ] 6. Phase 7: Playground `/play`
+  - [ ] 6.1 Shared `packages/ui` with the localStorage adapter and session simulator
+    - _Requirements: DC18_
+    - commit:
+  - [ ] 6.2 `dnr export-case` for both demo reverts with the five defined presets (half-of-two-file omitted with a reason when `c_file_count < 2`)
+    - _Requirements: DC18_
+    - commit:
+  - [ ] 6.3 Routes `/`, `/play/:case` (presets and free edit), `/graveyard`, `/orders/:id`, `/orders/view` with Zod validation and error state
+    - _Requirements: DC18, R14_
+    - commit:
+  - [ ] 6.4 Deploy to Cloudflare Pages from `main` (GitHub Pages mirror); smoke test passes on the preview URL
+    - _Requirements: DC18_
+    - commit:
+  - [ ] 6.5 P9 parity on Chromium, Firefox, WebKit; axe 0 violations
+    - _Properties: P9_
+    - commit:
+
+- [ ] 7. Phase 8: Drafter
+  - [ ] 7.1 `dnr draft` with Zod validation, two retries and caching; injection fixture yields a plain sentence
+    - _Requirements: DC20_
+    - commit:
+  - [ ] 7.2 `dnr steering generate`; template checked with `--out /tmp/check.md`
+    - _Requirements: DC21_
+    - commit:
+  - [ ] 7.3 Copy drafted, approved demo orders into `fixtures/demo-orders/`; re-run `make-demo-checkout.sh`; both show `approved` with `reason_source: drafter`
+    - _Requirements: DC20_
+    - commit:
+
+- [ ] 8. Phase 10: Proximity, fingerprint index, frozen config
+  - [ ] 8.1 Build proximity; tune `prox_threshold` on the tune families; apply the single enabling rule; record in `reports/gate.md`
+    - _Requirements: DC7. Properties: P14, P17_
+    - commit:
+  - [ ] 8.2 Fingerprint index and `dnr orders relocate`; tune `fingerprint_floor` on seeds 3105–3109; P16 on seeds 3100–3104
+    - _Requirements: R11, DC14. Properties: P16_
+    - commit:
+  - [ ] 8.3 Re-run the Phase 5 latency checks with the index on, including a cold-cache first write at Django scale (< 2 s)
+    - _Requirements: R8_
+    - commit:
+  - [ ] 8.4 Freeze `.dnr/config.json`
+    - _Requirements: DC15_
+    - commit:
+
+- [ ] 9. Phase 12: Board, MCP, power, TypeScript, Crew
+  - [ ] 9.1 Local board (Hono, local-API adapter, §10 auth); Playwright: approve → block → allow once → allowed → TTL expires → blocked, through a real `dnr board` in `node-pty`; auth matrix 401/403/421/409 and nonce reuse
+    - _Requirements: DC17, R9_
+    - commit:
+  - [ ] 9.2 MCP server with the two read-only tools; SDK stdio test; a live session calls `explain_function` before editing
+    - _Requirements: DC19_
+    - commit:
+  - [ ] 9.3 Power in the format S9 found
+    - _Requirements: DC19_
+    - commit:
+  - [ ] 9.4 TypeScript and JavaScript (§5.15) plus TS mutation operators; P1–P5 and P16 on TS; a TS case blocks in `/play`
+    - _Requirements: DC13. Properties: P1–P5, P16_
+    - commit:
+  - [ ] 9.5 `dnr init --crew` caller workflow; Crew acceptance on `django-demo-crew` (check fails, comment, `/dnr allow` turns it green, spoofing tests)
+    - _Requirements: R14, R15_
+    - commit:
+  - [ ] 9.6 Product-mode `dnr scan` with language globs; `dnr init && dnr scan && dnr orders build` on the TS demo repo, then a scripted re-application is blocked
+    - _Requirements: DC16_
+    - commit:
+
+- [ ] 10. Phase 13: `/trial` surfaces and hardening
+  - [ ] 10.1 `/trial`, `/replay`, `/kiro`, the recorded-agent preset, the real CLI loop on `/`
+    - _Requirements: DC18_
+    - commit:
+  - [ ] 10.2 `docs/threat-model.md` and `docs/architecture.md` final versions
+    - commit:
+  - [ ] 10.3 Uptime and keepalive workflows; CI on Node 24 and 26; Lighthouse gates (performance ≥ 90, accessibility 100)
+    - _Requirements: DC18_
+    - commit:
+  - [ ] 10.4 npm release: manual `0.0.0`, trusted publishing, `release.yml` with provenance, `v0.1.0`; `.dist.attestations` present
+    - _Requirements: DC16_
+    - commit:
+  - [ ] 10.5 `dnr init` refuses npx cache paths; `dnr doctor` confirms the hook command resolves
+    - _Requirements: DC16_
+    - commit:
+  - [ ] 10.6 Board deep links (four cases) and every empty state in Playwright on three engines
+    - _Requirements: DC17, DC18_
+    - commit:
+  - [ ] 10.7 Recovery capture against a live `kiro-cli` session with `DNR_NOW` advanced 1 h, saved in `reports/video/recovery/`
+    - _Requirements: R9_
+    - commit:
+  - [ ] 10.8 README#testing passes on a clean devcontainer
+    - commit:

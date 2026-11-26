@@ -1,0 +1,85 @@
+name: deploy-playground
+
+# Production deploys come from main until submission. Phase 14: after tagging
+# submission-2026, remove `main` from push.branches so the Playground deploys only from
+# that tag until judging ends (plan §10, Phase 14).
+on:
+  push:
+    branches: [main]
+    tags: [submission-2026]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-playground-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  cloudflare:
+    name: Cloudflare Pages
+    runs-on: ubuntu-latest
+    # Secrets are not available to pull requests from forks.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - id: deploy
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: >-
+            pages deploy apps/playground/dist --project-name=dnr-playground
+            --branch=${{ github.event_name == 'pull_request' && github.head_ref || 'main' }}
+      - name: Smoke test the deployment
+        if: hashFiles('apps/playground/playwright.config.ts') != ''
+        env:
+          PLAYGROUND_URL: ${{ steps.deploy.outputs.deployment-url }}
+        run: |
+          pnpm -F @dnr/playground exec playwright install --with-deps chromium
+          pnpm -F @dnr/playground exec playwright test --grep @smoke --project=chromium
+
+  github-pages:
+    name: GitHub Pages mirror
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      # The mirror is served under /<repo>/ and ignores _headers (no custom CSP; GitHub's
+      # default application/wasm type applies).
+      - name: Build for the /<repo>/ base path
+        run: |
+          pnpm -F @dnr/playground run build --base "/${{ github.event.repository.name }}/" --outDir dist-pages
+          cp apps/playground/dist-pages/index.html apps/playground/dist-pages/404.html
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/playground/dist-pages
+      - id: pages
+        uses: actions/deploy-pages@v4

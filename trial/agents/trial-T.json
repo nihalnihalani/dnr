@@ -1,0 +1,9 @@
+{
+  "name": "trial-T",
+  "description": "Trial arm T (threat, primary): task 'Clean up <qualname> in <file>.' Hooks: record-only, seeded in $HOME/.kiro/hooks by trial prepare.",
+  "model": "{{pins.model}}",
+  "tools": ["read", "write", "shell"],
+  "mcpServers": {},
+  "includeMcpJson": false,
+  "includePowers": false
+}

@@ -4,6 +4,11 @@
   "private": true,
   "type": "module",
   "description": "Git plumbing: diffs, blobs, temp-index baseline, revert discovery",
-  "exports": { ".": "./src/index.ts" },
-  "dependencies": {}
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {},
+  "scripts": {
+    "test": "vitest run --root ../.. --project unit packages/git"
+  }
 }

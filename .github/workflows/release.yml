@@ -1,0 +1,43 @@
+name: release
+
+# npm trusted publishing (OIDC) with provenance; no npm token is stored (plan Phase 13).
+# The first 0.0.0 publish is done by hand so the package exists before trusted
+# publishing is linked.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - run: pnpm build
+      - name: Package name and version match pins.json and the tag
+        run: |
+          want_name="$(jq -r .npm_package fixtures/pins.json)"
+          have_name="$(jq -r .name packages/cli/package.json)"
+          have_version="$(jq -r .version packages/cli/package.json)"
+          test "$want_name" = "$have_name" || { echo "::error::packages/cli name is $have_name, pins.json says $want_name"; exit 1; }
+          test "v$have_version" = "$GITHUB_REF_NAME" || { echo "::error::tag $GITHUB_REF_NAME does not match version $have_version"; exit 1; }
+          test "$(jq -r '.private // false' packages/cli/package.json)" = false || { echo "::error::packages/cli is private"; exit 1; }
+          jq -e '.bin.dnr' packages/cli/package.json > /dev/null || { echo "::error::packages/cli has no bin.dnr"; exit 1; }
+      - name: Publish with provenance
+        working-directory: packages/cli
+        run: npm publish --provenance --access public

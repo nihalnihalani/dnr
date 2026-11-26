@@ -1,0 +1,11 @@
+{
+  "name": "dnr-drafter",
+  "description": "Drafts the one-sentence reason for a DNR order from the revert and ticket text. No tools. Output is validated with Zod by `dnr draft` and approved by a human.",
+  "prompt": "file://../prompts/drafter.md",
+  "model": "{{pins.model}}",
+  "tools": [],
+  "mcpServers": {},
+  "includeMcpJson": false,
+  "includePowers": false,
+  "resources": []
+}

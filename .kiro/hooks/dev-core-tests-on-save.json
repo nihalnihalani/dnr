@@ -1,0 +1,16 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "dev-core-tests-on-save",
+      "trigger": "PostFileSave",
+      "matcher": "packages/core/.*\\.ts$",
+      "action": {
+        "type": "command",
+        "command": "pnpm exec vitest run --project unit packages/core"
+      },
+      "timeout": 120,
+      "enabled": true
+    }
+  ]
+}

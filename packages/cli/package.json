@@ -4,6 +4,20 @@
   "private": true,
   "type": "module",
   "description": "The dnr command",
-  "exports": { ".": "./src/index.ts" },
-  "dependencies": {"@dnr/core":"workspace:*","@dnr/grammar":"workspace:*","@dnr/git":"workspace:*","@dnr/store":"workspace:*","@dnr/hook":"workspace:*","@dnr/mcp":"workspace:*","@dnr/trial":"workspace:*","@dnr/schemas":"workspace:*"}
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "@dnr/core": "workspace:*",
+    "@dnr/grammar": "workspace:*",
+    "@dnr/git": "workspace:*",
+    "@dnr/store": "workspace:*",
+    "@dnr/hook": "workspace:*",
+    "@dnr/mcp": "workspace:*",
+    "@dnr/trial": "workspace:*",
+    "@dnr/schemas": "workspace:*"
+  },
+  "scripts": {
+    "test": "vitest run --root ../.. --project unit packages/cli"
+  }
 }

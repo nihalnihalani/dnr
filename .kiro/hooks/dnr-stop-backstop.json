@@ -1,0 +1,12 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "dnr-stop-backstop",
+      "trigger": "Stop",
+      "action": { "type": "command", "command": "dnr check --worktree --hook stop --max-forced-turns 2" },
+      "timeout": 30,
+      "enabled": true
+    }
+  ]
+}

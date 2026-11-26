@@ -1,0 +1,13 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "dnr-pre-write",
+      "trigger": "PreToolUse",
+      "matcher": "write",
+      "action": { "type": "command", "command": "dnr check --stdin --hook kiro" },
+      "timeout": 10,
+      "enabled": true
+    }
+  ]
+}

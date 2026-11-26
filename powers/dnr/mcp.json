@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "dnr": {
+      "command": "dnr",
+      "args": ["mcp"]
+    }
+  }
+}

@@ -1,0 +1,157 @@
+# Implementation Plan: trial-harness
+
+Tasks follow plan §13.1 in dependency order. Run them one at a time in Kiro spec mode; tick each and fill its `commit:` slot with the SHA that completed it. Hook, scoring and UI work is in `.kiro/specs/dnr-check/tasks.md`. Steps marked **(user)** need a person or an account and are not done by an agent.
+
+- [ ] 0. Phase 0: trial inputs
+  - [ ] 0.1 Export `ROOT`, `DJANGO_SRC`, `TRIAL_ROOT`, `SECOND_SRC`, `TS_DEMO_SRC`; clone Django and CPython; pick the TS demo case by hand into `pins.json` and NOTICE
+    - _Requirements: TH9. Plan: Phase 0_
+    - commit:
+  - [ ] 0.2 `fixtures/known-reverts.json` and `known-reverts-rejected.json` from the two paginated `gh api search/commits` queries, person-confirmed
+    - _Requirements: TH1_
+    - commit:
+  - [ ] 0.3 `fixtures/pins.json`: Django SHA, model and cutoff, kiro-cli version, Docker digests, tool versions, demo C/file/qualname for `43933a1dca` and `d0e4dd5cdd`, `npm_package`
+    - _Requirements: TH8, TH10_
+    - commit:
+  - [ ] 0.4 Fill the model pin into `trial/agents/trial-*.json` and `.kiro/agents/*.json` (replace `{{pins.model}}`)
+    - _Requirements: TH8_
+    - commit:
+  - [ ] 0.5 **(user)** Credits requested; outside labeler, adjudicator, SYN author and pilot maintainers booked; `dnr-labeling` and `django-syn` private repos; Touch the Plan study started and `study-prereg` tagged; bookings recorded in `docs/spikes.md`
+    - _Requirements: TH11, TH13, TH18, TH19_
+    - commit:
+
+- [ ] 1. Phase 3: mining, environments, labeling inputs
+  - [ ] 1.1 Shared revert-discovery engine (§9.1 steps 1–2) used by `trial mine` and `dnr scan`; patch-id silent reverts
+    - _Requirements: TH1, TH2_
+    - commit:
+  - [ ] 1.2 `dnr trial label --reasons` and `--critical-edits`
+    - _Requirements: TH4, TH12_
+    - commit:
+  - [ ] 1.3 `dnr trial mine` (Django and `--repo` for repo2): candidates and rule-engine proposals, E1–E8, `reports/eligibility.md`
+    - _Requirements: TH3, TH4_
+    - commit:
+  - [ ] 1.4 `dnr trial tickets` into `fixtures/discussion/`
+    - _Requirements: TH5_
+    - commit:
+  - [ ] 1.5 Labeler setup and the reason-packet round-trip through `dnr-labeling`
+    - _Requirements: TH13_
+    - commit:
+  - [ ] 1.6 **(user)** Blind reason-category labeling by both labelers; reason κ reported
+    - _Requirements: TH4_
+    - commit:
+  - [ ] 1.7 `dnr trial mine --labels fixtures/reason-labels.json` → `fixtures/reverts.json` with `rdelta_sha`
+    - _Requirements: TH4, TH19_
+    - commit:
+  - [ ] 1.8 `dnr trial assign` → `fixtures/assignment.json`
+    - _Requirements: TH7_
+    - commit:
+  - [ ] 1.9 `dnr trial envs` (uv, Docker with constraints, CPython builds); restored tests validated on C and R (and R+Δ); `flaky.json`
+    - _Requirements: TH6_
+    - commit:
+  - [ ] 1.10 **(user)** Critical-edit annotation by both labelers into `fixtures/critical-edits.json`
+    - _Requirements: TH12_
+    - commit:
+  - [ ] 1.11 Human re-proposal count into `reports/human-reproposals.md`
+    - _Requirements: TH19_
+    - commit:
+  - [ ] 1.12 Acceptance: all known reverts recovered, rerun byte-identical, K in `eligibility.md`, critical edits complete
+    - _Requirements: TH1, TH3_
+    - commit:
+
+- [ ] 2. Phase 4: trial orders
+  - [ ] 2.1 `dnr orders build` for Django and repo2 into `reports/orders`, then `dnr orders approve --all --orders reports/orders --by builder`; both demo orders meet `min_order_weight`
+    - _Requirements: TH3_
+    - commit:
+  - [ ] 2.2 Push the approved `dnr-43933a1dca` order to `<you>/django-demo-crew` under `.dnr/orders/`
+    - commit:
+
+- [ ] 3. Phase 5: false-alarm scan
+  - [ ] 3.1 `dnr trial falsealarm [--config] [--role]` over later commits with `dnr check --commit`
+    - _Requirements: TH15_
+    - commit:
+  - [ ] 3.2 Recompute the trial budget with S11's credits per run and K
+    - _Requirements: TH11_
+    - commit:
+
+- [ ] 4. Phase 8: trial drafts
+  - [ ] 4.1 `dnr draft --orders reports/orders --trial` for every assigned order (Django, repo2) and both demo orders; unassigned orders keep the revert subject
+    - _Requirements: TH9_
+    - commit:
+
+- [ ] 5. Phase 9: harness
+  - [ ] 5.1 `dnr trial prepare` (truncated repos, per-run clones, ancestor order sets, HOME seeding and hashing, frozen config, S steering via `dnr steering generate`)
+    - _Requirements: TH9_
+    - commit:
+  - [ ] 5.2 `dnr trial run` with process-group timeout, manifest/resume, flags, retries
+    - _Requirements: TH8, TH10, TH11_
+    - commit:
+  - [ ] 5.3 Agent configs `trial/agents/trial-{T,U,B,S,H,L,probe}.json` finalized and arm hook bundles frozen
+    - _Requirements: TH8_
+    - commit:
+  - [ ] 5.4 Packet generation (run, blocked, probe), `label`, `--freeze`, `replay`, `score`, `rescore --check`, `report`, `probe`, `baseline`
+    - _Requirements: TH13, TH14, TH18, TH19_
+    - commit:
+  - [ ] 5.5 SYN in the §9.10 order (clone and ancestry check, orders build, approve, envs, draft, prepare)
+    - _Requirements: TH19_
+    - commit:
+  - [ ] 5.6 repo2 environments (`dnr trial envs --repo cpython|sympy`)
+    - _Requirements: TH19_
+    - commit:
+  - [ ] 5.7 Acceptance: wave-1 dry run on one revert; dry runs for `rdelta`, `syn`, `repo2`, `demo`, `practice`, the probe; run-packet round-trip through `dnr-labeling`; two-file `session_patch` dry run
+    - _Requirements: TH9, TH10, TH13_
+    - commit:
+
+- [ ] 6. Phase 10: tuning, gate, pre-registration
+  - [ ] 6.1 Threshold and `side_min` grid on the tuning reverts and tune families (`falsealarm --role tune`)
+    - _Requirements: TH16_
+    - commit:
+  - [ ] 6.2 Gate checks 1a–1d (1b retried with `.kiro/agents/dnr-gate-1b.json` in `../django-demo/.kiro/agents/`), 2 (exact replays and held-out recall ≥ 70%), 3 (≥ 20 negatives, ≤ 2 match-tier blocks); `reports/gate.md`
+    - _Requirements: TH16_
+    - commit:
+  - [ ] 6.3 Relocation caches (`dnr orders relocate`), order files unchanged; re-run `trial prepare` and the Phase 9 dry runs
+    - _Requirements: TH9_
+    - commit:
+  - [ ] 6.4 Demo runs (`demo/T`, `demo/L`, `demo/LU`, `demo/U`, `demo/CE`, r1–r3, both demo reverts) and practice runs (`practice/T`, `practice/H`)
+    - _Requirements: TH8_
+    - commit:
+  - [ ] 6.5 `dnr trial baseline --generate` (rules hashed with `gen.ts`)
+    - _Requirements: TH19_
+    - commit:
+  - [ ] 6.6 Credits cover the run count with 40% margin (else the user decides)
+    - _Requirements: TH11_
+    - commit:
+  - [ ] 6.7 `reports/preregistration.md`; tag and push `prereg-v1`; post its hash
+    - _Requirements: TH17_
+    - commit:
+
+- [ ] 7. Phase 11: trial
+  - [ ] 7.1 Waves 1–3 including `rdelta`, `syn`, `repo2` (with the `chmod 000` lockdown)
+    - _Requirements: TH9, TH10, TH11, TH19_
+    - commit:
+  - [ ] 7.2 `dnr trial probe`; `dnr trial baseline --score`
+    - _Requirements: TH19_
+    - commit:
+  - [ ] 7.3 **(user)** Blind labeling of run, blocked and probe packets; adjudication; `dnr trial label --freeze`; commit the key
+    - _Requirements: TH12, TH13_
+    - commit:
+  - [ ] 7.4 `trial replay`, `trial falsealarm --role trial`, `trial score --unseal`, `trial rescore --check`, `trial report`
+    - _Requirements: TH14, TH15_
+    - commit:
+  - [ ] 7.5 `reports/decision.md` from the §9.8 rows in order D1, D6, D2, D3, D4, D5
+    - _Requirements: TH18_
+    - commit:
+  - [ ] 7.6 Acceptance: tag predates the first run; no run repo newer than `start_sha`; HOME hashes match; full labeler coverage; every secondary cohort present; `error_open` runs listed and reported with and without
+    - _Requirements: TH9, TH13, TH14_
+    - commit:
+
+- [ ] 8. Phase 12: regression gate
+  - [ ] 8.1 Canonical replay of every sealed run into `reports/regression/<run_id>.before` at the start of Phase 12
+    - _Requirements: TH21_
+    - commit:
+  - [ ] 8.2 The same into `.after` at the end; every pair byte-identical
+    - _Requirements: TH21_
+    - commit:
+
+- [ ] 9. Phase 13: maintainer pilot
+  - [ ] 9.1 **(user)** Pilot with three or more maintainers after the npm release; `reports/pilot.md` and `reports/pilot.json`, not pre-registered
+    - _Requirements: TH20_
+    - commit:

@@ -1,0 +1,13 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "dnr-post-write",
+      "trigger": "PostToolUse",
+      "matcher": "write",
+      "action": { "type": "command", "command": "dnr session confirm --stdin" },
+      "timeout": 10,
+      "enabled": true
+    }
+  ]
+}

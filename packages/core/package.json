@@ -4,6 +4,17 @@
   "private": true,
   "type": "module",
   "description": "Isomorphic match engine: tokenize, qualname, diff, multiset, score, proximity, decide, stale, apply-tool (no node:* imports)",
-  "exports": { ".": "./src/index.ts" },
-  "dependencies": {"diff":"9.0.0","@dnr/schemas":"workspace:*"}
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "diff": "9.0.0",
+    "@dnr/schemas": "workspace:*"
+  },
+  "devDependencies": {
+    "@dnr/grammar": "workspace:*"
+  },
+  "scripts": {
+    "test": "vitest run --root ../.. packages/core"
+  }
 }

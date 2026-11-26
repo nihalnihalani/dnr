@@ -1,0 +1,10 @@
+{
+  "name": "trial-S",
+  "description": "Trial arm S (steering at scale): same task as T, no hooks. Loads the working copy steering file .kiro/steering/dnr-history.md written by `dnr steering generate` (spike S10 confirms whether custom agents load workspace steering without this resource).",
+  "model": "{{pins.model}}",
+  "tools": ["read", "write", "shell"],
+  "mcpServers": {},
+  "includeMcpJson": false,
+  "includePowers": false,
+  "resources": ["file://.kiro/steering/**/*.md"]
+}

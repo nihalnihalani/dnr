@@ -1,0 +1,13 @@
+{
+  "version": "v1",
+  "hooks": [
+    {
+      "name": "dnr-post-shell",
+      "trigger": "PostToolUse",
+      "matcher": "shell",
+      "action": { "type": "command", "command": "dnr session shell-after --stdin" },
+      "timeout": 10,
+      "enabled": true
+    }
+  ]
+}

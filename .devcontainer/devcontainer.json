@@ -1,0 +1,26 @@
+{
+  "name": "dnr",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:24-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+  "containerEnv": {
+    "PNPM_HOME": "/home/node/.local/share/pnpm",
+    "KIRO_NO_AUTO_UPDATE": "1"
+  },
+  "remoteEnv": {
+    "PATH": "/home/node/.local/share/pnpm:/home/node/.local/bin:${containerEnv:PATH}"
+  },
+  "onCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends jq && curl -LsSf https://astral.sh/uv/install.sh | sh && curl -fsSL https://cli.kiro.dev/install | bash",
+  "postCreateCommand": "sudo corepack enable && pnpm install --frozen-lockfile && pnpm build && (pnpm -C packages/cli link --global || echo 'dnr is not linkable yet: packages/cli has no bin until Phase 2')",
+  "postAttachCommand": "echo 'Next: dnr doctor, then scripts/demo/make-demo-checkout.sh and kiro-cli login (README#testing)'",
+  "forwardPorts": [4317],
+  "portsAttributes": {
+    "4317": { "label": "dnr board", "onAutoForward": "silent" }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": ["biomejs.biome"]
+    }
+  }
+}

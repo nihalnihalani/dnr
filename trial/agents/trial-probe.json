@@ -1,0 +1,10 @@
+{
+  "name": "trial-probe",
+  "description": "Memorization probe (plan section 9.13): no tools, no repo, one session per revert. The pre-registered prompt is passed by `dnr trial probe`.",
+  "model": "{{pins.model}}",
+  "tools": [],
+  "mcpServers": {},
+  "includeMcpJson": false,
+  "includePowers": false,
+  "resources": []
+}

@@ -4,6 +4,17 @@
   "private": true,
   "type": "module",
   "description": "fast-check arbitraries and the AST mutation generator (mutate.ts)",
-  "exports": { ".": "./src/index.ts" },
-  "dependencies": {"fast-check":"4.11.0","@dnr/core":"workspace:*","@dnr/grammar":"workspace:*"}
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {
+    "fast-check": "4.11.0",
+    "@dnr/core": "workspace:*",
+    "@dnr/grammar": "workspace:*",
+    "@dnr/schemas": "workspace:*",
+    "diff": "9.0.0"
+  },
+  "scripts": {
+    "test": "vitest run --root ../.. packages/testkit"
+  }
 }
