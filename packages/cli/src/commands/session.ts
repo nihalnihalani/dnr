@@ -11,7 +11,9 @@ import {
   sessionShow,
 } from '@dnr/hook';
 import { nowIso, nowMs, parseTtl } from '@dnr/store';
+import { effectiveStatuses } from '../analysis';
 import { parse, str } from '../args';
+import { ALLOW_ONCE } from '../board-store';
 import { repoContext, requireHuman } from '../context';
 import { CliError, EXIT, usage } from '../errors';
 import type { CliIO } from '../io';
@@ -134,6 +136,13 @@ export async function cmdAllow(argv: string[], io: CliIO): Promise<number> {
   }
   const order = await ctx.store.orders.get(id);
   if (!order) throw new CliError(`DNR: no order ${id}`, EXIT.USAGE);
+  // The §10 state table: only an enforced order can be allowed once (the board answers 409).
+  const eff = (await effectiveStatuses(ctx, [order])).get(order.id) ?? order.status;
+  if (!ALLOW_ONCE.has(eff))
+    throw new CliError(
+      `DNR: ${id} is ${eff}; only an enforced order (approved, stale, re-landed or violated) can be allowed once`,
+      EXIT.FINDINGS,
+    );
   const at = nowMs(io.env);
   const origin = await grantOrigin({
     via: 'cli',
@@ -156,8 +165,6 @@ export async function cmdAllow(argv: string[], io: CliIO): Promise<number> {
     io.err(
       `DNR: this grant is flagged suspect (${origin.markers.join(', ')}) and does not apply until a human confirms it: \`dnr allow --confirm ${id}\` from your own terminal, or Confirm on the board.\n`,
     );
-  if (order.status !== 'approved')
-    io.err(`DNR: note: ${id} is ${order.status}, so it does not block anyway.\n`);
   io.out(`DNR: allowed ${id} once, for the current or next agent session, until ${g.expires_at}.\n`);
   return EXIT.OK;
 }

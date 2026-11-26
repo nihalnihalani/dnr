@@ -78,12 +78,12 @@ Tasks follow plan §13.1 in dependency order. Run them one at a time in Kiro spe
     - commit:
 
 - [ ] 5. Phase 9: harness
-  - [ ] 5.1 `dnr trial prepare` (truncated repos, per-run clones, ancestor order sets, HOME seeding and hashing, frozen config, S steering via `dnr steering generate`)
+  - [x] 5.1 `dnr trial prepare` (truncated repos, per-run clones, ancestor order sets, HOME seeding and hashing, frozen config, S steering via `dnr steering generate`)
     - _Requirements: TH9_
-    - commit:
-  - [ ] 5.2 `dnr trial run` with process-group timeout, manifest/resume, flags, retries
+    - commit: pending
+  - [x] 5.2 `dnr trial run` with process-group timeout, manifest/resume, flags, retries
     - _Requirements: TH8, TH10, TH11_
-    - commit:
+    - commit: pending
   - [ ] 5.3 Agent configs `trial/agents/trial-{T,U,B,S,H,L,probe}.json` finalized and arm hook bundles frozen
     - _Requirements: TH8_
     - commit:

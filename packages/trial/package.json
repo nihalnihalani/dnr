@@ -12,9 +12,14 @@
     "@dnr/git": "workspace:*",
     "@dnr/store": "workspace:*",
     "@dnr/schemas": "workspace:*",
-    "@dnr/grammar": "workspace:*"
+    "@dnr/grammar": "workspace:*",
+    "zod": "4.6.7",
+    "@dnr/hook": "workspace:*"
   },
   "scripts": {
     "test": "vitest run --root ../.. --project unit packages/trial"
+  },
+  "devDependencies": {
+    "@ast-grep/cli": "0.51.3"
   }
 }

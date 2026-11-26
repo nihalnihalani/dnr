@@ -959,3 +959,74 @@ describe('tamper and demo (wave-3)', () => {
     expect(live.out).toContain('DNR order dnr-43933a1dca matched (edit 1.00 ≥ 0.60) in Query.clear_ordering');
   });
 });
+
+describe('state-table rules shared by the board and the CLI', () => {
+  it('ST-1: allow-once is refused on a draft or retired order (CLI exit 1; board adapter TransitionError → 409)', async () => {
+    fx = await revertFixture({ status: 'draft' });
+    const d = fx.repo.dir;
+    const r = await dnr(d, ['allow', fx.order.id]);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain('only an enforced order');
+    expect(existsSync(join(d, '.dnr', 'grants'))).toBe(false);
+    const { createBoardStore } = await import('../src/board-store');
+    const { openContext } = await import('@dnr/hook');
+    class TransitionError extends Error {
+      override name = 'TransitionError';
+    }
+    const store = createBoardStore((await openContext(d, envFor(fx.repo))) as never, {
+      TransitionError,
+      NotFoundError: Error,
+    });
+    await expect(store.allowOnce(fx.order.id, 3600, 'human')).rejects.toThrow(TransitionError);
+    await store.patchOrder(fx.order.id, { status: 'retired' }, 'human');
+    await expect(store.allowOnce(fx.order.id, 3600, 'human')).rejects.toThrow(TransitionError);
+    expect((await dnr(d, ['allow', fx.order.id])).code).toBe(1);
+  });
+
+  it('ST-2: a no-op transition (draft → draft) is refused by the board adapter and by `dnr orders`', async () => {
+    fx = await revertFixture({ status: 'draft' });
+    const { createBoardStore } = await import('../src/board-store');
+    const { openContext } = await import('@dnr/hook');
+    class TransitionError extends Error {
+      override name = 'TransitionError';
+    }
+    const store = createBoardStore((await openContext(fx.repo.dir, envFor(fx.repo))) as never, {
+      TransitionError,
+      NotFoundError: Error,
+    });
+    await expect(store.patchOrder(fx.order.id, { status: 'draft' }, 'human')).rejects.toThrow(
+      TransitionError,
+    );
+    await dnr(fx.repo.dir, ['orders', 'approve', fx.order.id]);
+    expect((await dnr(fx.repo.dir, ['orders', 'approve', fx.order.id])).code).toBe(1);
+  });
+
+  it('ST-3: reasons are trimmed and bounded to 1–280 characters after trimming, everywhere', async () => {
+    fx = await revertFixture({ status: 'draft' });
+    const d = fx.repo.dir;
+    expect(
+      (await dnr(d, ['orders', 'edit', fx.order.id, '--reason', '   Totals double-counted refunds.   ']))
+        .code,
+    ).toBe(0);
+    expect(readOrder(fx).reason).toBe('Totals double-counted refunds.');
+    expect((await dnr(d, ['orders', 'edit', fx.order.id, '--reason', '    '])).code).toBe(65);
+    const { createBoardStore } = await import('../src/board-store');
+    const { openContext } = await import('@dnr/hook');
+    class TransitionError extends Error {
+      override name = 'TransitionError';
+    }
+    const store = createBoardStore((await openContext(d, envFor(fx.repo))) as never, {
+      TransitionError,
+      NotFoundError: Error,
+    });
+    await expect(store.patchOrder(fx.order.id, { reason: ` ${'x'.repeat(281)} ` }, 'human')).rejects.toThrow(
+      TransitionError,
+    );
+    const row = await store.patchOrder(fx.order.id, { reason: '  Board reason.  ' }, 'human');
+    expect(row.order.reason).toBe('Board reason.');
+    const { openStore } = await import('@dnr/store');
+    await expect(
+      openStore(d, { env: envFor(fx.repo) }).orders.editReason(fx.order.id, '   ', 'h'),
+    ).rejects.toThrow(/after trimming/);
+  });
+});

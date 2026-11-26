@@ -295,10 +295,10 @@ export async function cmdOrders(argv: string[], io: CliIO): Promise<number> {
       return EXIT.OK;
     }
     case 'edit': {
-      const reason = str(v.reason);
-      if (!id || !reason) throw usage('dnr orders edit <id> --reason <text>');
+      const reason = str(v.reason)?.trim();
+      if (!id || reason === undefined) throw usage('dnr orders edit <id> --reason <text>');
       const r = Order.shape.reason.safeParse(reason);
-      if (!r.success) throw invalidData(`DNR: reason must be 1–280 characters`);
+      if (!r.success) throw invalidData('DNR: reason must be 1–280 characters after trimming');
       await store.editReason(id, reason, by, 'human', at);
       io.out(`${id}: reason updated\n`);
       return EXIT.OK;

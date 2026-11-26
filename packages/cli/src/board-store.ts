@@ -21,6 +21,9 @@ export interface BoardErrors {
   NotFoundError: new (m: string) => Error;
 }
 
+/** Effective statuses that enforce, so an allow-once grant means something (§10 state table). */
+export const ALLOW_ONCE = new Set<EffectiveStatus>(['approved', 'stale', 'relanded', 'violated']);
+
 export function createBoardStore(ctx: HookContext, errors: BoardErrors) {
   const store = ctx.store;
   const ordersRel = relative(ctx.repoRoot, store.paths.ordersDir);
@@ -78,13 +81,14 @@ export function createBoardStore(ctx: HookContext, errors: BoardErrors) {
       wrap(async () => {
         const at = nowIso(ctx.env);
         if (patch.reason !== undefined) {
-          if (!Order.shape.reason.safeParse(patch.reason).success)
-            throw new errors.TransitionError('reason must be 1–280 characters');
-          await store.orders.editReason(id, patch.reason, by, 'human', at);
+          const reason = patch.reason.trim();
+          if (!Order.shape.reason.safeParse(reason).success)
+            throw new errors.TransitionError('reason must be 1–280 characters after trimming');
+          await store.orders.editReason(id, reason, by, 'human', at);
         }
         if (patch.status !== undefined) {
-          const cur = await store.orders.require(id);
-          if (cur.status !== patch.status) await store.orders.transition(id, patch.status, by, at);
+          // A no-op transition is invalid too (checkTransition): 409, same as `dnr orders`.
+          await store.orders.transition(id, patch.status, by, at);
         }
         return requireRow(id);
       }),
@@ -100,7 +104,11 @@ export function createBoardStore(ctx: HookContext, errors: BoardErrors) {
       }),
     allowOnce: (id: string, ttlSeconds: number, by: string) =>
       wrap(async () => {
-        await store.orders.require(id);
+        const row = await requireRow(id);
+        if (!ALLOW_ONCE.has(row.effective))
+          throw new errors.TransitionError(
+            `DNR: ${id} is ${row.effective}; only an enforced order can be allowed once`,
+          );
         const at = nowMs(ctx.env);
         const origin = await grantOrigin({
           via: 'board',
