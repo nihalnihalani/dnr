@@ -17,10 +17,12 @@ interface RouterState {
 
 const RouterContext = createContext<RouterState | null>(null);
 
-function strip(base: string, pathname: string): string {
+export function strip(base: string, pathname: string): string {
   const b = base.endsWith('/') ? base.slice(0, -1) : base;
   const p = b && pathname.startsWith(b) ? pathname.slice(b.length) : pathname;
-  return p.startsWith('/') ? p : `/${p}`;
+  const abs = p.startsWith('/') ? p : `/${p}`;
+  // Static hosts (GitHub Pages) redirect /route to /route/; treat both the same.
+  return abs.length > 1 && abs.endsWith('/') ? abs.replace(/\/+$/, '') : abs;
 }
 
 export function href(base: string, to: string): string {

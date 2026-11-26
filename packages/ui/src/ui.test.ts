@@ -162,3 +162,14 @@ describe('case packing', () => {
     expect(CaseBundle.parse(unpackCase(JSON.parse(JSON.stringify(packed))))).toEqual(CaseBundle.parse(raw));
   });
 });
+
+describe('router base path (GitHub Pages mirror)', () => {
+  it('ROUTE-1: a trailing slash added by a static host resolves to the same route', async () => {
+    const { strip, match } = await import('./app/router');
+    expect(strip('/dnr/', '/dnr/graveyard/')).toBe('/graveyard');
+    expect(strip('/dnr/', '/dnr/graveyard')).toBe('/graveyard');
+    expect(strip('/dnr/', '/dnr/')).toBe('/');
+    expect(strip('/', '/play/43933a1dca/')).toBe('/play/43933a1dca');
+    expect(match('/play/:case', strip('/dnr/', '/dnr/play/43933a1dca/'))).toEqual({ case: '43933a1dca' });
+  });
+});
