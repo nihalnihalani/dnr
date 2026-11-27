@@ -40,7 +40,7 @@ export {
 } from './engine';
 export { type HookEvent, parseHookEvent, StdinError, shellCommandOf } from './event';
 export { failOpen } from './failopen';
-export { grantOrigin, launchMarkers } from './grant-origin';
+export { approvalOrigin, grantOrigin, launchMarkers, testHarness } from './grant-origin';
 export { bundleSha256, type InstallRecord, installGlobs, installMismatch, installRoot } from './install';
 export {
   blockText,

@@ -63,3 +63,39 @@ export async function grantOrigin(input: {
   });
   return { via: input.via, suspect: markers.length > 0, markers };
 }
+
+/**
+ * Known test harnesses that drive `dnr` through a pty (node-pty under vitest, Playwright, or a
+ * tsx-run demo script). A pty they spawn passes the R6 guard like a human terminal, so approvals
+ * record which harness it was: an approval made that way is never a maintainer's.
+ */
+const HARNESSES: Array<[string, RegExp]> = [
+  ['vitest', /(^|[/\s])vitest([/\s.]|$)/],
+  ['playwright', /(^|[/\s])(playwright|@playwright)([/\s]|$)/],
+  ['jest', /(^|[/\s])jest([/\s.]|$)/],
+  ['tsx', /(^|[/\s])tsx([/\s]|$)/],
+  ['node-pty', /node-pty/],
+];
+
+/** The first known test harness among the ancestors above the interactive shell, else null. */
+export function testHarness(chain: readonly Proc[]): string | null {
+  for (const p of chain) for (const [label, re] of HARNESSES) if (re.test(p.command)) return label;
+  return null;
+}
+
+/** Provenance of a CLI approval (order history `origin`). */
+export function approvalOrigin(input: { env: NodeJS.ProcessEnv; isTTY?: boolean; chain?: Proc[] }): {
+  via: 'cli';
+  markers: string[];
+  harness: string | null;
+} {
+  const chain = input.chain ?? processChain();
+  const markers = launchMarkers({
+    chain,
+    env: input.env,
+    isTTY: input.isTTY ?? (!!process.stdin.isTTY && !!process.stdout.isTTY),
+  });
+  const harness = testHarness(chain);
+  if (harness) markers.push(`harness:${harness}`);
+  return { via: 'cli', markers, harness };
+}

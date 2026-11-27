@@ -55,6 +55,14 @@ export const Order = z.object({
       at: Iso,
       by: z.string(),
       action: z.enum(['created', 'approved', 'retired', 'unretired', 'edited_reason', 'reapproved']),
+      /**
+       * How a CLI approval was made: the launch markers of the approving process (as for grants)
+       * and, when the terminal was a pty driven by a known test harness, which one. Absent on
+       * entries written before it existed and on board actions.
+       */
+      origin: z
+        .object({ via: z.literal('cli'), markers: z.array(z.string()), harness: z.string().nullable() })
+        .optional(),
     }),
   ),
   created_at: Iso,

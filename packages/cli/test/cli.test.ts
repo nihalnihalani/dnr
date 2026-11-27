@@ -302,7 +302,7 @@ describe('cli: orders', () => {
     expect(show.out).toContain('  A: [');
     expect((await dnr(d, ['orders', 'approve', fx.order.id, '--by', 'builder'])).code).toBe(0);
     expect(readOrder(fx).history.at(-1)).toMatchObject({ action: 'approved', by: 'builder' });
-    expect((await dnr(d, ['orders', 'approve', fx.order.id])).code).toBe(1); // already approved: invalid transition
+    expect((await dnr(d, ['orders', 'approve', fx.order.id, '--by', 'builder'])).code).toBe(1); // already approved: invalid transition
     expect((await dnr(d, ['orders', 'retire', fx.order.id])).code).toBe(0);
     expect((await dnr(d, ['orders', 'unretire', fx.order.id])).code).toBe(0);
     expect(readOrder(fx).status).toBe('draft');
@@ -633,6 +633,65 @@ describe('scan', () => {
     } finally {
       rmSync(clone, { recursive: true, force: true });
     }
+  });
+});
+
+describe('approval provenance', () => {
+  it('approve: --by is required; without it nothing is approved and the git user is never used', async () => {
+    fx = await revertFixture({ status: 'draft' });
+    const r = await dnr(fx.repo.dir, ['orders', 'approve', fx.order.id], {
+      env: envFor(fx.repo, { USER: 'someone' }),
+    });
+    expect(r.code).toBe(64);
+    expect(r.err).toContain('--by <name> is required');
+    expect(readOrder(fx).status).toBe('draft');
+    expect(readOrder(fx).history.map((h) => h.action)).toEqual(['created']);
+    expect((await dnr(fx.repo.dir, ['orders', 'approve', '--all'])).code).toBe(64);
+    expect((await dnr(fx.repo.dir, ['orders', 'approve', fx.order.id, '--by', '  '])).code).toBe(64);
+  });
+
+  it('approve: history records a pty driven by a known test harness, and a human terminal as no harness', async () => {
+    fx = await revertFixture({ status: 'draft' });
+    const harness = await dnr(
+      fx.repo.dir,
+      ['orders', 'approve', fx.order.id, '--by', 'node-pty test harness (not a human)'],
+      {
+        isTTY: () => true,
+        processChain: () => [
+          { pid: 30, ppid: 20, command: '/bin/bash --noprofile --norc -i' },
+          {
+            pid: 20,
+            ppid: 10,
+            command: '/usr/local/bin/node /repo/node_modules/vitest/dist/workers/forks.js',
+          },
+          { pid: 10, ppid: 1, command: '-zsh' },
+        ],
+      },
+    );
+    expect(harness.code, harness.err).toBe(0);
+    expect(harness.out).toContain('(test harness: vitest)');
+    expect(readOrder(fx).history.at(-1)).toEqual({
+      at: expect.any(String),
+      by: 'node-pty test harness (not a human)',
+      action: 'approved',
+      origin: { via: 'cli', markers: ['harness:vitest'], harness: 'vitest' },
+    });
+    expect((await dnr(fx.repo.dir, ['orders', 'retire', fx.order.id, '--by', 'x'])).code).toBe(0);
+    expect((await dnr(fx.repo.dir, ['orders', 'unretire', fx.order.id, '--by', 'x'])).code).toBe(0);
+    const human = await dnr(fx.repo.dir, ['orders', 'approve', fx.order.id, '--by', 'Maintainer Name'], {
+      isTTY: () => true,
+      processChain: () => [
+        { pid: 500, ppid: 400, command: '-zsh' },
+        { pid: 400, ppid: 1, command: '/usr/bin/login -pfl me' },
+      ],
+    });
+    expect(human.code, human.err).toBe(0);
+    expect(readOrder(fx).history.at(-1)).toMatchObject({
+      by: 'Maintainer Name',
+      action: 'approved',
+      origin: { via: 'cli', markers: [], harness: null },
+    });
+    expect(Order.safeParse(readOrder(fx)).success).toBe(true);
   });
 });
 
@@ -1098,8 +1157,8 @@ describe('state-table rules shared by the board and the CLI', () => {
     await expect(store.patchOrder(fx.order.id, { status: 'draft' }, 'human')).rejects.toThrow(
       TransitionError,
     );
-    await dnr(fx.repo.dir, ['orders', 'approve', fx.order.id]);
-    expect((await dnr(fx.repo.dir, ['orders', 'approve', fx.order.id])).code).toBe(1);
+    await dnr(fx.repo.dir, ['orders', 'approve', fx.order.id, '--by', 'builder']);
+    expect((await dnr(fx.repo.dir, ['orders', 'approve', fx.order.id, '--by', 'builder'])).code).toBe(1);
   });
 
   it('ST-3: reasons are trimmed and bounded to 1–280 characters after trimming, everywhere', async () => {

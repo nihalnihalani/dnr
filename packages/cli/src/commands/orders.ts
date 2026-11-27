@@ -15,7 +15,7 @@ import {
   unitWeights,
 } from '@dnr/core';
 import { headCommit, resolveCommit, treeDiffNames } from '@dnr/git';
-import { BlobReader, filesOf, type HookContext, loadParser, readViolations } from '@dnr/hook';
+import { approvalOrigin, BlobReader, filesOf, type HookContext, loadParser, readViolations } from '@dnr/hook';
 import { Order, RevertCase, ScanCandidate } from '@dnr/schemas';
 import { nowIso, OrderStore, TransitionError } from '@dnr/store';
 import { z } from 'zod';
@@ -30,7 +30,7 @@ const HELP = `dnr orders build [--from <reverts.json|candidates.json>] [--only <
 dnr orders add --original <sha> [--snapshot <sha>] [--reason <text>] [--git-dir <path>]
 dnr orders list [--orders <dir>] [--json]
 dnr orders show <id> [--tokens] [--orders <dir>]
-dnr orders approve <id>|--all [--by <name>]        (humans only)
+dnr orders approve <id>|--all --by <name>          (humans only; --by is required)
 dnr orders retire|unretire <id> [--by <name>]       (humans only)
 dnr orders edit <id> --reason <text> [--by <name>]  (humans only)
 dnr orders reapprove <id> [--by <name>]             (humans only; rebases the snapshot onto HEAD)
@@ -197,7 +197,7 @@ export async function cmdOrders(argv: string[], io: CliIO): Promise<number> {
       if (!r.ok) throw new CliError(`DNR: ${r.id}: ${r.skip_reason}`, EXIT.FINDINGS);
       await store.put({ ...r.order, source: 'manual' });
       io.out(
-        `${r.order.id} ${r.created ? 'created' : 'rebuilt'} (draft). Next: dnr orders approve ${r.order.id}\n`,
+        `${r.order.id} ${r.created ? 'created' : 'rebuilt'} (draft). Next: dnr orders approve ${r.order.id} --by <your name>\n`,
       );
       return EXIT.OK;
     }
@@ -269,11 +269,25 @@ export async function cmdOrders(argv: string[], io: CliIO): Promise<number> {
         : id
           ? [id]
           : [];
-      if (ids.length === 0 && !v.all) throw usage('dnr orders approve <id>|--all [--by <name>]');
+      if (ids.length === 0 && !v.all) throw usage('dnr orders approve <id>|--all --by <name>');
+      // The approver is named explicitly, never taken from $USER or the git user: an approval
+      // must say who made it. History also records how it was made (markers, test harness).
+      const approver = str(v.by)?.trim();
+      if (!approver)
+        throw usage(
+          'dnr orders approve: --by <name> is required (who is approving; recorded in the history)',
+        );
+      const origin = approvalOrigin({
+        env: io.env,
+        ...(io.processChain ? { chain: io.processChain() } : {}),
+        ...(io.isTTY ? { isTTY: io.isTTY() } : {}),
+      });
       for (const x of ids) {
         try {
-          await store.approve(x, by, at);
-          io.out(`${x} approved by ${by}\n`);
+          await store.approve(x, approver, at, origin);
+          io.out(
+            `${x} approved by ${approver}${origin.harness ? ` (test harness: ${origin.harness})` : ''}\n`,
+          );
         } catch (e) {
           if (e instanceof TransitionError) throw new CliError(e.message, EXIT.FINDINGS);
           throw e;

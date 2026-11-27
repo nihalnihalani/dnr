@@ -152,19 +152,25 @@ export class OrderStore {
   }
 
   /** Apply a lifecycle transition; throws TransitionError when it is not allowed. */
-  async transition(id: string, to: OrderStatus, by: string, at = nowIso()): Promise<Order> {
+  async transition(
+    id: string,
+    to: OrderStatus,
+    by: string,
+    at = nowIso(),
+    origin?: Order['history'][number]['origin'],
+  ): Promise<Order> {
     return this.update(id, (o) => {
       const action = checkTransition(o.status, to);
       if (!action) throw new TransitionError(id, o.status, to);
       o.status = to;
-      o.history.push({ at, by, action });
+      o.history.push(origin ? { at, by, action, origin } : { at, by, action });
       o.updated_at = at;
       return o;
     });
   }
 
-  approve(id: string, by: string, at?: string) {
-    return this.transition(id, 'approved', by, at);
+  approve(id: string, by: string, at?: string, origin?: Order['history'][number]['origin']) {
+    return this.transition(id, 'approved', by, at, origin);
   }
   retire(id: string, by: string, at?: string) {
     return this.transition(id, 'retired', by, at);
