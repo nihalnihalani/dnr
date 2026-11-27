@@ -127,8 +127,10 @@ function Shell() {
       </main>
       <footer className="footer">
         DNR {cfg.version}. Case data excerpts Django source (BSD-3-Clause, © Django Software Foundation and
-        individual contributors; <a href={`${cfg.base}licenses/django-LICENSE.txt`}>license</a>). Grammars:
-        tree-sitter-python and tree-sitter-typescript (MIT).
+        individual contributors; <a href={`${cfg.base}licenses/django-LICENSE.txt`}>Django license</a>) and
+        Vite source (MIT, © VoidZero Inc. and Vite contributors;{' '}
+        <a href={`${cfg.base}licenses/vite-LICENSE.txt`}>Vite license</a>). Grammars: tree-sitter-python and
+        tree-sitter-typescript (MIT).
       </footer>
     </>
   );

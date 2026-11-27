@@ -5,6 +5,7 @@
       "id": "43933a1dca",
       "title": "Reverted \"Fixed #26434 -- Removed faulty clearing of ordering field when missing from explicit grouping.\"",
       "order_id": "dnr-43933a1dca",
+      "status": "draft",
       "grammars": [
         "python"
       ],
@@ -33,6 +34,7 @@
       "id": "d0e4dd5cdd",
       "title": "Fixed #36572 -- Revert \"Fixed #36546 -- Deprecated django.utils.crypto.constant_time_compare() in favor of hmac.compare_",
       "order_id": "dnr-d0e4dd5cdd",
+      "status": "draft",
       "grammars": [
         "python"
       ],
@@ -52,12 +54,37 @@
         "formatting-only: when approved, the first write decides warn_block"
       ],
       "omitted": []
+    },
+    {
+      "id": "afc44f0957",
+      "title": "chore: revert \"fix(build): keep `magicString` and `ast` in transform hook meta (#24012)\" (#24065)",
+      "order_id": "dnr-afc44f0957",
+      "status": "draft",
+      "grammars": [
+        "typescript"
+      ],
+      "source": {
+        "repo": "vitejs/vite",
+        "license": "MIT",
+        "from": "reports/ts-demo/dnr-afc44f0957.case.json"
+      },
+      "notes": [
+        "source: dnr export-case (reports/ts-demo/dnr-afc44f0957.case.json)",
+        "order status as stored: draft",
+        "source repository and license: fixtures/ts-demo/pins.json",
+        "held-out-paraphrase: testkit mutant, tried extract-helper/2000 (export-case had no fixture)",
+        "original-change: when approved, the first write decides warn_block",
+        "held-out-paraphrase: when approved, the first write decides warn_block",
+        "half-of-two-file: when approved, the first write decides warn_block",
+        "formatting-only: when approved, the first write decides warn_block"
+      ],
+      "omitted": [
+        {
+          "kind": "hard-negative",
+          "reason": "fixtures/hook-events/hardneg-afc44f0957.json does not exist yet"
+        }
+      ]
     }
   ],
-  "pending": [
-    {
-      "what": "TypeScript case",
-      "why": "the Phase 0 TypeScript demo revert (fixtures/pins.json ts_demo) is not chosen yet"
-    }
-  ]
+  "pending": []
 }

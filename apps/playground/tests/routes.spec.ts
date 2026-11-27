@@ -12,6 +12,14 @@ import {
   runPreset,
 } from './helpers';
 
+/** The real orders the Playground graveyard ships (cases/graveyard.json, built by build-cases.ts). */
+const graveRows = (
+  JSON.parse(
+    readFileSync(fileURLToPath(new URL('../public/cases/graveyard.json', import.meta.url)), 'utf8'),
+  ) as { rows: Array<{ order: { status: string } }> }
+).rows;
+const drafts = graveRows.filter((r) => r.order.status === 'draft').length;
+
 const demoBundle = JSON.parse(
   readFileSync(fileURLToPath(new URL(`../public/cases/${DEMO}.json`, import.meta.url)), 'utf8'),
 );
@@ -59,13 +67,14 @@ test('STATE-01: the real demo orders are drafts: outlined, labeled, Approve / Ed
   tag: ['@STATE-01', '@STATE-07'],
 }, async ({ page }) => {
   await page.goto('graveyard');
-  await expect(page.locator('article.stone')).toHaveCount(2);
+  expect(drafts).toBe(graveRows.length); // every shipped order is a draft until a human approves it
+  await expect(page.locator('article.stone')).toHaveCount(graveRows.length);
   await expect(stone(page, 'draft')).toHaveClass(/outlined/);
   await expect(stone(page, 'draft').getByTestId('state-label')).toHaveText('Draft: not enforced');
   const plot = plotOf(page, 'draft');
   for (const a of ['approve', 'edit', 'retire'])
     await expect(plot.locator(`[data-action="${a}"]`)).toBeVisible();
-  await expect(page.getByTestId('banner-drafts-only')).toContainText('2 drafts, 0 enforced');
+  await expect(page.getByTestId('banner-drafts-only')).toContainText(`${drafts} drafts, 0 enforced`);
   await expectNoAxeViolations(page);
 });
 
@@ -97,7 +106,7 @@ test('STATE-03: retired (simulated) is faded with Unretire, which returns it to 
   await expect(stone(page, 'retired').getByTestId('state-label')).toHaveText('Retired');
   await plotOf(page, 'retired').locator('[data-action="unretire"]').click();
   await expect(page.getByRole('status').filter({ hasText: 'unretired to draft' })).toBeAttached();
-  await expect(page.locator('article.stone[data-state="draft"]')).toHaveCount(2);
+  await expect(page.locator('article.stone[data-state="draft"]')).toHaveCount(drafts);
 });
 
 test('empty-states: board down, no trial data', { tag: ['@empty-states'] }, async ({ page }) => {

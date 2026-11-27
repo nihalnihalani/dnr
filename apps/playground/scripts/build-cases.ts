@@ -16,7 +16,16 @@
  * A missing input fails the script; nothing is filled in.
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createState, decide, grammarForPath, type ParserProvider, UnitCache } from '@dnr/core';
@@ -36,6 +45,7 @@ interface IndexEntry {
   id: string;
   title: string;
   order_id: string;
+  status: Order['status'];
   grammars: string[];
   source: { repo: string; license: string; from: string };
   notes: string[];
@@ -58,20 +68,46 @@ function firstOutcome(provider: ParserProvider, bundle: CaseBundle, order: Order
     .outcome;
 }
 
-function loadExport(provider: ParserProvider, short: string): { bundle: CaseBundle; entry: IndexEntry } {
+function exportFile(short: string): string {
   const dirs = [process.env.DNR_EXPORT_DIR, join(repoRoot, 'packages/cli/templates/demo')].filter(
     (d): d is string => !!d,
   );
   const file = dirs.map((d) => join(d, `${short}.case.json`)).find((f) => existsSync(f));
   if (!file)
     fail(`no export-case bundle for ${short} in ${dirs.join(', ')} (run \`dnr export-case ${short}\`)`);
+  return file;
+}
+
+/** TypeScript demo bundles: `dnr export-case` on the Phase 0 TS demo repo, in reports/ts-demo/. */
+function tsExportFiles(): string[] {
+  const dir = join(repoRoot, 'reports/ts-demo');
+  if (!existsSync(dir)) return [];
+  return readdirSync(dir)
+    .filter((f) => f.endsWith('.case.json'))
+    .sort()
+    .map((f) => join(dir, f));
+}
+
+function loadExport(provider: ParserProvider, file: string): { bundle: CaseBundle; entry: IndexEntry } {
   const raw = JSON.parse(readFileSync(file, 'utf8')) as CaseBundle & {
     omitted_presets?: Array<{ kind: string; reason: string }>;
   };
-  const exported = CaseBundle.parse(raw);
-  const order = exported.order;
+  const parsed = CaseBundle.parse(raw);
+  const order = parsed.order;
   const from = file.startsWith(repoRoot) ? relative(repoRoot, file) : basename(file);
   const notes = [`source: dnr export-case (${from})`, `order status as stored: ${order.status}`];
+  // `dnr export-case` run outside a known checkout records the source as unknown. For the TS demo
+  // the repository and license are pinned in fixtures/ts-demo/pins.json (Phase 0); use those.
+  const exported = { ...parsed, source: { ...parsed.source } };
+  const tsPins = join(repoRoot, 'fixtures/ts-demo/pins.json');
+  if (exported.source.repo === 'unknown' && from.startsWith('reports/ts-demo/') && existsSync(tsPins)) {
+    const pins = JSON.parse(readFileSync(tsPins, 'utf8')) as { repo: string; license: string; R: string };
+    if (!pins.R.startsWith(exported.id))
+      fail(`${from}: fixtures/ts-demo/pins.json pins ${pins.R}, not ${exported.id}`);
+    exported.source.repo = pins.repo.replace(/^https:\/\/github\.com\//, '');
+    exported.source.license = pins.license;
+    notes.push('source repository and license: fixtures/ts-demo/pins.json');
+  }
   const presets = [...exported.presets];
   const omitted: IndexEntry['omitted'] = [];
   for (const o of raw.omitted_presets ?? []) {
@@ -138,6 +174,7 @@ function loadExport(provider: ParserProvider, short: string): { bundle: CaseBund
       id: bundle.id,
       title: bundle.title.replace(/^dnr-[0-9a-f]{10}: /, ''),
       order_id: order.id,
+      status: order.status,
       grammars,
       source: { ...bundle.source, from },
       notes,
@@ -173,14 +210,42 @@ async function main() {
   // Drop any case file this script no longer produces.
   for (const f of readdirSync(outDir)) if (f.endsWith('.json')) rmSync(join(outDir, f));
   const index: IndexEntry[] = [];
-  for (const short of DEMO_REVERTS) {
-    const { bundle, entry } = loadExport(provider, short);
+  const tsFiles = tsExportFiles();
+  for (const file of [...DEMO_REVERTS.map(exportFile), ...tsFiles]) {
+    const { bundle, entry } = loadExport(provider, file);
     writeFileSync(join(outDir, `${bundle.id}.json`), `${JSON.stringify(bundle)}\n`);
     index.push(entry);
     console.log(`${bundle.id}: ${bundle.order.units.length} units, ${bundle.presets.length} presets`);
     for (const n of entry.notes) console.log(`  ${n}`);
   }
   const g = graveyard(django);
+  // TypeScript orders: the derived status of an approved order needs its own clone (TS_DEMO_SRC);
+  // a draft or retired order's effective status is its stored status, so it is exact without one.
+  for (const file of tsFiles) {
+    const b = CaseBundle.parse(JSON.parse(readFileSync(file, 'utf8')));
+    const src = process.env.TS_DEMO_SRC;
+    if (src && existsSync(join(src, '.git'))) {
+      const dir = mkdtempSync(join(tmpdir(), 'dnr-ts-orders-'));
+      writeFileSync(join(dir, `${b.order.id}.json`), JSON.stringify(b.order));
+      const listed = JSON.parse(
+        execFileSync('node', [CLI, 'orders', 'list', '--json', '--orders', dir], {
+          cwd: src,
+          encoding: 'utf8',
+        }),
+      ) as Array<{ id: string; effective: string }>;
+      rmSync(dir, { recursive: true, force: true });
+      g.rows.push({
+        order: b.order,
+        effective: listed[0]?.effective ?? b.order.status,
+        drift: false,
+        case_id: b.id,
+      });
+    } else if (b.order.status !== 'approved') {
+      g.rows.push({ order: b.order, effective: b.order.status, drift: false, case_id: b.id });
+    } else {
+      console.warn(`graveyard: ${b.order.id} is approved; set TS_DEMO_SRC to compute its derived status`);
+    }
+  }
   writeFileSync(join(outDir, 'graveyard.json'), `${JSON.stringify(g)}\n`);
   console.log(`graveyard: ${g.rows.map((r) => `${r.order.id}=${r.effective}`).join(', ')}`);
   writeFileSync(
@@ -189,12 +254,14 @@ async function main() {
       {
         generator: 'apps/playground/scripts/build-cases.ts',
         cases: index,
-        pending: [
-          {
-            what: 'TypeScript case',
-            why: 'the Phase 0 TypeScript demo revert (fixtures/pins.json ts_demo) is not chosen yet',
-          },
-        ],
+        pending: tsFiles.length
+          ? []
+          : [
+              {
+                what: 'TypeScript case',
+                why: 'no TypeScript demo bundle in reports/ts-demo/ yet (Phase 0 TS demo revert)',
+              },
+            ],
       },
       null,
       2,

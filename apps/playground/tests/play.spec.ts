@@ -124,12 +124,31 @@ test('ROUTE-03: simulated Retire stops enforcement; the ask format exits 0 with 
   await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'ALLOW');
 });
 
-test('ts-case: no TypeScript case until a real TS revert is chosen; /play says it is pending', {
-  tag: ['@ts-case'],
+const caseIndex = JSON.parse(
+  readFileSync(fileURLToPath(new URL('../public/cases/index.json', import.meta.url)), 'utf8'),
+) as { cases: Array<{ id: string; status: string; grammars: string[]; source: { repo: string } }> };
+
+test('ts-case: the real TypeScript case (vite afc44f0957) loads the TS grammar, allows as a draft, blocks once approved', {
+  tag: ['@ts-case', '@P12-08'],
 }, async ({ page }) => {
+  const ts = caseIndex.cases.find((c) => c.grammars.includes('typescript'));
+  expect(ts?.id).toBe('afc44f0957');
+  expect(ts?.source.repo).toBe('vitejs/vite');
+  // Exported as `dnr orders build` made it: a draft no human has approved.
+  expect(ts?.status).toBe('draft');
   await page.goto('play');
-  await expect(page.getByTestId('pending-case')).toContainText('TypeScript case: pending');
-  await expect(page.getByTestId('pending-case')).toContainText('ts_demo');
+  await expect(page.locator(`a[href$="/play/afc44f0957"]`)).toBeVisible();
+  await openPlay(page, 'afc44f0957');
+  await expect(page.getByText('Grammars loaded:')).toContainText('typescript');
+  await expect(page.getByTestId('banner-draft')).toContainText('Draft: not enforced');
+  await runPreset(page, 'original');
+  await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'ALLOW');
+  await approveSim(page);
+  await page.locator('[data-preset="reset"]').click();
+  await runPreset(page, 'original');
+  await expect(page.getByTestId('verdict')).toHaveAttribute('data-verdict', 'BLOCK');
+  await expect(page.getByTestId('exit-code')).toHaveText('2');
+  await expect(page.getByTestId('stderr')).toContainText('DNR order dnr-afc44f0957 matched');
 });
 
 test('STATE-08: a parse-degraded unit shows its banner', { tag: ['@STATE-08'] }, async ({ page }) => {
