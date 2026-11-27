@@ -142,15 +142,18 @@ if [ -z "$rec" ]; then row FAIL SUB-07 "Bonus eligibility recorded (Phase 0)" "n
 elif grep -qi '^pending' <<<"$rec"; then row PENDING SUB-07 "Bonus eligibility recorded (Phase 0)" "$rec"
 else row PASS SUB-07 "Bonus eligibility recorded (Phase 0)" "$rec"; fi
 
+# The Crew repo: crew_repo in links.json, else <owner>/dnr-crew. Its state is read from GitHub, never assumed.
 CREW="$(link crew_repo)"
-if [ -z "$CREW" ]; then row PENDING P14-03 "Crew bonus: separate public repo with .kiro" "crew_repo is not set in $LINKS (dnr-crew is local-only)"
-else
-  slug=$(sed -E 's#https://github.com/##; s#/$##' <<<"$CREW")
-  vis=$(gh repo view "$slug" --json visibility -q .visibility 2>/dev/null)
+slug=$(sed -E 's#^https://github.com/##; s#/$##' <<<"${CREW:-${REPO%%/*}/dnr-crew}")
+if cj=$(gh repo view "$slug" --json visibility,licenseInfo 2>/dev/null); then
+  vis=$(jq -r .visibility <<<"$cj")
   kiro=$(gh api "repos/$slug/contents/.kiro" -q 'length' 2>/dev/null || echo 0)
-  if [ "$vis" = PUBLIC ] && [ "${kiro:-0}" -gt 0 ]; then row PASS P14-03 "Crew bonus: separate public repo with .kiro" "$slug is public with .kiro/"
-  else row FAIL P14-03 "Crew bonus: separate public repo with .kiro" "$slug: visibility '${vis:-unknown}', .kiro entries ${kiro:-0}"; fi
-fi
+  if [ "$vis" = PUBLIC ] && [ "${kiro:-0}" -gt 0 ]; then
+    if [ -n "$CREW" ]; then row PASS P14-03 "Crew bonus: separate public repo with .kiro" "$slug is public with ${kiro} .kiro/ entries (gh)"
+    else row FAIL P14-03 "Crew bonus: separate public repo with .kiro" "$slug is public with .kiro/ (gh), but crew_repo is not set in $LINKS"; fi
+  else row FAIL P14-03 "Crew bonus: separate public repo with .kiro" "$slug: visibility '$vis', .kiro entries ${kiro:-0} (gh)"; fi
+elif [ -n "$CREW" ]; then row FAIL P14-03 "Crew bonus: separate public repo with .kiro" "gh repo view $slug failed (crew_repo is set in $LINKS)"
+else row PENDING P14-03 "Crew bonus: separate public repo with .kiro" "gh finds no $slug, and crew_repo is not set in $LINKS"; fi
 
 DEVTO="$(link devto_url)"
 if [ -z "$DEVTO" ]; then
