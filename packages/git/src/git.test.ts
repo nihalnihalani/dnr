@@ -8,7 +8,7 @@ import { revertReproduces } from './revert-check';
 import { lines, makeRepo, revertCommit, type TestRepo } from './test-repo';
 
 describe('classifyMessage', () => {
-  it('matches the three forms', () => {
+  it('P3-03 mine: regex: matches the three forms, incl. Fixed #N -- Reverted "…", and tags backport and partial', () => {
     expect(classifyMessage('Fixed #1 -- Reverted "Fixed #2 -- Foo."', '').forms).toEqual(['subject']);
     expect(classifyMessage('Revert "x"', 'This reverts commit abcdef1234.').forms).toEqual([
       'subject',
@@ -26,7 +26,7 @@ describe('classifyMessage', () => {
     expect(classifyMessage('Added revertible thing', 'no revert here').forms).toEqual([]);
     expect(classifyMessage('[4.2.x] Reverted "x"', 'Backport of abcdef1234 from main').backport).toBe(true);
   });
-  it('extracts the quoted subject', () => {
+  it('P3-05 mine: original: extracts the quoted subject', () => {
     expect(extractQuotedSubject('Fixed #1 -- Reverted "Fixed #2 -- Said "hi"."')).toBe(
       'Fixed #2 -- Said "hi".',
     );
@@ -137,7 +137,7 @@ describe('synthetic history', () => {
     expect(await resolveCommit(r.dir, 'deadbeefdeadbeef')).toBeNull();
   });
 
-  it('computes forward and inverse patch-ids consistently', async () => {
+  it('P3-04 mine: patch-id: computes forward and inverse patch-ids consistently', async () => {
     expect(await patchId(r.dir, s.c1 as string)).toBe(await inversePatchId(r.dir, s.r1 as string));
     expect(await patchId(r.dir, s.c3 as string)).not.toBe(await inversePatchId(r.dir, s.r3 as string));
     const idx = await patchIdIndex(r.dir, 'main');
@@ -145,7 +145,7 @@ describe('synthetic history', () => {
     expect(idx.inverse.get(s.r1 as string)).toBe(await inversePatchId(r.dir, s.r1 as string));
   });
 
-  it('reproduces a revert in a temp worktree', async () => {
+  it('P3-06 mine: kind: full = git revert --no-commit C on R^ reproduces R', async () => {
     expect(await revertReproduces(r.dir, s.c3 as string, s.r3 as string)).toBe(true);
     expect(await revertReproduces(r.dir, s.c4 as string, s.r4 as string)).toBe(false);
     expect(r.git('worktree', 'list').trim().split('\n')).toHaveLength(1);
@@ -157,7 +157,7 @@ describe('synthetic history', () => {
     expect(d[0]?.hunks[0]).toMatchObject({ oldStart: 5, removed: ['x5 = 5'], added: ['x5 = 500'] });
   });
 
-  it('finds originals and classifies kinds', async () => {
+  it('P3-04 P3-05 P3-06 mine: patch-id, original and kind: body SHA, quoted subject, silent patch-id, exact/full/partial', async () => {
     expect(byR('r1')).toMatchObject({
       original_sha: s.c1,
       match_method: 'body-sha',
@@ -178,7 +178,7 @@ describe('synthetic history', () => {
     expect(byR('r7')?.original_note).toMatch(/do not resolve/);
   });
 
-  it('accepts allowed extra paths in R for full, and is strict by default', async () => {
+  it('P3-06 mine: kind: allowed extra paths in R for full, strict by default', async () => {
     expect(byR('r8')).toMatchObject({
       original_sha: s.c8,
       revert_kind: 'full',
@@ -188,7 +188,7 @@ describe('synthetic history', () => {
     expect(strict.find((d) => d.revert_sha === s.r8)?.revert_kind).toBe('unclear');
   });
 
-  it('tags revert of revert and keeps the latest pair', () => {
+  it('P3-03 P3-05 mine: original: tags revert_of_revert and keeps the latest pair', () => {
     const reland = byR('reland');
     expect(reland?.original_sha).toBe(s.r6a);
     expect(reland?.tags).toContain('revert_of_revert');
@@ -197,7 +197,7 @@ describe('synthetic history', () => {
     expect(found.filter((d) => d.revert_sha === s.reland)).toHaveLength(1);
   });
 
-  it('is sorted and deterministic', async () => {
+  it('P3-02 mine: discovery is sorted and deterministic', async () => {
     const again = await discoverReverts(r.dir, {
       ref: 'main',
       extraPathAllowed: (p) => p.startsWith('docs/'),

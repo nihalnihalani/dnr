@@ -22,11 +22,11 @@ const base: RuleInputs = {
 const S = 'a'.repeat(40);
 
 describe('applyRules', () => {
-  it('passes a clean revert', () => {
+  it('P3-07 mine: E-rules: passes a clean revert', () => {
     const o = applyRules(base);
     expect(o).toMatchObject({ eligible: true, provisional: true, skip_reason: null });
   });
-  it('uses the first failing rule in order', () => {
+  it('P3-07 mine: E-rules: the first failing rule in order is skip_reason', () => {
     expect(applyRules({ ...base, backport: true, revertKind: 'partial' }).skip_reason).toBe('E1:backport');
     expect(applyRules({ ...base, originalFound: false }).skip_reason).toBe('E2:no-original');
     expect(applyRules({ ...base, superseded: true }).skip_reason).toBe('E2:superseded');
@@ -43,7 +43,7 @@ describe('applyRules', () => {
     expect(applyRules({ ...base, isDemo: true }).skip_reason).toBe('E8:demo');
     expect(applyRules({ ...base, inWindow: false }).skip_reason).toBe('window:out-of-range');
   });
-  it('reports pending rules and never calls them eligible', () => {
+  it('P3-07 mine: E-rules: pending rules are never eligible', () => {
     const o = applyRules({ ...base, orderWeight: null, reason: { state: 'pending' } });
     expect(o).toMatchObject({ eligible: false, provisional: true, skip_reason: 'pending:E5,E6' });
     expect(o.rules.E5).toBe('pending');
