@@ -137,3 +137,27 @@ jobs:
           name: playwright-report
           path: apps/playground/playwright-report
           if-no-files-found: ignore
+
+  lighthouse:
+    name: Lighthouse CI (mobile; performance >= 90, accessibility = 100)
+    runs-on: ubuntu-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -F @dnr/playground build
+      # /, /play/43933a1dca, /graveyard and /trial; gates in apps/playground/lighthouserc.cjs.
+      - name: lhci autorun
+        working-directory: apps/playground
+        run: pnpm exec lhci autorun
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-report
+          path: apps/playground/lhci-report
+          if-no-files-found: ignore

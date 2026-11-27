@@ -44,6 +44,8 @@ jobs:
           fi
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+        env:
+          DNR_SITE_URL: https://dnr-playground.pages.dev/
       - id: deploy
         uses: cloudflare/wrangler-action@v3
         with:
@@ -74,6 +76,9 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.pages.outputs.page_url }}
+    env:
+      # Absolute URL for og:image and the canonical link (apps/playground/vite.config.ts).
+      DNR_SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -103,3 +108,27 @@ jobs:
           path: apps/playground/dist-pages
       - id: pages
         uses: actions/deploy-pages@v4
+      # Check the live site after each deploy (Pages can take a moment to serve the new build).
+      - name: Wait for the new build to be served
+        env:
+          PAGE_URL: ${{ steps.pages.outputs.page_url }}
+        run: |
+          want=$(grep -o 'assets/index-[A-Za-z0-9_-]*\.js' apps/playground/dist-pages/index.html | head -1)
+          for i in $(seq 1 60); do
+            if curl -fsS "$PAGE_URL" | grep -q "$want"; then echo "live: $want"; exit 0; fi
+            sleep 5
+          done
+          echo "::error::$PAGE_URL is not serving $want after 5 minutes"; exit 1
+      - run: pnpm -F @dnr/playground exec playwright install --with-deps chromium firefox webkit
+      # The smoke test, every route's console, the 404 page and meta tags, and the hosted deep
+      # links (a real local board probed from the HTTPS page) on all three engines.
+      - name: Smoke and hosted checks against the live site
+        env:
+          PLAYGROUND_URL: ${{ steps.pages.outputs.page_url }}
+        run: pnpm -F @dnr/playground exec playwright test --grep "@smoke|@polish|@deeplink-hosted"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-pages
+          path: apps/playground/playwright-report
+          if-no-files-found: ignore
