@@ -3,6 +3,7 @@ import type { EventRecord, Grant } from '@dnr/schemas';
 import {
   AdapterError,
   type ApiErrorBody,
+  type BoardStatus,
   type DataAdapter,
   type OrderDetail,
   type OrderDiff,
@@ -67,6 +68,9 @@ export class ApiAdapter implements DataAdapter {
   }
   diff(id: string) {
     return this.req<OrderDiff>('GET', `/orders/${encodeURIComponent(id)}/diff`);
+  }
+  status() {
+    return this.req<BoardStatus>('GET', '/status');
   }
   async events(orderId?: string): Promise<EventRecord[]> {
     const q = orderId ? `?order=${encodeURIComponent(orderId)}` : '';

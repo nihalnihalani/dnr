@@ -4,7 +4,7 @@
  */
 import { relative } from 'node:path';
 import { catBlobs } from '@dnr/git';
-import { type EffectiveStatus, grantOrigin, type HookContext, readViolations } from '@dnr/hook';
+import { type EffectiveStatus, grantOrigin, type HookContext, readTamper, readViolations } from '@dnr/hook';
 import { Order } from '@dnr/schemas';
 import {
   nowIso,
@@ -143,6 +143,8 @@ export function createBoardStore(ctx: HookContext, errors: BoardErrors) {
         return done;
       }),
     listGrants: (orderId?: string) => store.grants.list(orderId),
+    /** The persistent tamper flag (wave-3 N3), shown as the board's tamper banner. */
+    tamper: async () => readTamper(store.paths.stateDir),
     listEvents: (filter: { order?: string }) => store.readEvents(filter.order ? { order: filter.order } : {}),
     diff: (id: string) =>
       wrap(async () => {

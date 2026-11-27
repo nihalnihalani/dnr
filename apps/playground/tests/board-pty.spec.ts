@@ -68,10 +68,15 @@ async function waitFor<T>(what: string, fn: () => T | undefined | null | false, 
 }
 
 /** Start an interactive shell in a pty and type `dnr board` into it, as a maintainer would. */
-async function launchInPty(page: Page, args: string[] = []): Promise<Launched> {
+async function launchInPty(
+  page: Page,
+  args: string[] = [],
+  prepare?: (repo: RealRepo) => Promise<void>,
+): Promise<Launched> {
   if (!existsSync(CLI)) throw new Error(`${CLI} is missing: run pnpm -F dnr-guard build first`);
   const { spawn: ptySpawn } = await import('node-pty');
   const repo = await RealRepo.create();
+  await prepare?.(repo);
   shim = mkdtempSync(join(tmpdir(), 'dnr-opener-'));
   const opened = join(shim, 'opened.txt');
   for (const name of ['open', 'xdg-open']) {
@@ -109,6 +114,25 @@ async function launchInPty(page: Page, args: string[] = []): Promise<Launched> {
   await page.goto(pathToFileURL(file).href);
   live = { repo, pty, port, screen: () => out };
   return live;
+}
+
+/** Run a built hook command (as `.kiro/hooks/` registers it) with `stdin`, no TTY. */
+function hook(repo: RealRepo, args: string[], stdin: string): Promise<{ code: number; stderr: string }> {
+  return new Promise((res, rej) => {
+    const p = spawn(process.execPath, [CLI, ...args], {
+      cwd: repo.dir,
+      env: repo.env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stderr = '';
+    p.stderr.on('data', (d) => {
+      stderr += String(d);
+    });
+    p.stdout.resume();
+    p.on('error', rej);
+    p.on('close', (code) => res({ code: code ?? -1, stderr }));
+    p.stdin.end(stdin);
+  });
 }
 
 /** A real agent write: a PreToolUse event into the built hook command, no TTY. */
@@ -260,4 +284,43 @@ test('P12-02: the real R6 guard refuses dnr board without a TTY (piped, as an ag
   } finally {
     repo.dispose();
   }
+});
+
+test('board error banners: a real error_open and a real tamper finding from the built hook', {
+  tag: ['@board-pty', '@STATE-08', '@board-banners'],
+}, async ({ page }) => {
+  test.setTimeout(180_000);
+  const { repo } = await launchInPty(page, [], async (r) => {
+    await r.approve();
+    r.commitOrders('Approve the order');
+  });
+  await expect(page.getByRole('heading', { name: 'The graveyard' })).toBeVisible();
+  await expect(page.getByTestId('banner-tamper')).toHaveCount(0);
+  await expect(page.getByTestId('banner-error-open')).toHaveCount(0);
+
+  // error_open: the hook gets stdin it cannot parse, fails open (exit 0) and records it.
+  const bad = await hook(repo, ['check', '--stdin', '--hook', 'kiro'], '{not json');
+  expect(bad.code).toBe(0);
+
+  // Tamper: in an agent session, a shell command moves HEAD back past the order's commit.
+  const ev = (hook_event_name: string, extra: object = {}) =>
+    JSON.stringify({ hook_event_name, cwd: repo.dir, session_id: 'sess-t', ...extra });
+  const cmd = 'git reset -q --hard HEAD~1';
+  const shell = { tool_name: 'execute_bash', tool_input: { command: cmd } };
+  expect((await hook(repo, ['session', 'start', '--stdin'], ev('SessionStart'))).code).toBe(0);
+  expect((await hook(repo, ['guard-shell', '--stdin'], ev('PreToolUse', shell))).code).toBe(0);
+  repo.git('reset', '-q', '--hard', 'HEAD~1');
+  const post = await hook(repo, ['session', 'shell-after', '--stdin'], ev('PostToolUse', shell));
+  expect(post.code, post.stderr).toBe(2);
+  expect(post.stderr).toContain('HEAD moving from');
+
+  await page.reload();
+  const tamper = page.getByTestId('banner-tamper');
+  await expect(tamper).toContainText('Tamper detected');
+  await expect(tamper).toContainText('HEAD moving from');
+  await expect(tamper).toContainText('dnr tamper show');
+  const open = page.getByTestId('banner-error-open');
+  await expect(open).toContainText('The hook failed open once');
+  await expect(open).toContainText('pre-write');
+  await expectNoAxeViolations(page);
 });

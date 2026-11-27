@@ -294,6 +294,7 @@ describe('board authorization', () => {
       ['GET', `/api/orders/${id}/diff`],
       ['GET', '/api/events'],
       ['GET', `/api/events?order=${id}`],
+      ['GET', '/api/status'],
       ['GET', '/api/unknown'],
     ];
     const origin = `http://${board.launchHost}`;

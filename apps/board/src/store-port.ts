@@ -33,6 +33,8 @@ export interface BoardStorePort {
    * without it answers 404 on POST /api/orders/:id/grants/confirm.
    */
   confirmGrant?(orderId: string, sessionKey: string | null, by: string): Promise<Grant>;
+  /** The open tamper flag (`readTamper(stateDir)` from @dnr/hook), or null. Optional. */
+  tamper?(): Promise<{ opened_at: string; findings: Array<{ at: string; what: string }> } | null>;
 }
 
 export type { EventRecord, Grant, Order };

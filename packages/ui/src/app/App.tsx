@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { Loading, useTitle } from '../components/common';
+import { HookStatusBanners } from '../components/HookStatus';
 import { Home } from '../routes/Home';
 import { type AppConfig, ConfigContext, useConfig } from './context';
 import { Link, match, RouterProvider, useRouter } from './router';
@@ -119,6 +120,7 @@ function Shell() {
         </span>
       </header>
       <main id="main" tabIndex={-1}>
+        {cfg.mode === 'board' && <HookStatusBanners />}
         <Suspense fallback={<Loading what="page" />}>
           <Routes />
         </Suspense>

@@ -207,14 +207,16 @@ test('deeplink-2: after launch, a deep link in a new page has working actions', 
 
 test('deeplink-4: the hosted page probes /api/health and moves to the board origin', {
   tag: ['@deeplink-4', '@ROUTE-10'],
-}, async ({ page, baseURL }) => {
+}, async ({ page, context, baseURL }) => {
   const { board, id } = await launch(page, baseURL, { prepare: approved });
   await graveyard(page);
   const origin = new URL(page.url()).origin;
-  await page.goto(`orders/${id}?board=${board.port}`);
-  await page.waitForURL(`${origin}/orders/${id}`);
-  await page.locator('[data-action="allow-once"]').first().click();
-  await expect(page.getByTestId('grants')).toContainText('allow_once');
+  // A new tab on the hosted Playground (same browser, so the board cookie is there).
+  const hosted = await context.newPage();
+  await hosted.goto(`orders/${id}?board=${board.port}`, { waitUntil: 'commit' });
+  await hosted.waitForURL(`${origin}/orders/${id}`);
+  await hosted.locator('[data-action="allow-once"]').first().click();
+  await expect(hosted.getByTestId('grants')).toContainText('allow_once');
 });
 
 test('STATE-08: 401 banner without a board session, 409 banner on a stale transition', {

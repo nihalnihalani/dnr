@@ -35,6 +35,16 @@ export interface PatchBody {
   reason?: string;
 }
 
+/**
+ * Hook state the board warns about (plan §10 error banners), read from the real store:
+ * - `tamper`: the persistent tamper flag (`$DNR_STATE_DIR/tamper.json`, wave-3 N3), or null;
+ * - `error_open`: events where the hook failed open (allowed a write it could not decide).
+ */
+export interface BoardStatus {
+  tamper: { opened_at: string; findings: Array<{ at: string; what: string }> } | null;
+  error_open: Array<{ at: string; hook: string; error: string }>;
+}
+
 export interface Health {
   origin: string;
   version: string;
@@ -71,6 +81,8 @@ export interface DataAdapter {
   events(orderId?: string): Promise<EventRecord[]>;
   /** N5: a human confirms a suspect grant (made while an agent session looked active). */
   confirmGrant(orderId: string, sessionKey: string | null): Promise<Grant>;
+  /** Board only: tamper flag and fail-open events. The Playground has no hook state. */
+  status?(): Promise<BoardStatus>;
 }
 
 /** Grant origin with the N5 confirmation fields (optional until @dnr/schemas carries them). */

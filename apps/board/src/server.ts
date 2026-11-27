@@ -8,7 +8,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import { extname, join, resolve, sep } from 'node:path';
-import type { ApiErrorBody, Health } from '@dnr/ui/model';
+import type { ApiErrorBody, BoardStatus, Health } from '@dnr/ui/model';
 import { checkTransition } from '@dnr/ui/model';
 import { type Context, Hono } from 'hono';
 import { getCookie } from 'hono/cookie';
@@ -299,6 +299,22 @@ export function createBoardApp(ctx: BoardContext): BoardApp {
     c.json(await ctx.store.reapprove(c.req.param('id'), by)),
   );
   app.get('/api/orders/:id/diff', async (c) => c.json(await ctx.store.diff(c.req.param('id'))));
+  // Error banners (§10): the tamper flag and the hook's fail-open events, newest first.
+  app.get('/api/status', async (c) => {
+    const tamper = ctx.store.tamper ? await ctx.store.tamper() : null;
+    const events = await ctx.store.listEvents({});
+    const error_open = events
+      .filter((e) => e.decision.outcome === 'error_open')
+      .map((e) => {
+        const b = e.decision.breakdown?.[0] as { error?: unknown } | undefined;
+        return { at: e.at, hook: e.hook, error: typeof b?.error === 'string' ? b.error : '' };
+      })
+      .sort((a, b) => (a.at < b.at ? 1 : -1));
+    return c.json({
+      tamper: tamper ? { opened_at: tamper.opened_at, findings: tamper.findings } : null,
+      error_open,
+    } satisfies BoardStatus);
+  });
   app.get('/api/events', async (c) => {
     const order = c.req.query('order');
     return c.json({ events: await ctx.store.listEvents(order ? { order } : {}) });
