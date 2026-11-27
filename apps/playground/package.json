@@ -13,14 +13,16 @@
     "typecheck": "tsc -p tsconfig.json",
     "capture": "tsx scripts/capture-cli.ts",
     "capture:og": "tsx scripts/capture-og.ts",
-    "lhci": "lhci autorun"
+    "lhci": "lhci autorun",
+    "predev": "tsx scripts/build-kiro.ts"
   },
   "dependencies": {
     "@dnr/core": "workspace:*",
     "@dnr/grammar": "workspace:*",
     "@dnr/schemas": "workspace:*",
     "@dnr/ui": "workspace:*",
-    "web-tree-sitter": "0.27.2"
+    "web-tree-sitter": "0.27.2",
+    "zod": "4.6.7"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.1",

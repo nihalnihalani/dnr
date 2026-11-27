@@ -15,9 +15,14 @@ import {
   simClock,
 } from '@dnr/ui';
 import runtimeUrl from 'web-tree-sitter/web-tree-sitter.wasm?url';
+import { config as zodConfig } from 'zod';
 import pythonUrl from '../../../vendor/grammars/tree-sitter-python.wasm?url';
 import tsxUrl from '../../../vendor/grammars/tree-sitter-tsx.wasm?url';
 import typescriptUrl from '../../../vendor/grammars/tree-sitter-typescript.wasm?url';
+
+// The CSP has no 'unsafe-eval'. Zod's JIT probes `new Function('')`, which the browser reports as
+// a CSP violation even though Zod catches it; jitless parsing never tries.
+zodConfig({ jitless: true });
 
 const base = import.meta.env.BASE_URL;
 const asset = (p: string) => `${base}${p}`;

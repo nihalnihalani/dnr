@@ -100,6 +100,68 @@ function socialMeta(): Plugin {
   };
 }
 
+/** One `_headers` rule (Cloudflare Pages format): a path pattern and the headers it sets. */
+interface HeaderRule {
+  re: RegExp;
+  headers: Array<[string, string]>;
+}
+
+/** Parse Cloudflare Pages `_headers`: `*` is a splat, `:name` a path segment. */
+export function parseHeaders(text: string): HeaderRule[] {
+  const rules: HeaderRule[] = [];
+  for (const raw of text.split('\n')) {
+    const line = raw.replace(/\s+$/, '');
+    if (!line.trim() || line.trim().startsWith('#')) continue;
+    if (!/^\s/.test(line)) {
+      const pat = line
+        .trim()
+        .replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+        .replace(/\*/g, '.*')
+        .replace(/:\w+/g, '[^/]+');
+      rules.push({ re: new RegExp(`^${pat}$`), headers: [] });
+      continue;
+    }
+    const m = line.trim().match(/^([^:]+):\s*(.*)$/);
+    if (m && rules.length) rules[rules.length - 1]?.headers.push([m[1] as string, m[2] as string]);
+  }
+  return rules;
+}
+
+/**
+ * `vite preview` applies public/_headers exactly as Cloudflare Pages does (every matching rule
+ * applies; a header set by several rules is joined with ", "). So the e2e suite runs under the
+ * production CSP, and P7-09 checks real response headers.
+ */
+function previewHeaders(): Plugin {
+  return {
+    name: 'dnr-preview-headers',
+    configurePreviewServer(server) {
+      const rules = parseHeaders(readFileSync(resolve(here, 'public/_headers'), 'utf8'));
+      server.middlewares.use((req, res, next) => {
+        const path = (req.url ?? '/').split('?')[0] as string;
+        const set = new Map<string, string>();
+        for (const r of rules)
+          if (r.re.test(path))
+            for (const [k, v] of r.headers) set.set(k, set.has(k) ? `${set.get(k)}, ${v}` : v);
+        // Set after Vite picks its own type, so _headers wins (as on Cloudflare).
+        const writeHead = res.writeHead.bind(res);
+        res.writeHead = ((status: number, ...rest: unknown[]) => {
+          for (const [k, v] of set) res.setHeader(k, v);
+          // Headers passed to writeHead itself (sirv passes Cache-Control) would win; drop those.
+          const last = rest.at(-1);
+          if (last && typeof last === 'object' && !Array.isArray(last)) {
+            const h = last as Record<string, unknown>;
+            for (const k of Object.keys(h))
+              if ([...set.keys()].some((n) => n.toLowerCase() === k.toLowerCase())) delete h[k];
+          }
+          return (writeHead as (...a: unknown[]) => typeof res)(status, ...rest);
+        }) as typeof res.writeHead;
+        next();
+      });
+    },
+  };
+}
+
 /**
  * Which optional data files this build ships. The app fetches only these, so a deploy without a
  * trial, a prereg tag or a CLI capture makes no requests that 404 (static hosts log those as
@@ -112,7 +174,7 @@ const shipped = {
 };
 
 export default defineConfig({
-  plugins: [react(), socialMeta(), trialData(), packCases(), inlineCss()],
+  plugins: [react(), socialMeta(), previewHeaders(), trialData(), packCases(), inlineCss()],
   define: { __DNR_DATA__: JSON.stringify(shipped) },
   build: {
     target: 'es2022',
