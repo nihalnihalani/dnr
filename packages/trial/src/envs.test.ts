@@ -102,3 +102,21 @@ describe('trial envs on a real repo', () => {
     expect(shas).toEqual([land]);
   });
 });
+
+describe('testCommand', () => {
+  it('P3-14: passes --parallel only to a runtests.py that has it (Django 1.8 has none)', async () => {
+    const { testCommand } = await import('./envs');
+    const { mkdirSync, writeFileSync } = await import('node:fs');
+    const d = mkdtempSync(join(tmpdir(), 'dnr-runtests-'));
+    try {
+      mkdirSync(join(d, 'tests'));
+      const env = { kind: 'uv' as const, path: '/env', image: null };
+      writeFileSync(join(d, 'tests/runtests.py'), "parser.add_argument('--failfast')\n");
+      expect(testCommand(env, d, ['a.b']).args).toEqual(['tests/runtests.py', 'a.b']);
+      writeFileSync(join(d, 'tests/runtests.py'), "parser.add_argument('--parallel')\n");
+      expect(testCommand(env, d, ['a.b']).args).toEqual(['tests/runtests.py', '--parallel', '1', 'a.b']);
+    } finally {
+      rmSync(d, { recursive: true, force: true });
+    }
+  });
+});

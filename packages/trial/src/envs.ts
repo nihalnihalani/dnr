@@ -1,6 +1,6 @@
 /**
  * `dnr trial envs` (§9.1 steps 6–7): one shared dependency environment per revert (uv for Python
- * ≥ 3.8, a digest-pinned Docker image with committed constraints for 3.5–3.7), restored-test
+ * ≥ 3.8, a digest-pinned Docker image with committed constraints for 3.4–3.7), restored-test
  * validation (fail on R, pass on C; at R+Δ with C cherry-picked), flaky detection (two baseline
  * runs). Tests always run with PYTHONPATH=<the working copy>, never `-e .`.
  */
@@ -147,7 +147,7 @@ export function cutoffUtc(iso: string): string {
 }
 
 /**
- * Constraints (full transitive closure) for Python 3.5–3.7, generated once inside the digest-pinned
+ * Constraints (full transitive closure) for Python 3.4–3.7, generated once inside the digest-pinned
  * image with pypi-timemachine serving the index as of the revert date; committed as
  * `fixtures/constraints/<sha10>.txt`. pypi-timemachine runs from its own venv so its own
  * dependencies stay out of `pip freeze`. The release pip resolves depends on the image: 0.1
@@ -272,7 +272,11 @@ export function testCommand(
   labels: string[],
   ids: { uid: number; gid: number } = { uid: process.getuid?.() ?? 0, gid: process.getgid?.() ?? 0 },
 ): { cmd: string; args: string[]; env: NodeJS.ProcessEnv } {
-  const tail = ['tests/runtests.py', '--parallel', '1', ...labels];
+  // `--parallel` arrived in Django 1.9; the 1.8-era runtests.py (Python 3.4, W3) rejects it.
+  const runtests = join(workdir, 'tests/runtests.py');
+  const parallel =
+    existsSync(runtests) && readFileSync(runtests, 'utf8').includes('--parallel') ? ['--parallel', '1'] : [];
+  const tail = ['tests/runtests.py', ...parallel, ...labels];
   if (e.kind === 'docker') {
     return {
       cmd: 'docker',
