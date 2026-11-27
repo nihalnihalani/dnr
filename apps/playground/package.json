@@ -11,7 +11,9 @@
     "cases": "tsx scripts/build-cases.ts",
     "test": "playwright test",
     "typecheck": "tsc -p tsconfig.json",
-    "capture": "tsx scripts/capture-cli.ts"
+    "capture": "tsx scripts/capture-cli.ts",
+    "capture:og": "tsx scripts/capture-og.ts",
+    "lhci": "lhci autorun"
   },
   "dependencies": {
     "@dnr/core": "workspace:*",
@@ -26,6 +28,7 @@
     "@dnr/grammar": "workspace:*",
     "@dnr/store": "workspace:*",
     "@dnr/testkit": "workspace:*",
+    "@lhci/cli": "0.16.1",
     "@playwright/test": "1.65.1",
     "@types/react": "19.3.3",
     "@types/react-dom": "19.2.3",

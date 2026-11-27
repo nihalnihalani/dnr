@@ -14,6 +14,8 @@
       "!**/*.yaml",
       "!apps/playground/test-results",
       "!apps/playground/playwright-report",
+      "!apps/playground/.lighthouseci",
+      "!apps/playground/lhci-report",
       "!apps/playground/public/data",
       "!apps/playground/public/cases"
     ]
