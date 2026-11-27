@@ -25,6 +25,9 @@ jobs:
         node: [24, 26]
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Full history: the /kiro page lists each .kiro file's commits (build-kiro.ts).
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
@@ -46,6 +49,9 @@ jobs:
         node: [24, 26]
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Full history: the /kiro page lists each .kiro file's commits (build-kiro.ts).
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
@@ -112,6 +118,9 @@ jobs:
     needs: check
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Full history: the /kiro page lists each .kiro file's commits (build-kiro.ts).
+          fetch-depth: 0
       - id: present
         name: Playground e2e suite present?
         run: |
@@ -144,6 +153,9 @@ jobs:
     needs: check
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Full history: the /kiro page lists each .kiro file's commits (build-kiro.ts).
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:

@@ -28,6 +28,9 @@ jobs:
       deployments: write
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Full history: the /kiro page lists each .kiro file's commits (build-kiro.ts).
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:
@@ -81,6 +84,9 @@ jobs:
       DNR_SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
     steps:
       - uses: actions/checkout@v5
+        with:
+          # Full history: the /kiro page lists each .kiro file's commits (build-kiro.ts).
+          fetch-depth: 0
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v5
         with:

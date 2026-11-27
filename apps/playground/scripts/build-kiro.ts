@@ -2,6 +2,11 @@
  * Builds public/data/kiro.json for /kiro from the files that actually exist in .kiro/ and powers/.
  * "What it changed" comes from the file itself (hook command, steering scope, spec progress) and
  * its git history, never from hand-written claims.
+ *
+ * The output is generated, not tracked (gitignored): it is a function of the checked-out commit.
+ * Only tracked files are listed (`git ls-files`), so local scratch files never appear. History
+ * needs the full git log, so CI checks out with fetch-depth 0; a shallow clone fails loudly here
+ * instead of publishing truncated history.
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -102,7 +107,23 @@ function describe(abs: string): Row | null {
   return null;
 }
 
+const tracked = new Set(
+  execFileSync('git', ['-C', root, 'ls-files', '-z', '--', '.kiro', 'powers'], { encoding: 'utf8' })
+    .split('\0')
+    .filter(Boolean),
+);
+const shallow =
+  execFileSync('git', ['-C', root, 'rev-parse', '--is-shallow-repository'], { encoding: 'utf8' }).trim() ===
+  'true';
+if (shallow) {
+  console.error(
+    'build-kiro: this is a shallow clone, so file history would be truncated. Fetch full history.',
+  );
+  process.exit(1);
+}
+
 const rows = [...walk(join(root, '.kiro')), ...walk(join(root, 'powers'))]
+  .filter((abs) => tracked.has(relative(root, abs)))
   .sort()
   .map(describe)
   .filter((r): r is Row => r !== null);
