@@ -552,6 +552,28 @@ describe('init', () => {
     }
   });
 
+  it('P3: init records the node binary sha256 and offers Kiro deny rules for node and its lib/node_modules', async () => {
+    const repo = makeRepo();
+    try {
+      const { mkdirSync, realpathSync } = await import('node:fs');
+      const { dirname: dn } = await import('node:path');
+      mkdirSync(join(repo.dir, '.home', '.kiro', 'settings'), { recursive: true });
+      await dnr(repo.dir, ['init'], { prompt: async () => 'y' });
+      const inst = JSON.parse(readFileSync(join(repo.dir, '.dnr', 'install.json'), 'utf8'));
+      expect(inst.node).toBe(process.execPath);
+      expect(inst.node_sha256).toMatch(/^[0-9a-f]{64}$/);
+      const real = realpathSync(process.execPath);
+      const text = readFileSync(join(repo.dir, '.home', '.kiro', 'settings', 'permissions.yaml'), 'utf8');
+      expect(text).toContain(JSON.stringify(real));
+      expect(text).toContain(JSON.stringify(`${join(dn(dn(real)), 'lib', 'node_modules')}/**`));
+      expect((await dnr(repo.dir, ['doctor'])).out).toMatch(
+        /ok\s+bundle integrity\s+the bundle and the node binary match/,
+      );
+    } finally {
+      repo.cleanup();
+    }
+  });
+
   it('init: the hook files it writes equal the §6 files in this repo (.kiro/hooks)', () => {
     const root = join(__dirname, '..', '..', '..');
     for (const h of DNR_HOOKS) {

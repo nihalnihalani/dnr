@@ -7,7 +7,7 @@ import { chmodSync, existsSync, readFileSync, realpathSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { findRepoRoot, gitPath } from '@dnr/git';
-import { bundleSha256 } from '@dnr/hook';
+import { bundleSha256, fileSha256, nodePaths } from '@dnr/hook';
 import { DnrConfig } from '@dnr/schemas';
 import { openStore } from '@dnr/store';
 import { createTwoFilesPatch } from 'diff';
@@ -161,7 +161,8 @@ export async function cmdInit(argv: string[], io: CliIO): Promise<number> {
 
   // Wave-3 N2: record the bundle's sha256; Stop and `dnr doctor` verify it.
   const sha = bundleSha256(cli);
-  const install = { node: process.execPath, cli, sha256: sha };
+  // Production audit P3: the node binary the hooks run is recorded too.
+  const install = { node: process.execPath, cli, sha256: sha, node_sha256: fileSha256(process.execPath) };
   const installRel = '.dnr/install.json';
   const prevInstall = existsSync(join(root, installRel))
     ? readFileSync(join(root, installRel), 'utf8')
@@ -212,7 +213,7 @@ async function installPermissions(
   const shims: string[] = [];
   for (const dir of (io.env.PATH ?? '').split(':'))
     if (dir && existsSync(join(dir, 'dnr'))) shims.push(join(dir, 'dnr'));
-  const block = dnrRules([`${installDir}/**`, ...shims]);
+  const block = dnrRules([`${installDir}/**`, ...shims, ...nodePaths()]);
   const cur = existsSync(file) ? readFileSync(file, 'utf8') : null;
   const next = mergePermissions(cur, block);
   if (cur === next) {

@@ -147,7 +147,7 @@ export async function cmdDoctor(argv: string[], io: CliIO): Promise<number> {
       ok: recorded && !mismatch,
       detail: !recorded
         ? 'no .dnr/install.json: run dnr init'
-        : (mismatch ?? 'the bundle matches the sha256 recorded at dnr init'),
+        : (mismatch ?? 'the bundle and the node binary match the sha256 recorded at dnr init'),
     });
     const pf = permissionsFile(io.env);
     const text = existsSync(pf) ? readFileSync(pf, 'utf8') : null;

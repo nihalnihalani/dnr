@@ -12,7 +12,12 @@ export interface AttestedRecord {
   version: 1;
   updated_at: string;
   by: string;
-  orders: Record<string, { status: Order['status']; sha256: string }>;
+  /**
+   * Production audit P4: an approved entry also keeps the order itself, so it stays enforceable
+   * when every other copy is gone or weakened (uncommitted orders right after init and approve).
+   * Trusted only when its hash equals `sha256`.
+   */
+  orders: Record<string, { status: Order['status']; sha256: string; order?: Order }>;
 }
 
 /** Canonical content hash of an order (sorted keys). */
@@ -43,7 +48,10 @@ export function readAttested(file: string): AttestedRecord | null {
 export function writeAttested(file: string, orders: readonly Order[], by: string, at: string): void {
   const rec: AttestedRecord = { version: 1, updated_at: at, by, orders: {} };
   for (const o of [...orders].sort((a, b) => a.id.localeCompare(b.id)))
-    rec.orders[o.id] = { status: o.status, sha256: orderHash(o) };
+    rec.orders[o.id] =
+      o.status === 'approved'
+        ? { status: o.status, sha256: orderHash(o), order: o }
+        : { status: o.status, sha256: orderHash(o) };
   mkdirSync(dirname(file), { recursive: true });
   const tmp = `${file}.${process.pid}.tmp`;
   writeFileSync(tmp, `${JSON.stringify(rec, null, 2)}\n`);

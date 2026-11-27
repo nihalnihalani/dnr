@@ -138,6 +138,43 @@ describe('N2: DNR installation and shell startup files', () => {
   });
 });
 
+describe('P3: the node binary the hooks run', () => {
+  it('P3: node (as written and its realpath) and its global lib/node_modules are protected in pre-write and guard-shell', async () => {
+    fx = await revertFixture();
+    const env = envFor(fx.repo);
+    const { realpathSync } = await import('node:fs');
+    const { dirname: dn } = await import('node:path');
+    const node = process.execPath;
+    const real = realpathSync(node);
+    for (const t of [node, real, join(dn(dn(real)), 'lib', 'node_modules', 'some-pkg', 'index.js')]) {
+      const io = await runPreWrite(writeEvent(fx.repo, t, 'x'), { env });
+      expect(io.exitCode, t).toBe(2);
+      expect(io.stderr, t).toContain('protected');
+    }
+    const sh = await runGuardShell(shellEv(fx, `cp /dev/null ${real}`), { env });
+    expect(sh.exitCode).toBe(2);
+    expect(sh.stderr).toContain('protected');
+  });
+
+  it('P3: Stop and the install check flag a node binary whose sha256 changed since init', async () => {
+    fx = await revertFixture();
+    const { fileSha256, installMismatch } = await import('../src/install');
+    // A stand-in node binary at a recorded path (the real one is not modified by a test).
+    const fake = join(fx.repo.dir, '.home', 'node');
+    mkdirSync(join(fx.repo.dir, '.home'), { recursive: true });
+    writeFileSync(fake, 'original runtime bytes');
+    writeFileSync(
+      join(fx.repo.dir, '.dnr', 'install.json'),
+      JSON.stringify({ node: fake, cli: '/nonexistent/cli.js', sha256: null, node_sha256: fileSha256(fake) }),
+    );
+    expect(installMismatch(fx.repo.dir, join(fx.repo.dir, '.dnr'))).toBeNull();
+    writeFileSync(fake, '');
+    expect(installMismatch(fx.repo.dir, join(fx.repo.dir, '.dnr'))).toContain('node binary');
+    const st = await stop(fx);
+    expect(JSON.parse(st.stdout).reason).toContain(`the node binary at ${fake} changed since \`dnr init\``);
+  });
+});
+
 describe('N3: union of order sets and the persistent tamper flag', () => {
   it('N3: retiring an uncommitted order through the shell does not stop enforcement, now or in the next session', async () => {
     fx = await revertFixture();
@@ -152,6 +189,58 @@ describe('N3: union of order sets and the persistent tamper flag', () => {
     expect(readTamper(join(fx.repo.dir, '.dnr'))).not.toBeNull();
     const st2 = await stop(fx, 'sess-2');
     expect(JSON.parse(st2.stdout).reason).toContain('Open tamper finding');
+  });
+
+  it('P4: while a tamper finding is open, a re-application of an order it holds blocks in the next session (uncommitted orders right after init and approve)', async () => {
+    fx = await revertFixture();
+    const env = envFor(fx.repo);
+    await start(fx);
+    // Session 1: the agent retires the uncommitted order through the shell.
+    const f = `.dnr/orders/${fx.order.id}.json`;
+    // An interpreter write with a path built at run time: guard-shell cannot see the path.
+    const r = await agentShell(
+      fx,
+      `${process.execPath} -e 'const fs=require("fs");const p=".d"+"nr/orders/${fx.order.id}.json";fs.writeFileSync(p,fs.readFileSync(p,"utf8").replace("\\"approved\\"","\\"retired\\""))'`,
+    );
+    expect(JSON.parse(readFileSync(join(fx.repo.dir, f), 'utf8')).status).toBe('retired');
+    expect(r).toBeTruthy();
+    const st = await stop(fx);
+    expect(JSON.parse(st.stdout).reason).toContain(fx.order.id);
+    expect(readTamper(join(fx.repo.dir, '.dnr'))).not.toBeNull();
+    // Session 2: the finding is still open, so the re-application blocks.
+    await start(fx, 'sess-2');
+    const io = await runPreWrite(writeEvent(fx.repo, 'shop.py', AFTER, 'sess-2'), { env });
+    expect(io.exitCode, io.stderr).toBe(2);
+    expect((readEventsFile(fx.repo).at(-1) as EventRecord).decision.outcome).toBe('block');
+    // Also without a SessionStart event.
+    const io3 = await runPreWrite(writeEvent(fx.repo, 'shop.py', AFTER, 'sess-3'), { env });
+    expect(io3.exitCode, io3.stderr).toBe(2);
+  });
+
+  it('P4: with only the attested record left, a retired-by-interpreter order still blocks in a later session, and the finding holds it', async () => {
+    fx = await revertFixture();
+    const env = envFor(fx.repo);
+    // As right after `dnr init` and `dnr orders approve`: uncommitted order, human-attested record.
+    const { writeAttested } = await import('@dnr/store');
+    writeAttested(
+      join(fx.repo.dir, '.dnr', 'attested.json'),
+      [fx.order],
+      'maintainer',
+      new Date().toISOString(),
+    );
+    // Between sessions an interpreter retires the working copy (no hook sees the write).
+    retireWorking(fx);
+    // Session 2, no SessionStart: the re-application must block, and the finding must hold the order.
+    const io = await runPreWrite(writeEvent(fx.repo, 'shop.py', AFTER, 'sess-2'), { env });
+    expect(io.exitCode, io.stderr).toBe(2);
+    expect((readEventsFile(fx.repo).at(-1) as EventRecord).decision.outcome).toBe('block');
+    const t = readTamper(join(fx.repo.dir, '.dnr'));
+    expect(t?.findings.some((f) => f.what.includes(fx?.order.id as string))).toBe(true);
+    expect(((t?.held ?? []) as Array<{ id: string; status: string }>).map((o) => [o.id, o.status])).toEqual([
+      [fx.order.id, 'approved'],
+    ]);
+    // Session 3: still blocks while the finding is open.
+    expect((await runPreWrite(writeEvent(fx.repo, 'shop.py', AFTER, 'sess-3'), { env })).exitCode).toBe(2);
   });
 
   it('N3: a commit that retires an order is refused at pre-commit unless the human-attested record agrees', async () => {

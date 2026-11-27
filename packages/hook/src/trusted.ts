@@ -210,7 +210,13 @@ export function unionOrders(
       if (!chosen) {
         // The attested version is gone from every copy: keep the strongest one there is.
         chosen = [...cands].sort((a, b) => RANK[b.status] - RANK[a.status])[0];
-        if (att.status === 'approved' && chosen?.status !== 'approved') weakened.push(id);
+        if (att.status === 'approved' && chosen?.status !== 'approved') {
+          weakened.push(id);
+          // Production audit P4: the record keeps the approved order itself; it stays enforced
+          // (and is what the tamper flag holds) when its hash checks out.
+          const kept = Order.safeParse(att.order);
+          if (kept.success && orderHash(kept.data) === att.sha256) chosen = kept.data;
+        }
       }
     } else {
       chosen = [...cands].sort((a, b) => RANK[b.status] - RANK[a.status])[0];

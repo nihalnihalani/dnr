@@ -3,7 +3,16 @@
  * replace DNR's own code, a `dnr` shim on PATH, or a shell startup file a hook shell may source.
  */
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'node:fs';
+import {
+  closeSync,
+  existsSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  readSync,
+  realpathSync,
+  statSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 
 const RC_FILES = [
@@ -35,8 +44,22 @@ export function installRoot(env: NodeJS.ProcessEnv): string | null {
   return dirname(dirname(real(self)));
 }
 
+/**
+ * Production audit P3: the `node` binary every hook command runs, and the global module tree next
+ * to it. Under nvm, Homebrew or Volta both are user-writable, and a hook that cannot execute exits
+ * 126/127, which Kiro treats as warn-and-allow. Both the path as written and its realpath count.
+ */
+export function nodePaths(node: string = process.execPath): string[] {
+  const out = new Set<string>();
+  for (const p of [node, real(node)]) {
+    out.add(p);
+    out.add(`${join(dirname(dirname(p)), 'lib', 'node_modules')}/**`);
+  }
+  return [...out];
+}
+
 export function installGlobs(env: NodeJS.ProcessEnv): string[] {
-  const out: string[] = [];
+  const out: string[] = [...nodePaths()];
   const root = installRoot(env);
   if (root) out.push(`${root}/**`);
   for (const dir of (env.PATH ?? '').split(':')) {
@@ -80,6 +103,28 @@ export interface InstallRecord {
   node: string;
   cli: string;
   sha256: string | null;
+  /** sha256 of the node binary (its realpath) the hooks run; absent in records from before P3. */
+  node_sha256?: string | null;
+}
+
+/** sha256 of one file, read in chunks (the node binary is ~100 MB), or null. */
+export function fileSha256(path: string): string | null {
+  let fd: number | null = null;
+  try {
+    fd = openSync(real(path), 'r');
+    const h = createHash('sha256');
+    const buf = Buffer.alloc(1 << 22);
+    for (;;) {
+      const n = readSync(fd, buf, 0, buf.length, null);
+      if (n <= 0) break;
+      h.update(buf.subarray(0, n));
+    }
+    return h.digest('hex');
+  } catch {
+    return null;
+  } finally {
+    if (fd !== null) closeSync(fd);
+  }
 }
 
 /** Compare the recorded bundle hash with the bundle on disk (wave-3 N2). Null when it matches. */
@@ -90,6 +135,12 @@ export function installMismatch(repoRoot: string, stateDir: string): string | nu
       rec = JSON.parse(readFileSync(f, 'utf8')) as InstallRecord;
     } catch {
       continue;
+    }
+    if (rec.node_sha256) {
+      const n = fileSha256(rec.node);
+      if (n === null) return `the node binary recorded at init (${rec.node}) is missing`;
+      if (n !== rec.node_sha256)
+        return `the node binary at ${rec.node} changed since \`dnr init\` (sha256 differs)`;
     }
     if (!rec.sha256) return null;
     const now = bundleSha256(rec.cli);

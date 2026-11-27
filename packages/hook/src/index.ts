@@ -41,7 +41,15 @@ export {
 export { type HookEvent, parseHookEvent, StdinError, shellCommandOf } from './event';
 export { failOpen } from './failopen';
 export { approvalOrigin, grantOrigin, launchMarkers, testHarness } from './grant-origin';
-export { bundleSha256, type InstallRecord, installGlobs, installMismatch, installRoot } from './install';
+export {
+  bundleSha256,
+  fileSha256,
+  type InstallRecord,
+  installGlobs,
+  installMismatch,
+  installRoot,
+  nodePaths,
+} from './install';
 export {
   blockText,
   cap,
