@@ -1,5 +1,5 @@
 /** Load approved orders for a set of ids with their derived stale/re-landed flags (§5.9). */
-import type { OrderEntry } from '@dnr/core';
+import { materialFromTexts, type OrderEntry, type OrderMaterial, type UnitMaterial } from '@dnr/core';
 import type { Order } from '@dnr/schemas';
 import type { HookContext } from './context';
 import { deriveStatus, filesOf, type UnitCache } from './engine';
@@ -19,7 +19,12 @@ export async function loadEntries(
     if (o && o.status === 'approved') orders.push(o);
   }
   const specs = [...extraSpecs];
-  for (const o of orders) for (const f of filesOf(o)) specs.push(`${o.snapshot_sha}:${f}`, `HEAD:${f}`);
+  for (const o of orders) {
+    for (const f of filesOf(o)) specs.push(`${o.snapshot_sha}:${f}`, `HEAD:${f}`);
+    // The C side of each unit (§5.16 material) comes from git objects, never from an on-disk cache.
+    for (const u of o.units)
+      if (u.kind !== 'removed') specs.push(`${u.c_state_ref.sha}:${u.c_state_ref.file}`);
+  }
   await reader.prefetch(specs);
   const entries: OrderEntry[] = orders.map((order) => {
     const d = deriveStatus(
@@ -30,7 +35,18 @@ export async function loadEntries(
       ctx.config,
       null, // no on-disk cache in the enforcement path: an agent could forge it (wave-2 C1)
     );
-    return { order, stale: d.stale, relanded: d.relanded };
+    const material = new LazyMaterial(() =>
+      materialFromTexts(
+        cache.provider,
+        order,
+        (f) => {
+          const u = order.units.find((x) => x.c_state_ref.file === f);
+          return u ? reader.get(u.c_state_ref.sha, f) : null;
+        },
+        (f) => reader.get(order.snapshot_sha, f),
+      ),
+    );
+    return { order, stale: d.stale, relanded: d.relanded, material };
   });
   // Wave-3 N4: a re-land committed by an agent without a grant is `violated` and keeps enforcing.
   const violations = readViolations(ctx.store.paths.stateDir);
@@ -43,4 +59,42 @@ export async function loadEntries(
     }
   }
   return { entries, orders, violated };
+}
+
+/**
+ * Order material (§5.16), parsed on first use. The engine only reads it when a covered unit is
+ * missing from the proposed state (move/rename lookup) or proximity is on, so a plain write pays
+ * nothing beyond the prefetched blobs.
+ */
+export class LazyMaterial implements OrderMaterial {
+  private m: Map<string, UnitMaterial> | null = null;
+  constructor(private readonly build: () => Map<string, UnitMaterial>) {}
+  private get map(): Map<string, UnitMaterial> {
+    if (!this.m) this.m = this.build();
+    return this.m;
+  }
+  get size(): number {
+    return this.map.size;
+  }
+  get(key: string): UnitMaterial | undefined {
+    return this.map.get(key);
+  }
+  has(key: string): boolean {
+    return this.map.has(key);
+  }
+  forEach(cb: (value: UnitMaterial, key: string, map: ReadonlyMap<string, UnitMaterial>) => void): void {
+    for (const [k, v] of this.map) cb(v, k, this);
+  }
+  entries(): MapIterator<[string, UnitMaterial]> {
+    return this.map.entries();
+  }
+  keys(): MapIterator<string> {
+    return this.map.keys();
+  }
+  values(): MapIterator<UnitMaterial> {
+    return this.map.values();
+  }
+  [Symbol.iterator](): MapIterator<[string, UnitMaterial]> {
+    return this.map[Symbol.iterator]();
+  }
 }

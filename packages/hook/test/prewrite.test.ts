@@ -100,6 +100,28 @@ describe('pre-write hook', () => {
     expect(other.exitCode).toBe(2);
   });
 
+  it('§5.16: a write that renames the covered function and re-applies C in the same edit is relocated by the fingerprint lookup and blocks', async () => {
+    fx = await revertFixture();
+    const renamed = AFTER.replace('def total(', 'def grand_total(');
+    const io = await runPreWrite(writeEvent(fx.repo, 'shop.py', renamed), { env: envFor(fx.repo) });
+    const ev = readEventsFile(fx.repo).at(-1) as EventRecord;
+    expect(io.exitCode, io.stderr).toBe(2);
+    expect(ev.decision.outcome).toBe('block');
+    const unit = (ev.decision.breakdown[0] as { units: Array<Record<string, unknown>> }).units[0];
+    expect(unit).toMatchObject({
+      qualname: 'total',
+      proposed: 'relocated',
+      relocated_to: { file: 'shop.py', qualname: 'grand_total' },
+    });
+    // A rename alone (no re-application) is not blocked.
+    const plain = await runPreWrite(
+      writeEvent(fx.repo, 'shop.py', BEFORE.replace('def total(', 'def grand_total('), 'sess-rename'),
+      { env: envFor(fx.repo) },
+    );
+    expect((readEventsFile(fx.repo).at(-1) as EventRecord).decision.outcome).not.toBe('block');
+    expect(plain.exitCode === 0 || plain.exitCode === 2).toBe(true);
+  });
+
   it('R2: a formatting-only edit of a covered unit never warns', async () => {
     fx = await revertFixture();
     const io = await runPreWrite(writeEvent(fx.repo, 'shop.py', COMMENT_ONLY), { env: envFor(fx.repo) });
