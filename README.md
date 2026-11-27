@@ -6,7 +6,7 @@ DNR turns a repo's reverts into do-not-resurrect orders. Each order is generated
 
 When a Kiro agent's write would bring a reverted change back, a PreToolUse hook stops it before the file changes. It shows the reason and links to the original commit, the revert, and the ticket. Re-landing a fixed version takes one approval. The known gaps are listed in the [threat model](docs/threat-model.md).
 
-**Status: hook path built; trial not run.** The PreToolUse hook, CLI, order store and MCP server are built. They block the real Django re-application end to end: re-applying the change reverted in `43933a1dca` exits 2 with edit 1.00 in `Query.clear_ordering` (see below). The pre-registered trial has not run yet, and its pre-registration is in progress, so no trial result is claimed here. The hosted Playground URL is added when it is deployed (Phase 7).
+**Status: hook path built; trial not run.** The PreToolUse hook, CLI, order store and MCP server are built. They block the real Django re-application end to end: re-applying the change reverted in `43933a1dca` exits 2 with edit 1.00 in `Query.clear_ordering` (see below). The pre-registered trial has not run yet, and its pre-registration is in progress, so no trial result is claimed here. The hosted Playground is live at https://nihalnihalani.github.io/dnr/.
 
 Built for Kiroween 2026 (Frankenstein category) with Kiro: specs, hooks, steering, custom agents, MCP and a power. See [how Kiro built it](docs/kiro-usage.md).
 
@@ -36,7 +36,7 @@ A human recovers with `dnr board --open <order_id>` or `dnr allow <order_id>`, f
 
 ## Testing
 
-1. Open the hosted Playground (URL pending, Phase 7) and run `/play` on a demo case.
+1. Open the hosted Playground at https://nihalnihalani.github.io/dnr/ and run `/play` on a demo case.
 2. Run `scripts/demo/make-demo-checkout.sh`, log in to `kiro-cli`, and trigger the live Kiro block:
    `cd ../django-demo && kiro-cli chat "$(cat "$OLDPWD/scripts/demo/prompts/write.txt")"`.
    `direct.txt` and `cleanup.txt` are alternates.
