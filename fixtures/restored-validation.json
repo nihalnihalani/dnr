@@ -25,6 +25,19 @@
     "python": "3.13",
     "kind": "uv"
   },
+  "0e489c19f1554ecfd9825daacfbac73be8ce723e": {
+    "fails_post_revert": true,
+    "passes_on_original": true,
+    "valid": true,
+    "flaky": [],
+    "note": "start fail, with C pass",
+    "provisional": true,
+    "labels": [
+      "model_meta.tests.GetFieldByNameTests.test_get_fields_when_apps_not_ready"
+    ],
+    "python": "3.4",
+    "kind": "docker"
+  },
   "976bd519a879b2fd7a356cb21bde32696adb545f": {
     "fails_post_revert": true,
     "passes_on_original": true,

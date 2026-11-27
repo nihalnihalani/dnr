@@ -16,6 +16,14 @@
     "ok": true
   },
   {
+    "revert_sha": "0e489c19f1554ecfd9825daacfbac73be8ce723e",
+    "kind": "docker",
+    "python": "3.4",
+    "path": "/var/tmp/dnr-trial/envs/0e489c19f1",
+    "image": "dnr-env-0e489c19f1",
+    "ok": true
+  },
+  {
     "revert_sha": "976bd519a879b2fd7a356cb21bde32696adb545f",
     "kind": "docker",
     "python": "3.5",

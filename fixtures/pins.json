@@ -33,6 +33,7 @@
   "npm_package": null,
   "syn_fork_base": null,
   "docker_images": {
+    "python:3.4-slim": "python:3.4-slim@sha256:44b78f9c6c93df7d8bc0d32a85ef8fd10a074a101985bde6fd41d3b5aadf16f0",
     "python:3.5-slim": "python:3.5-slim@sha256:2348c9c9fa90808066919c036d59919fbf82c7f9277c2ff8b6b8cc6e72f5b9d7",
     "python:3.6-slim": "python:3.6-slim@sha256:2cfebc27956e6a55f78606864d91fe527696f9e32a724e6f9702b5f9602d0474",
     "python:3.7-slim": "python:3.7-slim@sha256:b53f496ca43e5af6994f8e316cf03af31050bf7944e0e4a308ad86c001cf028b"
