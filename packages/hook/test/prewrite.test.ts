@@ -143,6 +143,25 @@ describe('pre-write hook', () => {
     expect(JSON.parse(readFileSync(cacheFile, 'utf8'))[key as string]).toEqual(cached[key as string]);
   });
 
+  it('P8: a forged c-units entry that keeps every added token but lowers similarity cannot hide a moved and re-applied unit', async () => {
+    fx = await revertFixture();
+    const renamed = AFTER.replace('def total(', 'def grand_total(');
+    const env = envFor(fx.repo);
+    const cacheFile = join(fx.repo.dir, '.dnr', 'cache', 'c-units.json');
+    expect((await runPreWrite(writeEvent(fx.repo, 'shop.py', renamed, 's-a'), { env })).exitCode).toBe(2);
+    const [key] = Object.keys(JSON.parse(readFileSync(cacheFile, 'utf8')));
+    // Passes the containment check (holds C's added tokens) but looks nothing like the moved unit.
+    const forged = [...fx.order.units[0]!.A, ...Array.from({ length: 200 }, (_, i) => `zz${i}`)];
+    writeFileSync(cacheFile, JSON.stringify({ [key as string]: forged }));
+    const io = await runPreWrite(writeEvent(fx.repo, 'shop.py', renamed, 's-b'), { env });
+    expect(io.exitCode, io.stderr).toBe(2);
+    const ev = readEventsFile(fx.repo).at(-1) as EventRecord;
+    expect(ev.decision.outcome).toBe('block');
+    expect((ev.decision.breakdown[0] as { units: Array<{ proposed: string }> }).units[0]?.proposed).toBe(
+      'relocated',
+    );
+  });
+
   it('R2: a formatting-only edit of a covered unit never warns', async () => {
     fx = await revertFixture();
     const io = await runPreWrite(writeEvent(fx.repo, 'shop.py', COMMENT_ONLY), { env: envFor(fx.repo) });

@@ -31,7 +31,7 @@ import { parseHookEvent } from './event';
 import { failOpen } from './failopen';
 import { installGlobs } from './install';
 import { blockText, gitBrokenMessage, protectMessage, violatedMessage, warnMessage } from './messages';
-import { loadEntries } from './orders';
+import { freshMaterial, loadEntries, usedMaterialCache } from './orders';
 import { BlobReader, readWorktree, realpathLoose, repoRelative } from './repo';
 import { coverageOf } from './trusted';
 
@@ -271,7 +271,9 @@ export async function preWrite(stdin: string, opts: HookOptions = {}): Promise<H
     const parser = await loadParser();
     const cache = new UnitCache(parser);
     const reader = new BlobReader(ctx.repoRoot);
-    const { entries, orders, violated } = await loadEntries(ctx, covering, reader, cache);
+    const { entries, orders, violated } = await loadEntries(ctx, covering, reader, cache, [], {
+      materialCache: true,
+    });
     const files = [...new Set(orders.flatMap(filesOf))];
     await reader.prefetch(files.map((f) => `${s.baseline_tree}:${f}`));
     const baseline = createState((f) => reader.get(s.baseline_tree, f), cache);
@@ -304,18 +306,24 @@ export async function preWrite(stdin: string, opts: HookOptions = {}): Promise<H
       const shown = finish(d, { proposed_text: effect.kind === 'write' ? effect.text : null });
       return renderDecision(ctx, shown, order, violatedMessage(order, v.commit));
     }
-    const r = decideWrite({
-      target: rel,
-      effect,
-      entries,
-      baseline,
-      current,
-      cache,
-      searchFiles: [...new Set([...s.touched, rel])],
-      warned: s.warned,
-      grantApplies: (id) => granted.has(id),
-      config: decideConfig(ctx),
-    });
+    const decideWith = (es: typeof entries) =>
+      decideWrite({
+        target: rel,
+        effect,
+        entries: es,
+        baseline,
+        current,
+        cache,
+        searchFiles: [...new Set([...s.touched, rel])],
+        warned: s.warned,
+        grantApplies: (id) => granted.has(id),
+        config: decideConfig(ctx),
+      });
+    let r = decideWith(entries);
+    // Production audit P8: a cached C side may only confirm a block. Anything else is decided again
+    // from the blobs, so a forged cache entry cannot hide a moved and re-applied unit.
+    if (!['block', 'ask'].includes(r.decision.outcome) && usedMaterialCache(entries))
+      r = decideWith(freshMaterial(entries, reader, cache));
     const d = r.decision;
     const order = orders.find((o) => o.id === d.order_id) ?? null;
     const recordText = ['block', 'warn_block', 'ask'].includes(d.outcome) || record;

@@ -16,6 +16,7 @@ export async function loadEntries(
   reader: BlobReader,
   cache: UnitCache,
   extraSpecs: readonly string[] = [],
+  opts: { materialCache?: boolean } = {},
 ): Promise<{ entries: OrderEntry[]; orders: Order[]; violated: Map<string, Violation> }> {
   const orders: Order[] = [];
   for (const id of ids) {
@@ -25,12 +26,13 @@ export async function loadEntries(
   const specs = [...extraSpecs];
   for (const o of orders) {
     for (const f of filesOf(o)) specs.push(`${o.snapshot_sha}:${f}`, `HEAD:${f}`);
-    // The C side of each unit (§5.16 material) comes from git objects, never from an on-disk cache.
+    // The C side of each unit (§5.16 material) comes from git objects; the c-units cache may only
+    // confirm a match (production audit P8; see freshMaterial).
     for (const u of o.units)
       if (u.kind !== 'removed') specs.push(`${u.c_state_ref.sha}:${u.c_state_ref.file}`);
   }
   await reader.prefetch(specs);
-  const cTokens = new CTokenCache(ctx.store.paths.cacheDir);
+  const cTokens = opts.materialCache ? new CTokenCache(ctx.store.paths.cacheDir) : null;
   const entries: OrderEntry[] = orders.map((order) => {
     const d = deriveStatus(
       order,
@@ -40,7 +42,7 @@ export async function loadEntries(
       ctx.config,
       null, // no on-disk cache in the enforcement path: an agent could forge it (wave-2 C1)
     );
-    const material = new LazyMaterial(() => orderMaterial(order, reader, cache, cTokens));
+    const material = new LazyMaterial((hit) => orderMaterial(order, reader, cache, cTokens, hit));
     return { order, stale: d.stale, relanded: d.relanded, material };
   });
   // Wave-3 N4: a re-land committed by an agent without a grant is `violated` and keeps enforcing.
@@ -57,6 +59,26 @@ export async function loadEntries(
 }
 
 /**
+ * Production audit P8: the c-units cache may raise a match, never lower one. When a decision made
+ * with cached material did not block, the caller rebuilds every entry's material from the blobs
+ * (no cache) and decides again; only the negative path pays the parse.
+ */
+export function usedMaterialCache(entries: readonly OrderEntry[]): boolean {
+  return entries.some((e) => e.material instanceof LazyMaterial && e.material.cacheHit);
+}
+
+export function freshMaterial(
+  entries: readonly OrderEntry[],
+  reader: BlobReader,
+  cache: UnitCache,
+): OrderEntry[] {
+  return entries.map((e) => ({
+    ...e,
+    material: new LazyMaterial((hit) => orderMaterial(e.order, reader, cache, null, hit)),
+  }));
+}
+
+/**
  * §5.16 material for one order. PR_u comes from the snapshot text through the shared in-process
  * UnitCache (deriveStatus has parsed the same text already). C_u comes from the C-side blob
  * through CTokenCache, so a warm lookup does not re-parse an unchanged file.
@@ -65,7 +87,8 @@ function orderMaterial(
   order: Order,
   reader: BlobReader,
   cache: UnitCache,
-  cTokens: CTokenCache,
+  cTokens: CTokenCache | null,
+  hit: () => void,
 ): Map<string, UnitMaterial> {
   const out = new Map<string, UnitMaterial>();
   for (const u of order.units) {
@@ -76,14 +99,10 @@ function orderMaterial(
       const ref = u.c_state_ref;
       const text = reader.get(ref.sha, ref.file);
       if (text !== null) {
-        C =
-          cTokens.get(text, ref.file, ref.qualname, u.A) ??
-          cTokens.put(
-            text,
-            ref.file,
-            ref.qualname,
-            cache.get(ref.file, text)?.units.get(ref.qualname)?.tokens ?? [],
-          );
+        const cached = cTokens?.get(text, ref.file, ref.qualname, u.A) ?? null;
+        if (cached) hit();
+        C = cached ?? cache.get(ref.file, text)?.units.get(ref.qualname)?.tokens ?? [];
+        if (!cached) cTokens?.put(text, ref.file, ref.qualname, C);
       }
     }
     out.set(unitKey(u.file, u.qualname), { C, PR });
@@ -162,9 +181,14 @@ export class CTokenCache {
  */
 export class LazyMaterial implements OrderMaterial {
   private m: Map<string, UnitMaterial> | null = null;
-  constructor(private readonly build: () => Map<string, UnitMaterial>) {}
+  /** True when any C-side tokens came from the c-units cache. */
+  cacheHit = false;
+  constructor(private readonly build: (hit: () => void) => Map<string, UnitMaterial>) {}
   private get map(): Map<string, UnitMaterial> {
-    if (!this.m) this.m = this.build();
+    if (!this.m)
+      this.m = this.build(() => {
+        this.cacheHit = true;
+      });
     return this.m;
   }
   get size(): number {
