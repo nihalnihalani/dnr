@@ -48,7 +48,7 @@ export async function expectNoAxeViolations(page: Page) {
  */
 export async function approveSim(page: Page) {
   await page.locator('.sim-actions [data-action="approve"]').click();
-  await expect(page.locator('.sim-actions')).toContainText('Approved: enforced');
+  await expect(page.locator('.sim-actions')).toContainText('Approved (simulated in this browser): enforced');
 }
 
 /** A loopback port nothing listens on: bound by the OS, then closed (a real "board down"). */

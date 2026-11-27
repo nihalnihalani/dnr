@@ -6,7 +6,7 @@ import { Banner, ErrorBanner, Loading, useAsync, useTitle } from '../components/
 import { Headstone } from '../components/Headstone';
 import { StateActions } from '../components/StateActions';
 import { TokenChips } from '../components/TokenChips';
-import { STATE_INFO } from '../model/states';
+import { stateLabel } from '../model/states';
 import { grantOrigin, type OrderDetail } from '../model/types';
 
 type Probe = { state: 'idle' } | { state: 'probing' } | { state: 'down'; why: string };
@@ -148,7 +148,7 @@ function OrderBody({
           Order <code>{o.id}</code>
         </h1>
         <p className="lede">
-          <strong>{STATE_INFO[detail.effective].label}</strong>
+          <strong data-testid="order-state">{stateLabel(detail)}</strong>
           {detail.drift ? ' · Differs from git' : ''} · reason source: {o.reason_source}
         </p>
         <p className="sr-only" role="status" aria-live="polite">

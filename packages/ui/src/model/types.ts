@@ -18,6 +18,8 @@ export interface OrderRow {
   violation?: { commit: string; at: string };
   /** Playground only: the /play case that exercises this order. */
   case_id?: string;
+  /** Playground only: the status comes from a simulated action stored in this browser. */
+  simulated?: boolean;
 }
 
 export interface OrderDetail extends OrderRow {

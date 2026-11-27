@@ -26,7 +26,19 @@ export function Graveyard() {
         <Banner kind="info" title="Playground" testId="banner-simulated">
           These are the real orders built from Django's reverts with <code>dnr orders build</code>, in the
           status <code>dnr orders list</code> computed for them. Actions here are <strong>simulated</strong>:
-          they run in this browser only and are stored in its local storage, never in the repository.
+          they run in this browser only and are stored in its local storage, never in the repository.{' '}
+          <button
+            type="button"
+            className="btn"
+            data-action="reset-real"
+            onClick={() => {
+              cfg.sim.reset();
+              cfg.clock.reset();
+              onChange('Reset to the real state: every order is back to its status as built.');
+            }}
+          >
+            Reset to the real state
+          </button>
         </Banner>
       )}
       <p className="sr-only" aria-live="polite" role="status">

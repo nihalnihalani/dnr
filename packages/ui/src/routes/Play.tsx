@@ -18,7 +18,7 @@ import {
   type UnitHits,
   type WriteResult,
 } from '../engine/session';
-import { STATE_INFO } from '../model/states';
+import { stateLabel } from '../model/states';
 import type { OrderDetail } from '../model/types';
 
 /** Resolve after the next paint and an idle slot (falls back to a short timeout). */
@@ -208,6 +208,28 @@ function PlayBody({
 
   const order: Order = detail?.order ?? bundle.order;
   const effective = detail?.effective ?? bundle.order.status;
+  const status = stateLabel(detail ?? { effective });
+  const original = bundle.presets.find((p) => p.kind === 'original-change');
+
+  /** Step 1: the maintainer's approval, simulated and stored in this browser only. */
+  const approveSimulated = async () => {
+    await sim.patchOrder(order.id, { status: 'approved' });
+    setMsg(`${order.id} approved (simulated in this browser): enforced`);
+    await refresh();
+  };
+  /** Forget every simulated change and the simulated clock: back to the order as shipped. */
+  const resetToReal = async () => {
+    sim.reset();
+    cfg.clock.reset();
+    const s = newSession(bundle, { ...initialState(bundle), now: cfg.clock.now() });
+    setState(s);
+    setDrafts({ ...s.files });
+    setResults([]);
+    setHits([]);
+    setPreset(null);
+    setMsg(`Reset to the real state: ${order.id} is ${bundle.order.status}, as built from the history.`);
+    await refresh();
+  };
 
   const send = (writes: Array<{ path: string; proposed_text: string }>, label: string) => {
     if (!engine) return;
@@ -270,7 +292,8 @@ function PlayBody({
       <div>
         <section className="card order-card" aria-labelledby="order-h">
           <h2 id="order-h" style={{ marginTop: 0, fontSize: '1rem', color: 'var(--muted)' }}>
-            Order <Link to={`/orders/${order.id}`}>{order.id}</Link> · {STATE_INFO[effective].label}
+            Order <Link to={`/orders/${order.id}`}>{order.id}</Link> ·{' '}
+            <span data-testid="play-state">{status}</span>
           </h2>
           <p className="reason">“{order.reason}”</p>
           <div className="links">
@@ -299,11 +322,55 @@ function PlayBody({
 
         {effective === 'draft' && (
           <Banner kind="warn" title="Draft: not enforced" testId="banner-draft">
-            This is the order as built from Django's history. No maintainer has approved it, so DNR allows
-            every write. Use <strong>Approve (simulated)</strong> under Maintainer actions to enforce it in
-            this browser only.
+            This is the order as built from {bundle.source.repo}'s history. No maintainer has approved it, so
+            DNR allows every write. Approve it below, simulated in this browser only, to see it enforced.
           </Banner>
         )}
+        <section className="card first-steps" aria-labelledby="steps-h" data-testid="first-steps">
+          <h2 id="steps-h" style={{ marginTop: 0 }}>
+            Try it
+          </h2>
+          <ol>
+            <li data-step="1" data-done={effective !== 'draft' ? 'true' : 'false'}>
+              {effective === 'draft' ? (
+                <button
+                  type="button"
+                  className="btn primary"
+                  onClick={() => void approveSimulated()}
+                  data-action="approve-first"
+                >
+                  1. Approve as maintainer <span className="sim">simulated in your browser</span>
+                </button>
+              ) : (
+                <span>
+                  1. Approved as maintainer <span className="sim">simulated in this browser</span>
+                </span>
+              )}
+              <span className="step-note">
+                {' '}
+                In a real repository only a human can approve, in a terminal.
+              </span>
+            </li>
+            <li data-step="2">
+              <button
+                type="button"
+                className="btn primary"
+                disabled={!engine || !original}
+                onClick={() => original && runPreset(original.id)}
+                data-action="send-original"
+              >
+                2. Send the agent's write
+              </button>
+              <span className="step-note">
+                {' '}
+                It re-applies the reverted change (C) through the same engine the hook runs.
+              </span>
+            </li>
+          </ol>
+          <button type="button" className="btn" onClick={() => void resetToReal()} data-action="reset-real">
+            Reset to the real state
+          </button>
+        </section>
         <section aria-labelledby="presets-h">
           <h2 id="presets-h">Presets</h2>
           {!engine && (
@@ -447,7 +514,7 @@ function PlayBody({
             Maintainer actions <SimTag on />
           </h3>
           <p style={{ fontSize: '0.85rem', margin: '0 0 8px' }}>
-            Status: <strong>{STATE_INFO[effective].label}</strong> · simulated clock{' '}
+            Status: <strong>{status}</strong> · simulated clock{' '}
             <span className="clock">{new Date(state.now).toISOString().replace('.000', '')}</span> · warned:{' '}
             {state.warned.length ? state.warned.join(', ') : 'none'} · grants used:{' '}
             {state.grants_used.length ? state.grants_used.join(', ') : 'none'}

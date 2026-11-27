@@ -200,7 +200,7 @@ test('A11Y-01: keyboard only: reach a preset, run it, hear the decision', {
   }
   await expect(approve).toBeFocused();
   await page.keyboard.press('Enter');
-  await expect(page.locator('.sim-actions')).toContainText('Approved: enforced');
+  await expect(page.locator('.sim-actions')).toContainText('Approved (simulated in this browser): enforced');
   await page.locator('#main').focus();
   const original = page.locator('[data-preset-kind="original-change"]');
   for (let i = 0; i < 60; i++) {

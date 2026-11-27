@@ -46,6 +46,8 @@ export interface AppConfig {
 export interface SimClock {
   now(): number;
   advance(ms: number): void;
+  /** Back to the wall clock (forget every "Advance 1 h"). */
+  reset(): void;
 }
 
 /** Wall clock plus a persisted offset (localStorage), so "Advance 1 h" survives reloads. */
@@ -64,6 +66,12 @@ export function simClock(key = 'dnr.playground.clock'): SimClock {
       offset += ms;
       try {
         globalThis.localStorage?.setItem(key, String(offset));
+      } catch {}
+    },
+    reset() {
+      offset = 0;
+      try {
+        globalThis.localStorage?.removeItem(key);
       } catch {}
     },
   };

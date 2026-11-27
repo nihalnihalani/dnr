@@ -102,7 +102,8 @@ export class LocalAdapter implements DataAdapter {
         : r.order.status === order.status
           ? r.effective
           : effectiveStatus(order, {});
-      return { ...r, order, effective };
+      const simulated = r.order.id in this.mem.orders || r.order.id in this.mem.effective;
+      return { ...r, order, effective, ...(simulated ? { simulated: true } : {}) };
     });
   }
 

@@ -1,6 +1,6 @@
 import type { Order } from '@dnr/schemas';
 import { Link } from '../app/router';
-import { DRIFT_INFO, STATE_INFO } from '../model/states';
+import { DRIFT_INFO, STATE_INFO, stateLabel } from '../model/states';
 import type { OrderRow } from '../model/types';
 
 const short = (sha: string | null) => (sha ? sha.slice(0, 10) : 'none');
@@ -39,6 +39,7 @@ export function Headstone({
 }) {
   const { order, effective, drift } = row;
   const info = STATE_INFO[effective];
+  const label = stateLabel(row);
   const original = order.links.find((l) => l.rel === 'original')?.url;
   const revert = order.links.find((l) => l.rel === 'revert')?.url;
   const ticket = order.tickets[0]?.url ?? order.links.find((l) => l.rel === 'ticket')?.url;
@@ -47,12 +48,12 @@ export function Headstone({
   return (
     <article
       className={cls}
-      aria-label={`Order ${order.id}: ${info.label}${drift ? `, ${DRIFT_INFO.label}` : ''}`}
+      aria-label={`Order ${order.id}: ${label}${drift ? `, ${DRIFT_INFO.label}` : ''}`}
       data-state={effective}
       data-drift={drift ? 'true' : 'false'}
     >
       <span className="state" data-testid="state-label">
-        {info.label}
+        {label}
       </span>
       {drift && (
         <span className="drift-label" data-testid="drift-label">

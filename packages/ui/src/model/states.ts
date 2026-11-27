@@ -38,6 +38,21 @@ export const STATE_INFO: Record<EffectiveStatus, StateInfo> = {
   },
 };
 
+/** The text that marks a state reached by a simulated (browser-only) action. */
+export const SIMULATED_MARK = 'simulated in this browser';
+
+/**
+ * The state label to show. A state set by a simulated Playground action always says so:
+ * "Approved (simulated in this browser): enforced". The real shipped state, and every state on
+ * the local board, shows the plain label.
+ */
+export function stateLabel(row: { effective: EffectiveStatus; simulated?: boolean }): string {
+  const label = STATE_INFO[row.effective].label;
+  if (!row.simulated) return label;
+  const i = label.indexOf(':');
+  return i < 0 ? `${label} (${SIMULATED_MARK})` : `${label.slice(0, i)} (${SIMULATED_MARK})${label.slice(i)}`;
+}
+
 export const DRIFT_INFO = {
   label: 'Differs from git',
   actions: ['view-diff', 'restore'] as ActionId[],

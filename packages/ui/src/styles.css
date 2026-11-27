@@ -1068,3 +1068,27 @@ textarea.code {
   margin: 24px 0 0;
   padding: 0;
 }
+
+/* /play first steps */
+.first-steps ol {
+  margin: 0 0 12px;
+  padding-left: 0;
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+.first-steps .step-note {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* Home: what is proven and what is pending */
+.evidence {
+  margin: 14px 0 0;
+  padding-left: 1.1rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+.evidence li + li {
+  margin-top: 6px;
+}

@@ -86,6 +86,9 @@ test('STATE-02: approved (simulated in this browser) is solid with Allow once / 
   await plot.locator('[data-action="approve"]').click();
   await expect(page.getByRole('status').filter({ hasText: 'approved (simulated)' })).toBeAttached();
   await expect(stone(page, 'approved')).toHaveClass(/solid/);
+  await expect(stone(page, 'approved').getByTestId('state-label')).toHaveText(
+    'Approved (simulated in this browser): enforced',
+  );
   const ap = plotOf(page, 'approved');
   for (const a of ['allow-once', 'edit', 'retire'])
     await expect(ap.locator(`[data-action="${a}"]`)).toBeVisible();
@@ -103,7 +106,9 @@ test('STATE-03: retired (simulated) is faded with Unretire, which returns it to 
   await page.goto('graveyard');
   await plotOf(page, 'draft').locator('[data-action="retire"]').click();
   await expect(stone(page, 'retired')).toHaveClass(/faded/);
-  await expect(stone(page, 'retired').getByTestId('state-label')).toHaveText('Retired');
+  await expect(stone(page, 'retired').getByTestId('state-label')).toHaveText(
+    'Retired (simulated in this browser)',
+  );
   await plotOf(page, 'retired').locator('[data-action="unretire"]').click();
   await expect(page.getByRole('status').filter({ hasText: 'unretired to draft' })).toBeAttached();
   await expect(page.locator('article.stone[data-state="draft"]')).toHaveCount(drafts);
@@ -316,4 +321,24 @@ test('polish: favicon, touch icon and social preview tags resolve to real files'
   const img = await request.get(new URL('og.png', new URL('./', page.url())).href);
   expect(img.status()).toBe(200);
   expect(img.headers()['content-type']).toContain('image/png');
+});
+
+test('polish: home claims are backed: the CLI block links its report; the live Kiro block is marked pending', {
+  tag: ['@polish', '@ROUTE-01', '@claims'],
+}, async ({ page }) => {
+  await page.goto('./');
+  const lede = page.locator('.hero .lede');
+  await expect(lede).not.toContainText('the hook blocks it');
+  const proven = page.getByTestId('home-evidence').locator('[data-status="proven"]');
+  await expect(proven).toContainText('real Django checkout');
+  const report = proven.getByRole('link', { name: 'reports/perf.md' });
+  await expect(report).toHaveAttribute('href', /\/blob\/main\/reports\/perf\.md$/);
+  // The linked file exists in this repository and records the block (exit 2) on that checkout.
+  const perf = readFileSync(fileURLToPath(new URL('../../../reports/perf.md', import.meta.url)), 'utf8');
+  expect(perf).toMatch(/Demo checkout:.*Django at the revert `43933a1dca`/);
+  expect(perf).toMatch(/\| Match \(block\) \| `fixtures\/hook-events\/reapply-43933a1dca\.json` \| 2 \|/);
+  const pending = page.getByTestId('home-evidence').locator('[data-status="pending"]');
+  await expect(pending).toContainText('Pending');
+  await expect(pending).toContainText('spike S1 and gate check 1b');
+  await expectNoAxeViolations(page);
 });
