@@ -1,0 +1,15 @@
+{
+  "hook_event_name": "PreToolUse",
+  "cwd": ".",
+  "session_id": "demo-session-1",
+  "tool_name": "str_replace",
+  "tool_input": {
+    "path": "django/db/models/sql/query.py",
+    "old_str": "    def clear_ordering(self, force=False, clear_default=True):\n        \"\"\"\n        Remove any ordering settings if the current query allows it without\n        side effects, set 'force' to True to clear the ordering regardless.\n        If 'clear_default' is True, there will be no ordering in the resulting\n        query (not even the model's default).\n        \"\"\"\n        if not force and (\n            self.is_sliced or self.distinct_fields or self.select_for_update\n        ):\n            return\n",
+    "new_str": "    def reset_ordering(self, force=False, clear_default=True):\n        \"\"\"\n        Remove any ordering settings if the current query allows it without\n        side effects, set 'force' to True to clear the ordering regardless.\n        If 'clear_default' is True, there will be no ordering in the resulting\n        query (not even the model's default).\n        \"\"\"\n        if not force and (\n            self.is_sliced\n            or self.distinct_fields\n            or self.select_for_update\n            or (\n                isinstance(self.group_by, tuple)\n                and not {*self.order_by, *self.extra_order_by}.issubset(self.group_by)\n            )\n        ):\n            return\n"
+  },
+  "_fixture": {
+    "provisional": "Kiro stdin field names are provisional until spike S2 freezes them (01-research.md: hook_event_name, cwd, session_id, tool_name, tool_input). cwd '.' resolves against the hook's working directory (the demo checkout).",
+    "expect": "block (exit 2): re-applies ea3a71c2d0, the change 43933a1dca reverted, in Query.clear_ordering"
+  }
+}
