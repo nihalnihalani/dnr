@@ -68,18 +68,18 @@ jobs:
           pnpm -F @dnr/playground exec playwright install --with-deps chromium
           pnpm -F @dnr/playground exec playwright test --grep @smoke --project=chromium
 
-  github-pages:
-    name: GitHub Pages mirror
+  # GitHub Pages: build and upload, deploy, then check the live site, as three jobs. Running
+  # deploy-pages in the job that uploaded the artifact failed intermittently with "No artifacts
+  # named github-pages" (actions/deploy-pages#451), four times on 2026-11-27. A separate deploy
+  # job is GitHub's own pattern and avoids that race.
+  github-pages-build:
+    name: GitHub Pages mirror (build)
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request'
     permissions:
       contents: read
-      pages: write
-      id-token: write
-      actions: read
-    environment:
-      name: github-pages
-      url: ${{ steps.pages.outputs.page_url }}
+    outputs:
+      entry: ${{ steps.entry.outputs.entry }}
     env:
       # Absolute URL for og:image and the canonical link (apps/playground/vite.config.ts).
       DNR_SITE_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
@@ -95,8 +95,8 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
-      # The mirror is served under /<repo>/ and ignores _headers (no custom CSP; GitHub's
-      # default application/wasm type applies).
+      # The mirror is served under /<repo>/ and ignores _headers (docs/architecture.md, "Hosted
+      # Playground headers"; GitHub's default application/wasm type applies).
       - name: Build for the /<repo>/ base path
         run: |
           pnpm -F @dnr/playground run build --base "/${{ github.event.repository.name }}/" --outDir dist-pages
@@ -109,42 +109,65 @@ jobs:
           for o in $(jq -r '.rows[].order.id' ../public/cases/graveyard.json); do routes="$routes orders/$o"; done
           for r in $routes; do mkdir -p "$r" && cp index.html "$r/index.html"; done
           echo "route pages: $routes"
+      - id: entry
+        name: Record the entry script of this build
+        run: echo "entry=$(grep -o 'assets/index-[A-Za-z0-9_-]*\.js' apps/playground/dist-pages/index.html | head -1)" >> "$GITHUB_OUTPUT"
       - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: apps/playground/dist-pages
-      # deploy-pages looks the artifact up by name right away, and the artifacts API can lag the
-      # upload: three runs on 2026-11-27 failed with "Found 0 artifact(s)" 0.4 s after the upload
-      # finalized (a re-run then found 2: the old attempt's and the new). Wait until it is listed.
-      - name: Wait until the Pages artifact is listed
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          for i in $(seq 1 30); do
-            n=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts?name=github-pages" --jq '.total_count')
-            if [ "$n" = "1" ]; then echo "listed after ${i} check(s)"; exit 0; fi
-            echo "listed: $n"; sleep 4
-          done
-          echo "::error::the github-pages artifact is not listed exactly once after 2 minutes"; exit 1
+
+  github-pages:
+    name: GitHub Pages mirror
+    runs-on: ubuntu-latest
+    needs: github-pages-build
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.pages.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.pages.outputs.page_url }}
+    steps:
       - id: pages
-        uses: actions/deploy-pages@v4
-      # Check the live site after each deploy (Pages can take a moment to serve the new build).
+        uses: actions/deploy-pages@v5
+
+  github-pages-live:
+    name: GitHub Pages mirror (live checks)
+    runs-on: ubuntu-latest
+    needs: [github-pages-build, github-pages]
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The hosted deep-link tests run a real local board from the workspace (built CLI and UI).
+      - run: pnpm build
+      # Pages can take a moment to serve the new build.
       - name: Wait for the new build to be served
         env:
-          PAGE_URL: ${{ steps.pages.outputs.page_url }}
+          PAGE_URL: ${{ needs.github-pages.outputs.page_url }}
+          WANT: ${{ needs.github-pages-build.outputs.entry }}
         run: |
-          want=$(grep -o 'assets/index-[A-Za-z0-9_-]*\.js' apps/playground/dist-pages/index.html | head -1)
           for i in $(seq 1 60); do
-            if curl -fsS "$PAGE_URL" | grep -q "$want"; then echo "live: $want"; exit 0; fi
+            if curl -fsS "$PAGE_URL" -o page.html && grep -q "$WANT" page.html; then echo "live: $WANT"; exit 0; fi
             sleep 5
           done
-          echo "::error::$PAGE_URL is not serving $want after 5 minutes"; exit 1
+          echo "::error::$PAGE_URL is not serving $WANT after 5 minutes"; exit 1
       - run: pnpm -F @dnr/playground exec playwright install --with-deps chromium firefox webkit
-      # The smoke test, every route's console, the 404 page and meta tags, and the hosted deep
-      # links (a real local board probed from the HTTPS page) on all three engines.
+      # The smoke test, every route's console, the 404 page, meta tags and WASM type, and the
+      # hosted deep links (a real local board probed from the HTTPS page) on all three engines.
       - name: Smoke and hosted checks against the live site
         env:
-          PLAYGROUND_URL: ${{ steps.pages.outputs.page_url }}
+          PLAYGROUND_URL: ${{ needs.github-pages.outputs.page_url }}
         run: pnpm -F @dnr/playground exec playwright test --grep "@smoke|@polish|@deeplink-hosted"
       - if: always()
         uses: actions/upload-artifact@v4
