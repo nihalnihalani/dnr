@@ -72,3 +72,30 @@ Results:
 - The warm match and fast-path rows are within their Phase 5 budgets, both close to the edge under this load.
 - **The index lookup path misses the 300 ms match budget when warm (p95 667 ms).** It parses C's and PR's unit material and every unit of the target file to score candidates. This is the hook's cost, so it is reported to the hook owner and not tuned here. An idle Linux CI run is still owed for all rows.
 - Before `5e640c6`, the same rename event scored `missing` and only warned: the hook never attached material, so the lookup never ran. Those timings are not reported, because they measured a path without the index.
+
+## P10-05 follow-up: the move/rename lookup after the C-side material cache (November 27, 2026)
+
+The warm index lookup missed the 300 ms match budget above. Two hook changes address it:
+- **C-side unit tokens are cached by content.** They are keyed by the sha256 of the C blob's text, the path, the qualname and the DNR version, in `$DNR_STATE_DIR/cache/c-units.json`. That is a protected path: write tools are denied, and guard-shell refuses shell writes to it. Every hit is checked: C_u must contain every token C added (the order's `A`), or the entry is ignored and the blob is parsed again (`prewrite.test.ts` › `§5.16: the C-side material is cached …, and a forged entry is ignored`). Residual risk: a forged entry that keeps every `A` token but changes the rest can still lower the rename similarity. It only affects this lookup, never the baseline or the proposed text.
+- **PR-side tokens come through the shared in-process UnitCache.** deriveStatus has already parsed the same snapshot text, so it is not parsed a second time.
+
+The lookup still runs only when a covered unit is missing from the proposed file (the material is built lazily), and it searches only the session's touched files plus the target.
+
+Measured with **hyperfine 2.0.0** (`-N --runs 30`, `--warmup 3`; cold uses `--warmup 1` and `--prepare "rm -rf $DNR_STATE_DIR"`). Each row runs **before and after in the same hyperfine invocation**, so both see the same load:
+- **before:** `origin/main` `bdf0e22`;
+- **after:** that commit plus this change.
+
+The checkout is the same `django-bench` checkout as above. Each build has its own `DNR_STATE_DIR`. Apple M4 Pro, Node v24.13.1, load average 6.7–10.1 (other agents' jobs were running). Raw JSON: `reports/perf-p10-05/c-cache-*.json`. Every run exited as expected: 2 (block) for rename and match, 0 for the fast path.
+
+| Case | Fixture | before p50 | before p95 | after p50 | after p95 | Target |
+|---|---|---|---|---|---|---|
+| Warm: rename + re-apply (index lookup, block) | `event-rename-reapply-43933a1dca.json` | 211.3 ms | 228.1 ms | 164.8 ms | **192.6 ms** | p95 < 300 ms |
+| Warm: match (block) | `reapply-43933a1dca.json` | 160.0 ms | 180.3 ms | 168.8 ms | 179.2 ms | p95 < 300 ms |
+| Warm: fast path | `uncovered.json` | 72.1 ms | 79.8 ms | 69.5 ms | 71.9 ms | p95 < 80 ms |
+| Cold: first write, rename + re-apply | `event-rename-reapply-43933a1dca.json` | 372.9 ms | 404.2 ms | 356.3 ms | 419.4 ms | < 2 s |
+
+Results:
+- The warm lookup path now costs about what a plain match does: p95 193 ms against 179 ms.
+- It is within the 300 ms match budget. Under the same load, the build before this change measured p95 228 ms, not the 667 ms of the heavier-loaded run above. That earlier figure was mostly machine load (14.3).
+- Cold rows are unchanged: the first write parses C's blob and fills the cache. The match and fast-path rows didn't regress.
+- An idle Linux CI run is still owed for all rows.

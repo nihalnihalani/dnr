@@ -122,6 +122,27 @@ describe('pre-write hook', () => {
     expect(plain.exitCode === 0 || plain.exitCode === 2).toBe(true);
   });
 
+  it('§5.16: the C-side material is cached by blob content in the state cache, and a forged entry is ignored', async () => {
+    fx = await revertFixture();
+    const renamed = AFTER.replace('def total(', 'def grand_total(');
+    const env = envFor(fx.repo);
+    const cacheFile = join(fx.repo.dir, '.dnr', 'cache', 'c-units.json');
+    expect((await runPreWrite(writeEvent(fx.repo, 'shop.py', renamed, 's-a'), { env })).exitCode).toBe(2);
+    const cached = JSON.parse(readFileSync(cacheFile, 'utf8')) as Record<string, string[]>;
+    const [key] = Object.keys(cached);
+    expect(Object.keys(cached)).toHaveLength(1);
+    expect(key).toContain('shop.py');
+    // Warm: same decision from the cache.
+    expect((await runPreWrite(writeEvent(fx.repo, 'shop.py', renamed, 's-b'), { env })).exitCode).toBe(2);
+    // Forged: tokens without C's added tokens are rejected, the blob is parsed again, and it still blocks.
+    writeFileSync(cacheFile, JSON.stringify({ [key as string]: ['def', 'x', '(', ')', ':', 'pass'] }));
+    const forged = await runPreWrite(writeEvent(fx.repo, 'shop.py', renamed, 's-c'), { env });
+    expect(forged.exitCode).toBe(2);
+    const ev = readEventsFile(fx.repo).at(-1) as EventRecord;
+    expect(ev.decision.outcome).toBe('block');
+    expect(JSON.parse(readFileSync(cacheFile, 'utf8'))[key as string]).toEqual(cached[key as string]);
+  });
+
   it('R2: a formatting-only edit of a covered unit never warns', async () => {
     fx = await revertFixture();
     const io = await runPreWrite(writeEvent(fx.repo, 'shop.py', COMMENT_ONLY), { env: envFor(fx.repo) });
