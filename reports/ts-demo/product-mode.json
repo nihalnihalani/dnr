@@ -1,0 +1,311 @@
+{
+  "ran_at": "2026-11-27T15:06:41.414Z",
+  "dnr": {
+    "bin": "~/Desktop/Github/dnr-work/dnr-prefix/bin/dnr",
+    "version": "0.1.0"
+  },
+  "node": "v24.13.1",
+  "repo": {
+    "url": "https://github.com/vitejs/vite",
+    "head": "dda2a82c357fee0d68b0c2e6f158041c340effa9",
+    "path_name": "vite"
+  },
+  "order": "dnr-afc44f0957",
+  "candidates": 39,
+  "steps": [
+    {
+      "cmd": "dnr init",
+      "via": "node-pty terminal",
+      "exit": 0,
+      "ms": 122
+    },
+    {
+      "cmd": "dnr scan",
+      "exit": 0,
+      "ms": 15091,
+      "out": "DNR: 39 revert(s) that change a py/ts unit, written to ~/Desktop/Github/dnr-work/vite/.dnr/candidates.json.\nNext: dnr orders build"
+    },
+    {
+      "cmd": "dnr orders build",
+      "via": "node-pty terminal",
+      "exit": 0,
+      "ms": 3145
+    },
+    {
+      "cmd": "dnr orders approve dnr-afc44f0957",
+      "via": "node-pty terminal",
+      "exit": 0,
+      "ms": 139
+    },
+    {
+      "cmd": "dnr check --stdin --hook kiro (reland, file by file)",
+      "writes": [
+        {
+          "file": "packages/vite/rolldown.dts.config.ts",
+          "attempt": 1,
+          "exit": 2,
+          "outcome": "warn_block",
+          "edit_score": 0.030303030303030304,
+          "ms": 236
+        },
+        {
+          "file": "packages/vite/rolldown.dts.config.ts",
+          "attempt": 2,
+          "exit": 0,
+          "outcome": "warn_pass",
+          "edit_score": 0.030303030303030304,
+          "ms": 154
+        },
+        {
+          "file": "packages/vite/src/node/plugin.ts",
+          "attempt": 1,
+          "exit": 0,
+          "outcome": "warn_pass",
+          "edit_score": 0.5454545454545454,
+          "ms": 160
+        },
+        {
+          "file": "packages/vite/src/node/build.ts",
+          "attempt": 1,
+          "exit": 2,
+          "outcome": "block",
+          "edit_score": 0.9696969696969697,
+          "ms": 174
+        }
+      ],
+      "stderr": "DNR: chore: revert \"fix(build): keep `magicString` and `ast` in transform hook meta (#24012)\" (#24065) https://github.com/vitejs/vite/commit/afc44f0957f7ef52d27d5026200a289de374c215\nDNR order dnr-afc44f0957 matched (edit 0.97 ≥ 0.60) in <module>, injectSsrFlag. Original: https://github.com/vitejs/vite/commit/a3b28e8744ffae9abd018696ad4fc01b27ac71ce. Ticket: https://github.com/vitejs/vite/issues/24012.\nThis change was tried and reverted. Do not re-apply it or route around this block. Tell the user. Only a human maintainer, not the agent, can approve a re-land: `dnr board --open dnr-afc44f0957` or `dnr allow dnr-afc44f0957`, which both need a terminal and refuse inside an agent session.\n"
+    },
+    {
+      "cmd": "dnr check --file (reland build.ts, other files re-applied)",
+      "exit": 1,
+      "decision": {
+        "edit_score": 0.9696969696969697,
+        "prox_score": null,
+        "outcome": "block",
+        "tier": "match",
+        "order_id": "dnr-afc44f0957",
+        "fired_by": "edit",
+        "breakdown": [
+          {
+            "order_id": "dnr-afc44f0957",
+            "edit": 0.9696969696969697,
+            "prox": null,
+            "wA": 33,
+            "wR": 0,
+            "iA": 32,
+            "iR": 0,
+            "two_sided": true,
+            "small": false,
+            "degraded": false,
+            "missing": false,
+            "stale": false,
+            "matched": true,
+            "changes_covered_unit": true,
+            "units": [
+              {
+                "file": "packages/vite/rolldown.dts.config.ts",
+                "qualname": "<module>",
+                "kind": "modified",
+                "wA": 2,
+                "wR": 0,
+                "iA": 1,
+                "iR": 0,
+                "proposed": "present",
+                "relocated_to": null,
+                "degraded": false,
+                "prox": null
+              },
+              {
+                "file": "packages/vite/src/node/build.ts",
+                "qualname": "injectSsrFlag",
+                "kind": "modified",
+                "wA": 14,
+                "wR": 0,
+                "iA": 14,
+                "iR": 0,
+                "proposed": "present",
+                "relocated_to": null,
+                "degraded": false,
+                "prox": null
+              },
+              {
+                "file": "packages/vite/src/node/plugin.ts",
+                "qualname": "<module>",
+                "kind": "modified",
+                "wA": 17,
+                "wR": 0,
+                "iA": 17,
+                "iR": 0,
+                "proposed": "present",
+                "relocated_to": null,
+                "degraded": false,
+                "prox": null
+              }
+            ]
+          }
+        ],
+        "reason_line": "DNR: chore: revert \"fix(build): keep `magicString` and `ast` in transform hook meta (#24012)\" (#24065) https://github.com/vitejs/vite/commit/afc44f0957f7ef52d27d5026200a289de374c215",
+        "fast_path": false,
+        "scope": "order",
+        "latency_ms": 18.123334
+      }
+    },
+    {
+      "cmd": "dnr check --file (hard negative)",
+      "exit": 0,
+      "decision": {
+        "edit_score": 0,
+        "prox_score": null,
+        "fired_by": null,
+        "breakdown": [
+          {
+            "order_id": "dnr-afc44f0957",
+            "edit": 0,
+            "prox": null,
+            "wA": 33,
+            "wR": 0,
+            "iA": 0,
+            "iR": 0,
+            "two_sided": true,
+            "small": false,
+            "degraded": false,
+            "missing": false,
+            "stale": false,
+            "matched": false,
+            "changes_covered_unit": false,
+            "units": [
+              {
+                "file": "packages/vite/rolldown.dts.config.ts",
+                "qualname": "<module>",
+                "kind": "modified",
+                "wA": 2,
+                "wR": 0,
+                "iA": 0,
+                "iR": 0,
+                "proposed": "present",
+                "relocated_to": null,
+                "degraded": false,
+                "prox": null
+              },
+              {
+                "file": "packages/vite/src/node/build.ts",
+                "qualname": "injectSsrFlag",
+                "kind": "modified",
+                "wA": 14,
+                "wR": 0,
+                "iA": 0,
+                "iR": 0,
+                "proposed": "present",
+                "relocated_to": null,
+                "degraded": false,
+                "prox": null
+              },
+              {
+                "file": "packages/vite/src/node/plugin.ts",
+                "qualname": "<module>",
+                "kind": "modified",
+                "wA": 17,
+                "wR": 0,
+                "iA": 0,
+                "iR": 0,
+                "proposed": "present",
+                "relocated_to": null,
+                "degraded": false,
+                "prox": null
+              }
+            ]
+          }
+        ],
+        "reason_line": null,
+        "outcome": "allow",
+        "tier": "none",
+        "order_id": null,
+        "fast_path": false,
+        "scope": "order",
+        "latency_ms": 12.533915999999977
+      }
+    },
+    {
+      "cmd": "dnr check --stdin --hook kiro (hard negative)",
+      "exit": 0,
+      "ms": 236
+    },
+    {
+      "cmd": "dnr export-case afc44f0957",
+      "exit": 0,
+      "ms": 285
+    }
+  ],
+  "doctor": [
+    "ok   node                     v24.13.1 (need ≥ 24)",
+    "ok   git                      git version 2.50.1 (Apple Git-155)",
+    "ok   grammars                 python, typescript and tsx load (ABI ok)",
+    "ok   hook dnr-pre-write       `~/.nvm/versions/node/v24.13.1/bin/node` resolves to ~/Desktop/Github/dnr-work/dnr-prefix/lib/node_modules/dnr-guard/dist/cli.js",
+    "ok   hook dnr-post-write      `~/.nvm/versions/node/v24.13.1/bin/node` resolves to ~/Desktop/Github/dnr-work/dnr-prefix/lib/node_modules/dnr-guard/dist/cli.js",
+    "ok   hook dnr-guard-shell     `~/.nvm/versions/node/v24.13.1/bin/node` resolves to ~/Desktop/Github/dnr-work/dnr-prefix/lib/node_modules/dnr-guard/dist/cli.js",
+    "ok   hook dnr-post-shell      `~/.nvm/versions/node/v24.13.1/bin/node` resolves to ~/Desktop/Github/dnr-work/dnr-prefix/lib/node_modules/dnr-guard/dist/cli.js",
+    "ok   hook dnr-stop-backstop   `~/.nvm/versions/node/v24.13.1/bin/node` resolves to ~/Desktop/Github/dnr-work/dnr-prefix/lib/node_modules/dnr-guard/dist/cli.js",
+    "ok   hook dnr-session-start   `~/.nvm/versions/node/v24.13.1/bin/node` resolves to ~/Desktop/Github/dnr-work/dnr-prefix/lib/node_modules/dnr-guard/dist/cli.js",
+    "ok   config                   mode enforce, decision_format deny",
+    "ok   board port               4317 is free",
+    "ok   bundle integrity         the bundle matches the sha256 recorded at dnr init",
+    "FAIL kiro permissions         DNR deny rules missing from ~/.kiro/settings/permissions.yaml: run dnr init (spike S17 verifies matching)",
+    "ok   kiro-cli                 kiro-cli 3.6.2 (need ≥ 3.4, 3.6 preferred)",
+    "FAIL kiro-cli login           kiro-cli 3.6.2 is installed but not logged in: run `kiro-cli login`"
+  ],
+  "expectations": [
+    {
+      "what": "dnr init (terminal) exits 0",
+      "ok": true
+    },
+    {
+      "what": "dnr scan exits 0",
+      "ok": true
+    },
+    {
+      "what": "scan finds R afc44f0957 → C a3b28e8744",
+      "ok": true
+    },
+    {
+      "what": "scan resolves packages/vite/src/node/build.ts:injectSsrFlag",
+      "ok": true
+    },
+    {
+      "what": "dnr orders build (terminal) exits 0",
+      "ok": true
+    },
+    {
+      "what": "orders build creates dnr-afc44f0957",
+      "ok": true
+    },
+    {
+      "what": "dnr orders approve dnr-afc44f0957 (terminal) exits 0",
+      "ok": true
+    },
+    {
+      "what": "PreToolUse hook blocks the full re-application at packages/vite/src/node/build.ts (exit 2, outcome block, names the order)",
+      "ok": true
+    },
+    {
+      "what": "the blocked write did not change the file",
+      "ok": true
+    },
+    {
+      "what": "dnr check --file: the re-application is a block",
+      "ok": true
+    },
+    {
+      "what": "dnr check --file: the hard negative is not blocked",
+      "ok": true
+    },
+    {
+      "what": "PreToolUse hook lets the hard negative through (exit 0)",
+      "ok": true
+    },
+    {
+      "what": "dnr export-case writes a valid CaseBundle",
+      "ok": true
+    }
+  ],
+  "ok": true
+}

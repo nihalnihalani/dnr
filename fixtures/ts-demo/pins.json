@@ -1,0 +1,16 @@
+{
+  "repo": "https://github.com/vitejs/vite",
+  "license": "MIT",
+  "R": "afc44f0957f7ef52d27d5026200a289de374c215",
+  "R_subject": "chore: revert \"fix(build): keep `magicString` and `ast` in transform hook meta (#24012)\" (#24065)",
+  "C": "a3b28e8744ffae9abd018696ad4fc01b27ac71ce",
+  "C_subject": "fix(build): keep `magicString` and `ast` in transform hook meta (#24012)",
+  "file": "packages/vite/src/node/build.ts",
+  "qualname": "injectSsrFlag",
+  "c_file_count": 4,
+  "demo_head": "dda2a82c357fee0d68b0c2e6f158041c340effa9",
+  "reland": "c0d590d697bb21530f687ea094a36c943620232c",
+  "hard_negative": "40475e51e785e470b09a67b23d66487649b32226",
+  "selection": "Phase 0: vitejs/vite checked first. `git log --no-merges -i --grep=revert` newest first on 2026-11-27 (vite main 7d0c054f4); the first entry, afc44f0957, reverts a3b28e8744, which changes the function injectSsrFlag in packages/vite/src/node/build.ts. vscode and vuejs/core were not needed.",
+  "demo_head_note": "The demo checkout is dda2a82c35, the parent of c0d590d697, which re-landed C unchanged (#24067). At dda2a82c35 the change is reverted; the reland's build.ts is a real re-application of C. hard_negative 40475e51e7 is a later real commit that edits build.ts outside injectSsrFlag."
+}

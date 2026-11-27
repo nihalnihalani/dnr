@@ -3,3 +3,4 @@ DNR includes or redistributes third-party material:
 - tree-sitter, tree-sitter-python, tree-sitter-typescript grammars (MIT). See vendor/grammars/PROVENANCE.md.
 - Excerpts of Django source code in fixtures and Playground cases (BSD-3-Clause, Copyright (c) Django Software Foundation and individual contributors).
 - axe-core (MPL-2.0), used only as a development dependency for accessibility tests.
+- Excerpts of Vite source code (packages/vite/src/node/build.ts, plugin.ts, rolldown.dts.config.ts at commits afc44f0957, a3b28e8744, c0d590d697) in the TypeScript demo case, fixtures/ts-demo/pins.json and reports/ts-demo/ (MIT, Copyright (c) 2019-present, VoidZero Inc. and Vite contributors). Repository: https://github.com/vitejs/vite.
