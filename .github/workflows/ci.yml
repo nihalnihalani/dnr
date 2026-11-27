@@ -64,6 +64,8 @@ jobs:
       - run: pnpm build
       - name: Pack, npm i -g into a fresh prefix, and test the installed dnr
         run: pnpm test:pack
+      - name: README Quick start install block, run exactly as written (audit P1)
+        run: bash scripts/check-readme-install.sh
 
   properties-nightly:
     name: property tests at 2,000 runs (nightly)

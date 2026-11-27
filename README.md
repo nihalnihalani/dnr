@@ -12,10 +12,17 @@ Built for Kiroween 2026 (Frankenstein category) with Kiro: specs, hooks, steerin
 
 ## Quick start
 
-Requires Node 24 or later, pnpm 10, git, and Kiro CLI 3.4 or later. The npm package is not published yet, so build and link `dnr` from source:
+Requires Node 24 or later, pnpm 10, git, and Kiro CLI 3.4 or later. The npm package is not published yet, so build it from a clone of this repository and install the tarball (CI runs this block exactly, from this README: `scripts/check-readme-install.sh`):
+
+<!-- readme-install -->
+```bash
+pnpm install --frozen-lockfile && pnpm build && pnpm -F dnr-guard pack && npm install -g ./dnr-guard-*.tgz
+```
+<!-- /readme-install -->
+
+Once `dnr-guard` is published, this becomes `npm i -g dnr-guard`. Then, in your own repository:
 
 ```bash
-pnpm install --frozen-lockfile && pnpm build && pnpm -C packages/cli link --global
 cd your-repo
 dnr init            # hooks in .kiro/hooks/, .dnr/config.json, pre-commit shim, steering
 dnr scan            # find reverts in your history

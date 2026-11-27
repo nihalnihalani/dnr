@@ -12,7 +12,7 @@
     "PATH": "/home/node/.local/share/pnpm:/home/node/.local/bin:${containerEnv:PATH}"
   },
   "onCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends jq && curl -LsSf https://astral.sh/uv/install.sh | sh && curl -fsSL https://cli.kiro.dev/install | bash",
-  "postCreateCommand": "sudo corepack enable && pnpm install --frozen-lockfile && pnpm build && (pnpm -C packages/cli link --global || echo 'dnr is not linkable yet: packages/cli has no bin until Phase 2')",
+  "postCreateCommand": "sudo corepack enable && pnpm install --frozen-lockfile && pnpm build && pnpm -F dnr-guard pack && npm install -g ./dnr-guard-*.tgz && rm -f ./dnr-guard-*.tgz && dnr --version",
   "postAttachCommand": "echo 'Next: dnr doctor, then scripts/demo/make-demo-checkout.sh and kiro-cli login (README#testing)'",
   "forwardPorts": [4317],
   "portsAttributes": {
