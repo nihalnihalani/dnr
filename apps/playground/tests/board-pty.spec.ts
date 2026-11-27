@@ -9,14 +9,12 @@
  *   the exact command `.kiro/hooks/` registers, with no TTY (as Kiro runs hooks);
  * - the browser is driven only through the board UI.
  *
- * The one thing replaced is the OS "open in browser" helper (`open` / `xdg-open`): a script on
- * PATH records the file `dnr board` asks it to open, and Playwright's browser opens that file
- * instead of the desktop browser. Everything after that is the real launch: one-shot file →
- * single-use nonce → session ticket → cookie.
+ * `dnr board --no-open` prints the path of its one-shot launch file instead of starting the
+ * desktop browser (as over SSH); Playwright's browser opens that file. Everything after that is the
+ * real launch: one-shot file → single-use nonce → session ticket → cookie.
  */
 import { spawn } from 'node:child_process';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { expect, type Page, test } from '@playwright/test';
@@ -38,7 +36,6 @@ interface Launched {
 }
 
 let live: Launched | null = null;
-let shim: string | null = null;
 
 test.afterEach(async () => {
   if (live) {
@@ -52,9 +49,7 @@ test.afterEach(async () => {
     } catch {}
     repo.dispose();
   }
-  if (shim) rmSync(shim, { recursive: true, force: true });
   live = null;
-  shim = null;
 });
 
 async function waitFor<T>(what: string, fn: () => T | undefined | null | false, ms = 30_000): Promise<T> {
@@ -77,21 +72,13 @@ async function launchInPty(
   const { spawn: ptySpawn } = await import('node-pty');
   const repo = await RealRepo.create();
   await prepare?.(repo);
-  shim = mkdtempSync(join(tmpdir(), 'dnr-opener-'));
-  const opened = join(shim, 'opened.txt');
-  for (const name of ['open', 'xdg-open']) {
-    const f = join(shim, name);
-    writeFileSync(f, `#!/bin/sh\nprintf '%s' "$1" > '${opened}'\n`);
-    chmodSync(f, 0o755);
-  }
   const env: Record<string, string> = {};
   for (const [k, v] of Object.entries(repo.env)) if (v !== undefined) env[k] = v;
-  env.PATH = `${shim}:${process.env.PATH ?? ''}`;
   env.PS1 = '$ ';
   env.TERM = 'xterm-256color';
   const pty = ptySpawn('bash', ['--noprofile', '--norc', '-i'], {
     name: 'xterm-256color',
-    cols: 160,
+    cols: 500,
     rows: 40,
     cwd: repo.dir,
     env,
@@ -101,16 +88,17 @@ async function launchInPty(
     out += d;
   });
   const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
-  pty.write(`${q(process.execPath)} ${q(CLI)} board --port 0 ${args.map(q).join(' ')}\r`);
+  pty.write(`${q(process.execPath)} ${q(CLI)} board --port 0 --no-open ${args.map(q).join(' ')}\r`);
   const port = await waitFor('the board to start', () => {
     if (/Only a human maintainer|DNR: /.test(out) && !/DNR board on/.test(out))
       throw new Error(`dnr board refused or failed:\n${out}`);
     const m = out.match(/DNR board on http:\/\/[^:\s]+:(\d+)/);
     return m ? Number(m[1]) : null;
   });
-  const file = await waitFor('dnr board to open the browser', () =>
-    existsSync(opened) ? readFileSync(opened, 'utf8') : null,
-  );
+  const file = await waitFor('dnr board to print its launch file', () => {
+    const m = out.match(/Open this file in your browser to sign in: (\S+\.html)/);
+    return m?.[1] && existsSync(m[1]) ? m[1] : null;
+  });
   await page.goto(pathToFileURL(file).href);
   live = { repo, pty, port, screen: () => out };
   return live;
