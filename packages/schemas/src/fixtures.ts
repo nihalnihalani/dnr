@@ -30,10 +30,11 @@ export const Pins = z.strictObject({
       c_file_count: z.number().int(),
     }),
   ),
-  model: z.string(),
-  model_cutoff: z.strictObject({ date: z.string(), source_url: z.string().url() }), // from the provider's model card
+  // null = pending: P0-04 picks the model with `kiro-cli chat --list-models` (a real run refuses null).
+  model: z.string().min(1).nullable(),
+  model_cutoff: z.strictObject({ date: z.string(), source_url: z.string().url() }).nullable(), // from the provider's model card
   kiro_cli_version: z.string(),
-  npm_package: z.string(),
+  npm_package: z.string().min(1).nullable(), // null = pending: P0-29, the maintainer decides the name
   syn_fork_base: Sha40.nullable(),
   docker_images: z.record(z.string(), z.string()),
   tools: z.record(z.string(), z.string()),

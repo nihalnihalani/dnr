@@ -105,6 +105,13 @@ describe('Pins (strict fixture schema)', () => {
     expect(Pins.safeParse({ ...pins, extra: 1 }).success).toBe(false);
     expect(Pins.safeParse({ ...pins, demo_cases: [{ ...pins.demo_cases[0], typo: 1 }] }).success).toBe(false);
   });
+  it('P0-16: records human-pending pins as null, never as an empty string', () => {
+    const pending = { ...pins, model: null, model_cutoff: null, npm_package: null };
+    expect(Pins.safeParse(pending).success).toBe(true);
+    expect(Pins.safeParse({ ...pins, model: '' }).success).toBe(false);
+    expect(Pins.safeParse({ ...pins, npm_package: '' }).success).toBe(false);
+    expect(Pins.safeParse({ ...pins, tools: undefined }).success).toBe(false);
+  });
 });
 
 describe('Grant.origin (optional, wave-2 C3/H4)', () => {

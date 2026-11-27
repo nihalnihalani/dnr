@@ -13,6 +13,8 @@ import {
   Candidate,
   DiscussionFile,
   DjangoPython,
+  EnvMatrix,
+  Flaky,
   KnownReverts,
   KnownRevertsRejected,
   Pins,
@@ -55,12 +57,18 @@ describe('fixtures (required)', () => {
   });
 });
 
-describe('fixtures (scheduled later)', () => {
-  // §4 Pins: pins.json is written at the end of Phase 0, once P0-04 has chosen the model with
-  // `kiro-cli chat --list-models`. Delete this skipIf when that lands; from then on it is required.
-  const pins = join(root, 'pins.json');
-  it.skipIf(!existsSync(pins))(
-    'pins.json validates [SKIPPED until Phase 0 P0-04 records the model pin; required after]',
-    () => validate('pins.json', Pins),
-  );
+describe('fixtures (Phase 0 and Phase 3)', () => {
+  // P0-16: pins.json is required from Phase 0. Pins a person or Kiro still decides (model, npm name)
+  // are null until then, never a placeholder string.
+  it('P0-16 pins.json validates', () => validate('pins.json', Pins));
+  // P3-14 / P3-15: written by `dnr trial envs`; required once that has run.
+  for (const [file, schema] of [
+    ['env-matrix.json', EnvMatrix],
+    ['flaky.json', Flaky],
+  ] as const) {
+    it.skipIf(!existsSync(join(root, file)))(
+      `${file} validates [skipped until dnr trial envs writes it]`,
+      () => validate(file, schema),
+    );
+  }
 });

@@ -1,0 +1,52 @@
+{
+  "django_sha": "f0e7bd90884b5da0a7418f3c78d1fd309c905014",
+  "second_repo": null,
+  "second_sha": null,
+  "ts_demo": null,
+  "demo_cases": [
+    {
+      "R": "43933a1dca07047e95ec990d9289d0212668009e",
+      "C": "ea3a71c2d09f8281d8a50ed20e40e1fb13db5cd9",
+      "file": "django/db/models/sql/query.py",
+      "qualname": "Query.clear_ordering",
+      "c_file_count": 2
+    },
+    {
+      "R": "d0e4dd5cdd743a5c43c4ccc2c8fa29d3982eaa71",
+      "C": "0246f478882c26bc1fe293224653074cd46a90d0",
+      "file": "django/utils/crypto.py",
+      "qualname": "constant_time_compare",
+      "c_file_count": 9
+    }
+  ],
+  "model": null,
+  "model_cutoff": null,
+  "kiro_cli_version": "3.6.2",
+  "npm_package": null,
+  "syn_fork_base": null,
+  "docker_images": {
+    "python:3.5-slim": "python:3.5-slim@sha256:2348c9c9fa90808066919c036d59919fbf82c7f9277c2ff8b6b8cc6e72f5b9d7",
+    "python:3.6-slim": "python:3.6-slim@sha256:2cfebc27956e6a55f78606864d91fe527696f9e32a724e6f9702b5f9602d0474",
+    "python:3.7-slim": "python:3.7-slim@sha256:b53f496ca43e5af6994f8e316cf03af31050bf7944e0e4a308ad86c001cf028b"
+  },
+  "tools": {
+    "node": "v24.13.1",
+    "pnpm": "10.23.0",
+    "uv": "0.9.26",
+    "python": "cpython 3.10.19, 3.12.12, 3.13.11 (uv-managed); 3.11.14, 3.14.3 (Homebrew); 3.9.6 (system)",
+    "hyperfine": "2.0.0",
+    "ast-grep": "0.51.3",
+    "git": "2.50.1 (Apple Git-155)",
+    "gh": "2.89.0",
+    "jq": "1.7.1-apple",
+    "openssl": "4.1.0",
+    "rsync": "openrsync, protocol version 29",
+    "ffprobe": "8.0.1",
+    "lhci": "0.16.1",
+    "ruff": "0.15.0",
+    "biome": "2.6.9",
+    "typescript": "5.9.3",
+    "docker": "client 24.0.7, server 28.4.0 (colima 0.9.1, limactl 2.0.2)",
+    "cpython_build_toolchain": "DEVELOPER_DIR=/Library/Developer/CommandLineTools (ld-27106.1, MacOSX27.2.sdk); Xcode's ld-1267 cannot link against SDK 27.2"
+  }
+}
