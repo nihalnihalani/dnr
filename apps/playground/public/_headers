@@ -1,5 +1,6 @@
-# Cloudflare Pages headers (plan §10). `vite preview` applies this file too (vite.config.ts), so
-# the e2e suite runs under this CSP. The GitHub Pages mirror ignores it (docs/architecture.md).
+# Response-header policy (plan §10). `vite preview` applies this file (vite.config.ts), so the
+# e2e suite runs under this CSP. GitHub Pages, the hosted site, ignores it, so the build also
+# writes this CSP into every HTML page as a <meta> tag (metaCsp; docs/architecture.md).
 /*
   Content-Security-Policy: default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' https://raw.githubusercontent.com http://127.0.0.1:* http://*.localhost:*; worker-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
   X-Content-Type-Options: nosniff

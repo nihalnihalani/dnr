@@ -124,8 +124,7 @@ function inlineCss(): Plugin {
 
 /**
  * Social preview and canonical tags. og:image must be an absolute URL, so the site URL comes from
- * DNR_SITE_URL (set per deploy target in deploy-playground.yml), defaulting to the live GitHub
- * Pages mirror. og.png is a real screenshot of /play (scripts/capture-og.ts).
+ * DNR_SITE_URL (set in deploy-playground.yml), defaulting to the live GitHub Pages site. og.png is a real screenshot of /play (scripts/capture-og.ts).
  */
 function socialMeta(): Plugin {
   const site = (process.env.DNR_SITE_URL ?? 'https://nihalnihalani.github.io/dnr/').replace(/\/?$/, '/');
@@ -155,13 +154,13 @@ function socialMeta(): Plugin {
   };
 }
 
-/** One `_headers` rule (Cloudflare Pages format): a path pattern and the headers it sets. */
+/** One `_headers` rule (the Netlify/Cloudflare Pages format): a path pattern and the headers it sets. */
 interface HeaderRule {
   re: RegExp;
   headers: Array<[string, string]>;
 }
 
-/** Parse Cloudflare Pages `_headers`: `*` is a splat, `:name` a path segment. */
+/** Parse `_headers`: `*` is a splat, `:name` a path segment. */
 export function parseHeaders(text: string): HeaderRule[] {
   const rules: HeaderRule[] = [];
   for (const raw of text.split('\n')) {
@@ -183,9 +182,9 @@ export function parseHeaders(text: string): HeaderRule[] {
 }
 
 /**
- * `vite preview` applies public/_headers exactly as Cloudflare Pages does (every matching rule
- * applies; a header set by several rules is joined with ", "). So the e2e suite runs under the
- * production CSP, and P7-09 checks real response headers.
+ * `vite preview` applies public/_headers as a header-capable static host would (every matching
+ * rule applies; a header set by several rules is joined with ", "). So the e2e suite runs under
+ * the full policy, frame-ancestors included, and P7-09 checks real response headers.
  */
 function previewHeaders(): Plugin {
   return {
@@ -193,7 +192,7 @@ function previewHeaders(): Plugin {
     configurePreviewServer(server) {
       const rules = parseHeaders(readFileSync(resolve(here, 'public/_headers'), 'utf8'));
       const outDir = resolve(here, server.config.build.outDir);
-      // Like GitHub Pages and Cloudflare Pages: /play/<id> is served from play/<id>/index.html when
+      // Like GitHub Pages: /play/<id> is served from play/<id>/index.html when
       // the build has one (playRoutePages), before the SPA fallback.
       server.middlewares.use((req, _res, next) => {
         const [path, query] = (req.url ?? '/').split('?') as [string, string?];
@@ -208,7 +207,7 @@ function previewHeaders(): Plugin {
         for (const r of rules)
           if (r.re.test(path))
             for (const [k, v] of r.headers) set.set(k, set.has(k) ? `${set.get(k)}, ${v}` : v);
-        // Set after Vite picks its own type, so _headers wins (as on Cloudflare).
+        // Set after Vite picks its own type, so _headers wins.
         const writeHead = res.writeHead.bind(res);
         res.writeHead = ((status: number, ...rest: unknown[]) => {
           for (const [k, v] of set) res.setHeader(k, v);
@@ -227,6 +226,43 @@ function previewHeaders(): Plugin {
   };
 }
 
+/** Directives a browser ignores (and warns about) when the CSP arrives in a `<meta>` tag. */
+const META_IGNORED = new Set(['frame-ancestors', 'report-uri', 'report-to', 'sandbox']);
+
+/** The `/*` rule's Content-Security-Policy from `_headers`, minus what `<meta>` cannot carry. */
+export function metaCspFrom(headersText: string): string {
+  const all = parseHeaders(headersText).find((r) => r.re.test('/') && r.re.test('/play/x'));
+  const csp = all?.headers.find(([k]) => k.toLowerCase() === 'content-security-policy')?.[1];
+  if (!csp) throw new Error('public/_headers has no Content-Security-Policy on /*');
+  return csp
+    .split(';')
+    .map((d) => d.trim())
+    .filter((d) => d && !META_IGNORED.has(d.split(/\s+/)[0]?.toLowerCase() ?? ''))
+    .join('; ');
+}
+
+/**
+ * GitHub Pages, the hosted site, cannot set response headers, so every built HTML page carries
+ * the `_headers` CSP as a `<meta http-equiv>` tag right after the charset, ahead of any script
+ * (frame-ancestors cannot be sent this way). Under `vite preview` and `dnr board` the header
+ * policy applies too; both are enforced, so the stricter of each directive wins.
+ */
+function metaCsp(): Plugin {
+  const csp = metaCspFrom(readFileSync(resolve(here, 'public/_headers'), 'utf8'));
+  return {
+    name: 'dnr-meta-csp',
+    apply: 'build',
+    transformIndexHtml: (html) => {
+      if (!html.includes('<meta charset="utf-8" />'))
+        throw new Error('index.html: no <meta charset> to anchor the CSP');
+      return html.replace(
+        '<meta charset="utf-8" />',
+        `<meta charset="utf-8" />\n    <meta http-equiv="Content-Security-Policy" content="${csp}" />`,
+      );
+    },
+  };
+}
+
 /**
  * Which optional data files this build ships. The app fetches only these, so a deploy without a
  * trial, a prereg tag or a CLI capture makes no requests that 404 (static hosts log those as
@@ -239,7 +275,16 @@ const shipped = {
 };
 
 export default defineConfig({
-  plugins: [react(), socialMeta(), previewHeaders(), trialData(), packCases(), inlineCss(), playRoutePages()],
+  plugins: [
+    react(),
+    metaCsp(),
+    socialMeta(),
+    previewHeaders(),
+    trialData(),
+    packCases(),
+    inlineCss(),
+    playRoutePages(),
+  ],
   define: { __DNR_DATA__: JSON.stringify(shipped) },
   build: {
     target: 'es2022',

@@ -17,7 +17,7 @@ export interface CaseIndexEntry {
 
 export interface AppConfig {
   mode: 'playground' | 'board';
-  /** Base path the app is served under ('/' on Cloudflare, '/<repo>/' on the GitHub Pages mirror). */
+  /** Base path the app is served under ('/' locally and on the board, '/<repo>/' on GitHub Pages). */
   base: string;
   adapter: DataAdapter;
   /** The Playground's localStorage adapter (also used by /play on the board, which never touches the API). */

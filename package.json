@@ -13,7 +13,8 @@
     "test:fixtures": "vitest run --project fixtures",
     "test:pack": "vitest run --project pack",
     "lint": "biome check .",
-    "format": "biome format --write ."
+    "format": "biome format --write .",
+    "postinstall": "node scripts/fix-node-pty.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.9",

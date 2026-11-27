@@ -286,7 +286,7 @@ test('polish: unknown routes get the 404 page with ways back; static hosts answe
   tag: ['@polish', '@not-found'],
 }, async ({ page }) => {
   const res = await page.goto('no-such-page');
-  // The GitHub Pages mirror serves 404.html with status 404; vite preview falls back with 200.
+  // GitHub Pages serves 404.html with status 404; vite preview falls back with 200.
   if (isRemote) expect(res?.status()).toBe(404);
   await expect(page.getByTestId('not-found')).toContainText('404 · page not found');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Nothing buried here');

@@ -19,12 +19,13 @@ const ENFORCED = new Set(['approved', 'stale', 'relanded', 'violated']);
 
 export const NONCE_TTL_MS = 60_000;
 export const TICKET_TTL_MS = 60_000;
-export const DEFAULT_PLAYGROUND_ORIGIN = 'https://dnr-playground.pages.dev';
+export const DEFAULT_PLAYGROUND_ORIGIN = 'https://nihalnihalani.github.io';
 /**
  * Hosted Playground origins whose `/orders/:id?board=<port>` view may probe `/api/health` (§10):
- * the Cloudflare Pages site and its GitHub Pages mirror. Health returns only `{origin, version}`.
+ * the GitHub Pages site only. Health returns only `{origin, version}`. The Cloudflare Pages
+ * origin was dropped with that deploy: a project name nobody holds must never be trusted.
  */
-export const DEFAULT_PLAYGROUND_ORIGINS = [DEFAULT_PLAYGROUND_ORIGIN, 'https://nihalnihalani.github.io'];
+export const DEFAULT_PLAYGROUND_ORIGINS = [DEFAULT_PLAYGROUND_ORIGIN];
 
 export const CSP =
   "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +

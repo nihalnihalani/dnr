@@ -68,7 +68,7 @@ Only findings that came up while building go here, each linked to its evidence.
 
 ## 6. Try it
 
-- **Hosted Playground:** https://nihalnihalani.github.io/dnr/ (GitHub Pages mirror, deployed from `main` by `.github/workflows/deploy-playground.yml`).
+- **Hosted Playground:** https://nihalnihalani.github.io/dnr/ (GitHub Pages, deployed from `main` by `.github/workflows/deploy-playground.yml`).
 - **The real hook offline:** `dnr demo --live` ([docs/testing.md](testing.md)).
 - **Your repository:** `dnr init`, built from source until the npm package is published. The package name is **pending** (Phase 0, `fixtures/pins.json`).
 

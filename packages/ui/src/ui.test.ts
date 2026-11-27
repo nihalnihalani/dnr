@@ -163,7 +163,7 @@ describe('case packing', () => {
   });
 });
 
-describe('router base path (GitHub Pages mirror)', () => {
+describe('router base path (GitHub Pages)', () => {
   it('ROUTE-1: a trailing slash added by a static host resolves to the same route', async () => {
     const { strip, match } = await import('./app/router');
     expect(strip('/dnr/', '/dnr/graveyard/')).toBe('/graveyard');

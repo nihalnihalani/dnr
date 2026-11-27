@@ -21,7 +21,8 @@ if (!existsSync(`${uiFrom}index.html`)) {
   process.exit(1);
 }
 rmSync(uiTo, { recursive: true, force: true });
-// `_headers` is a Cloudflare Pages file and robots.txt is for the hosted site; the board ignores both.
+// `_headers` is the static-host header file and robots.txt is for the hosted site; the board sets its
+// own headers and ignores both.
 cpSync(uiFrom, uiTo, {
   recursive: true,
   filter: (src) => !/[\\/](_headers|robots\.txt)$/.test(src),

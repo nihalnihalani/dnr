@@ -170,7 +170,7 @@ Tasks follow the build phases in plan §13.1, in dependency order. Run them one 
   - [x] 6.3 Routes `/`, `/play/:case` (presets and free edit), `/graveyard`, `/orders/:id`, `/orders/view` with Zod validation and error state
     - _Requirements: DC18, R14_
     - commit: 2a25cff
-  - [ ] 6.4 Deploy to Cloudflare Pages from `main` (GitHub Pages mirror); smoke test passes on the preview URL
+  - [ ] 6.4 Deploy to GitHub Pages from `main` (the one host; Cloudflare dropped 2026-11-28); smoke test passes on the live URL
     - _Requirements: DC18_
     - commit:
   - [ ] 6.5 P9 parity on Chromium, Firefox, WebKit; axe 0 violations

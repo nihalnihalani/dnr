@@ -20,7 +20,7 @@ export interface StartBoardOptions {
   host?: 'auto' | '127.0.0.1';
   /** --open <id>: after launch, land on /orders/<id>. */
   openOrder?: string;
-  /** Default: the Cloudflare Pages site and the GitHub Pages mirror (DEFAULT_PLAYGROUND_ORIGINS). */
+  /** Default: the GitHub Pages site (DEFAULT_PLAYGROUND_ORIGINS). */
   playgroundOrigin?: string | string[];
   /** Built UI; default = DEFAULT_STATIC_DIR. */
   staticDir?: string;

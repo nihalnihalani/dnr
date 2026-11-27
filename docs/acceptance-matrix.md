@@ -67,8 +67,8 @@ Placeholders: `$ROOT` = this repo, `$DJ` = `$DJANGO_SRC`, `$TR` = `$TRIAL_ROOT`,
 | P0-04 | 0 | Model chosen from the CLI list and pinned | `kiro-cli chat --list-models --format json` ; `jq -e '.model != ""' fixtures/pins.json` | kiro | needs-kiro | open |
 | P0-05 | 0 | Headless login works with an API key and an empty HOME | `HOME=$(mktemp -d) KIRO_API_KEY=… kiro-cli chat --v3 --no-interactive "say hi"` exits 0 | user | needs-user | open |
 | P0-06 | 0 | Public GitHub repo `dnr`, MIT detected; first commit holds product.md, LICENSE, NOTICE | `gh repo view dnr --json licenseInfo -q .licenseInfo.key` = `mit` ; `git show --stat $(git rev-list --max-parents=0 HEAD)` | user | needs-user | **proven** — `gh`: nihalnihalani/dnr public, license mit (check.sh SUB-02) |
-| P0-07 | 0 | Cloudflare token (Pages: Edit), project `dnr-playground`, both secrets in repo | `npx wrangler pages project list` lists it ; `gh secret list` shows `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | user | needs-user | open |
-| P0-08 | 0 | GitHub Pages mirror enabled (workflow build) | `gh api repos/<you>/dnr/pages -q .build_type` = `workflow` | user | needs-user | **proven** — live https://nihalnihalani.github.io/dnr/ (deploy-playground Pages jobs green) |
+| P0-07 | 0 | ~~Cloudflare token, project `dnr-playground`, both secrets~~ Dropped 2026-11-28: GitHub Pages is the one host (plan §10 amendment) | `grep -ci cloudflare .github/workflows/*.yml` = 0 | user | — | **dropped** — user chose GitHub Pages only (2026-11-28) |
+| P0-08 | 0 | GitHub Pages enabled (workflow build) | `gh api repos/<you>/dnr/pages -q .build_type` = `workflow` | user | needs-user | **proven** — live https://nihalnihalani.github.io/dnr/ (deploy-playground Pages jobs green) |
 | P0-09 | 0 | `SECOND_SRC` CPython clone builds and a test passes | in `$SECOND_SRC`: `./configure && make -j && ./python.exe -m test test_os` | mining | local | **proven** — CPython built (docs/spikes.md P0-09) |
 | P0-10 | 0 | Node 24 active (not 25/26) | `node -v` starts `v24.` (today: `v25.2.1`, fails) | kiro | local | open — local Node v25.2.1; engines now `>=24 <27` |
 | P0-11 | 0 | pnpm, uv, Python present | `pnpm -v` ; `uv --version` ; `uv python list` | kiro | local | open |
@@ -248,8 +248,8 @@ Run with `DNR_ORDERS=$ROOT/reports/orders`, `cwd=DEMO`.
 | P7-05 | 7 | `/orders/view` renders a committed `django-demo-crew` order; Zod-invalid file shows the error state | `playwright test --grep @ROUTE-orders-view` | ui | needs-user | open |
 | P7-06 | 7 | P9 parity on Chromium, Firefox, WebKit | `pnpm -F @dnr/playground exec playwright test --grep @P9 --project=chromium --project=firefox --project=webkit` | ui | local | partial — passes on Firefox and WebKit, but compares UI engine to itself, not to the hook (M2) |
 | P7-07 | 7 | axe: 0 violations | `playwright test --grep @axe` | ui | local | **proven** — `routes.spec.ts` › A11Y-01 axe 0 on every route (Firefox, WebKit) |
-| P7-08 | 7 | Deployed to Cloudflare Pages from `main`; smoke passes on the preview URL | `gh run list -w deploy-playground.yml -L1` success ; `PLAYGROUND_URL=<preview> playwright test --grep @smoke` | ui | needs-user | partial — GitHub Pages live; Cloudflare job fails without secrets (see review-production P7) |
-| P7-09 | 7 | `_headers`: WASM as `application/wasm`; CSP with `'wasm-unsafe-eval'` and the stated `connect-src` | `grep -n wasm-unsafe-eval apps/playground/public/_headers` ; `curl -sI <url>/…wasm \| grep -i content-type` | ui | local | open |
+| P7-08 | 7 | Deployed to GitHub Pages from `main`; smoke passes on the live URL | `gh run list -w deploy-playground.yml -L1` success ; `PLAYGROUND_URL=https://nihalnihalani.github.io/dnr/ playwright test --grep @smoke` | ui | local | **proven** — deploy-playground "GitHub Pages (live checks)" runs smoke, polish and hosted deep links on 3 engines against the live URL |
+| P7-09 | 7 | `_headers`: WASM as `application/wasm`; CSP with `'wasm-unsafe-eval'` and the stated `connect-src` | `pnpm -F @dnr/playground exec playwright test --grep @P7-09` | ui | local | **proven** — `headers.spec.ts` › P7-09 checks the real response headers under `vite preview`, no CSP violations |
 
 ## Phase 8: Drafter
 
@@ -568,7 +568,8 @@ Each command exists, prints help, and returns 64 on bad usage. Behavioural check
 | AUTH-07 | 12 | Mutating route without `X-DNR-CSRF: 1` → 403 | `-t 'AUTH-07:'` | ui | local | **proven** — `board.test.ts` |
 | AUTH-08 | 12 | Nonce never printed or written to stderr | `dnr board 2>&1 \| grep -c 'n='` = 0 | ui | local | partial — off argv; 0600 temp file readable by same user (see review-wave3-security N7) |
 | AUTH-09 | 12 | R7: board's live port in `$DNR_STATE_DIR/board.json` covered by guard-shell; other localhost ports allowed | `pnpm test -t 'R7 port:'` | hook | local | **proven** — `shell.test.ts` › R7 port |
-| DEPLOY-01 | 7 | GitHub Pages mirror serves WASM (no custom CSP) | `curl -sI https://<you>.github.io/dnr/… \| grep application/wasm` | ui | needs-user | **proven** — live site serves the app and WASM (review) |
+| DEPLOY-01 | 7 | GitHub Pages serves WASM as `application/wasm` | `curl -sI https://<you>.github.io/dnr/… \| grep application/wasm` | ui | needs-user | **proven** — live site serves the app and WASM (review) |
+| DEPLOY-02 | 7 | Every built page carries the `_headers` CSP as a `<meta>` tag (no `frame-ancestors`), ahead of any script; the engine runs under it with no violations, locally and on the live site | `pnpm -F @dnr/playground exec playwright test --grep @DEPLOY-02` (and with `PLAYGROUND_URL`) | ui | local | **proven** locally (Chromium); the live check runs in deploy-playground "GitHub Pages (live checks)" |
 
 ## Kiro artifacts (05 §12.2–12.5)
 
@@ -688,7 +689,7 @@ The plan has 447 checks and 8 days. These are the 14 links whose failure sinks t
 | 6 | Hook path: `dnr check --stdin --hook kiro` exits 2 with the §6 stderr; temp-index baseline; `dnr init --hooks pre-write`; fail-open | P5-01, P5-07, P5-12, REQ-R1, REQ-R7 | local (+S2) | Sun Nov 29 |
 | 7 | **Gate check 1b: a live headless Kiro block** on `../django-demo` with HEAD and tree unchanged. Without this there is no product, and the video's 0:12–0:19 slot is empty | GATE-1b, GATE-1a | needs-kiro | **Mon Nov 30** |
 | 8 | **Credits in hand** (granted or a paid plan bought); budget fits the runs actually planned | P0-02 | **needs-user** | **Mon Dec 1 12:00 PT** (hard) |
-| 9 | **Hosted Playground URL**: `/play/43933a1dca` runs `@dnr/core` in the browser on a public URL, no login. Devpost requires it | P7-02, P7-04, ROUTE-02/03, P7-08 or DEPLOY-01 | local + **needs-user** (Cloudflare token or Pages enabled) | Tue Dec 2 |
+| 9 | **Hosted Playground URL**: `/play/43933a1dca` runs `@dnr/core` in the browser on a public URL, no login. Devpost requires it | P7-02, P7-04, ROUTE-02/03, P7-08 or DEPLOY-01 | local (GitHub Pages live) | Tue Dec 2 |
 | 10 | **Filmable demo runs**: `demo/L` / `demo/LU` r1–r3 and `demo/T` on 43933a1dca, transcripts committed | P10-09, VID-03, VID-04 | needs-kiro | Tue Dec 2 |
 | 11 | **Some honest measured result**: `prereg-v1` tagged, then at least wave 1 T + L (+ S) on the Django reverts, labeled under the §9.5 fallback if no outsider is booked, `decision.md` written | P10-13, P11-01, P11-15 | needs-user + needs-trial-data | Wed Dec 3 |
 | 12 | **Video**: < 3:00, real block by 0:19, captions from `numbers.json`, public on YouTube | VID-01, VID-02, VID-11 | **needs-user** | **Thu Dec 3 (evening)** |
@@ -701,7 +702,7 @@ The plan has 447 checks and 8 days. These are the 14 links whose failure sinks t
 |---|---|
 | **Thu Nov 26** | Request Kiro credits on Devpost and finish ID verification. Install `kiro-cli` and log in. |
 | Fri Nov 27 | Generate a Kiro API key for headless runs. Decide in principle whether to buy a paid plan if credits are late or short. Name the outside labeler and adjudicator, or say now that the §9.5 fallback applies. Decide on the plan amendments in risks 1 and 2 below. |
-| Sat Nov 28 | Approve creating the public `dnr` repo and pushing it. Create the Cloudflare token or say "GitHub Pages only". Create the npm account and confirm `dnr-guard`. |
+| Sat Nov 28 | Approve creating the public `dnr` repo and pushing it. ~~Create the Cloudflare token or say "GitHub Pages only".~~ Done: GitHub Pages only (2026-11-28). Create the npm account and confirm `dnr-guard`. |
 | **Mon Dec 1 12:00** | Credits redeemed, or the paid plan bought. After this, nothing that needs Kiro credits can be added. |
 | Wed Dec 3 | Push `prereg-v1` before the first trial run and post the hash publicly. Label packets as labeler 1, with labeler 2 if booked. |
 | Thu Dec 3 | Record or approve narration, upload the video to YouTube as public, write the dev.to and social posts (bonuses). |

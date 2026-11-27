@@ -15,8 +15,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { type BoardHandle, resolveStaticDir, type StartBoardOptions, startBoard } from './index';
 import { MAINTAINER, RealRepo } from './real-repo';
 
-const PLAYGROUND = 'https://dnr-playground.pages.dev';
-const MIRROR = 'https://nihalnihalani.github.io';
+const PLAYGROUND = 'https://nihalnihalani.github.io';
+/** The dropped Cloudflare Pages origin: nobody holds that project name, so it must get no CORS. */
+const DROPPED_CLOUDFLARE = 'https://dnr-playground.pages.dev';
 const UNKNOWN = 'dnr-ffffffffff';
 
 interface Res {
@@ -481,28 +482,34 @@ describe('board API', () => {
     expect(preOrders.headers['access-control-allow-origin']).toBeUndefined();
   });
 
-  it('ROUTE-10: health answers CORS to the GitHub Pages mirror too, and only health/ping', async () => {
+  it('ROUTE-10: health answers CORS to the GitHub Pages site only (not the dropped Cloudflare origin), and only health/ping', async () => {
     const { board } = await start();
     for (const path of ['/api/health', '/api/ping']) {
       const r = await http(board.port, path, {
         method: 'OPTIONS',
         headers: {
-          origin: MIRROR,
+          origin: PLAYGROUND,
           'access-control-request-method': 'GET',
           'access-control-request-private-network': 'true',
         },
       });
-      expect(r.headers['access-control-allow-origin']).toBe(MIRROR);
+      expect(r.headers['access-control-allow-origin']).toBe(PLAYGROUND);
       expect(r.headers['access-control-allow-private-network']).toBe('true');
-      const pg = await http(board.port, path, { headers: { origin: PLAYGROUND } });
-      expect(pg.headers['access-control-allow-origin']).toBe(PLAYGROUND);
+      for (const method of ['GET', 'OPTIONS']) {
+        const cf = await http(board.port, path, {
+          method,
+          headers: { origin: DROPPED_CLOUDFLARE, 'access-control-request-private-network': 'true' },
+        });
+        expect(cf.headers['access-control-allow-origin']).toBeUndefined();
+        expect(cf.headers['access-control-allow-private-network']).toBeUndefined();
+      }
     }
     const lookalike = await http(board.port, '/api/health', {
       headers: { origin: 'https://nihalnihalani.github.io.evil.com' },
     });
     expect(lookalike.headers['access-control-allow-origin']).toBeUndefined();
     const cookie = await login(board);
-    const orders = await http(board.port, '/api/orders', { headers: { cookie, origin: MIRROR } });
+    const orders = await http(board.port, '/api/orders', { headers: { cookie, origin: PLAYGROUND } });
     expect(orders.headers['access-control-allow-origin']).toBeUndefined();
   });
 

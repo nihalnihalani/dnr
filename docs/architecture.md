@@ -56,10 +56,12 @@ Every write is checked in the order **protect → match → warn → allow**. Pr
 
 ## Hosted Playground headers
 
+GitHub Pages (`https://nihalnihalani.github.io/dnr/`) is the one host. The Cloudflare Pages
+deploy was dropped on 2026-11-28 (plan §10 amendment).
+
 `apps/playground/public/_headers` is the response-header policy (plan §10). `vite preview`
-applies it as Cloudflare Pages does (`previewHeaders` in `apps/playground/vite.config.ts`).
-So the e2e suite runs under the production CSP, and `tests/headers.spec.ts` › P7-09 checks the
-real response headers:
+applies it (`previewHeaders` in `apps/playground/vite.config.ts`), so the e2e suite runs under it,
+and `tests/headers.spec.ts` › P7-09 checks the real response headers:
 
 - the WASM files are served as `application/wasm`;
 - the CSP has `script-src 'self' 'wasm-unsafe-eval'` and
@@ -67,19 +69,26 @@ real response headers:
 - the engine runs with no `securitypolicyviolation` events. Zod runs `jitless` because its JIT
   probe of `new Function` is otherwise reported.
 
-The GitHub Pages mirror (`https://nihalnihalani.github.io/dnr/`) is the site that is live today.
-It ignores `_headers`. Checked with `curl -sI` on 2026-11-27:
+GitHub Pages ignores `_headers`. So the build (`metaCsp` in `vite.config.ts`) writes the same
+CSP into every HTML page as `<meta http-equiv="Content-Security-Policy">`, right after the
+charset and ahead of any script. `frame-ancestors` is left out because browsers ignore it in a
+`<meta>` tag. `tests/headers.spec.ts` › DEPLOY-02 checks the tag on `/`, `/play/43933a1dca` and
+`/graveyard`, and runs the engine with no violations, both locally and against the live site
+after each deploy. Under `vite preview` and `dnr board` the header and the tag are both
+enforced, so the stricter value of each directive applies.
 
-| | Cloudflare Pages (`_headers`) | GitHub Pages mirror |
+What GitHub Pages sends, checked with `curl -sI` on 2026-11-27:
+
+| | Locally (`vite preview`, `_headers`) | GitHub Pages |
 |---|---|---|
 | WASM `Content-Type` | `application/wasm` | `application/wasm` (GitHub's default; `DEPLOY-01` checks it after each deploy) |
-| `Content-Security-Policy` | the policy above | none |
+| `Content-Security-Policy` | header and `<meta>` | `<meta>` only, without `frame-ancestors` |
 | `X-Content-Type-Options`, `Referrer-Policy`, `Permissions-Policy`, `Cross-Origin-Opener-Policy` | set | not set |
 | `Cache-Control` | `/assets/*` immutable for a year; `/cases/*` 300 s | `max-age=600` on everything |
-| `Strict-Transport-Security` | Cloudflare's | `max-age=31556952` |
+| `Strict-Transport-Security` | — | `max-age=31556952` |
 | Unknown route | SPA fallback | `404.html` (a copy of `index.html`) with HTTP 404 |
 
-So on the mirror, the browser's same-origin policy is the only protection: there is no CSP
-fallback against injected script. The page has no inline script, renders fetched order files
-through React only (never as HTML), and talks to a local board only through `/api/health`.
-Health returns `{origin, version}` and sends CORS to the two hosted origins only.
+What the hosted site still lacks is framing protection (`frame-ancestors`) and the other
+headers in the table. The page has no inline script, renders fetched order files through React
+only (never as HTML), and talks to a local board only through `/api/health`. Health returns
+`{origin, version}` and sends CORS to the GitHub Pages origin only.

@@ -104,6 +104,7 @@ Nothing I found lets a careless agent silently re-apply a reverted change that i
 - *Where:* in `.github/workflows/deploy-playground.yml` the job "Cloudflare Pages / Require the Cloudflare secrets" fails because `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` are not set. The GitHub Pages jobs pass.
 - *Effect:* judges see a ❌ on the repo's commit list and Actions tab.
 - *Fix (user decision):* either set the two secrets, or drop the Cloudflare job and keep GitHub Pages as the one URL (the plan allows the mirror). Dropping it is still "fail loudly": the deploy that matters, Pages, is the one that runs.
+- *Resolved 2026-11-28:* the user chose GitHub Pages only. The Cloudflare job, its uptime leg, the `wrangler` dependency and the board's trust of `https://dnr-playground.pages.dev` are removed (an unclaimed project name must not be a trusted origin; ROUTE-10 now checks it gets no CORS). GitHub Pages cannot send headers, so the build writes the `_headers` CSP into every page as a `<meta>` tag (DEPLOY-02).
 
 **P8. The rename cache can be forged to hide a re-application.**
 - *Where:* the C-side cache under `.dnr/cache/` (wave 4).
@@ -164,7 +165,7 @@ The `{{…}}` slots left are `docs/kiro-usage.md` (a labelled skeleton) and CI w
 | team | P2 (the first `/play` click must show the block path), P1 (Quick start), P3, P4, P5 (licenses), P8 | Nov 29 |
 | team + user + kiro-cli | Phases 4–10 on real data, then `prereg-v1` tagged and posted; Phase 11 waves and blind labelling; `trial report` | Dec 2–3 |
 | team, then **user** | Video with the real block by 0:19, numbers from `numbers.json`; YouTube upload | Dec 3 |
-| **user** | npm publish of `dnr-guard` (P13-08), the `v1` and `v0.1.0` tags (P6), Cloudflare decision (P7), Crew GitHub App and secrets and a real Crew session (Phase 12, bonus) | Dec 1–3 |
+| **user** | npm publish of `dnr-guard` (P13-08), the `v1` and `v0.1.0` tags (P6), ~~Cloudflare decision (P7)~~ (resolved: GitHub Pages only), Crew GitHub App and secrets and a real Crew session (Phase 12, bonus) | Dec 1–3 |
 | **user** | dev.to and social posts, Devpost form (Frankenstein), bonus links | **Dec 4, 10:00 (hard close 14:00)** |
 
 Without Kiro there is still no live block, no demo run, no trial and no video. Every software item above can be done on time; none of the Kiro-dependent ones can start until the user installs `kiro-cli` and the credits land.
