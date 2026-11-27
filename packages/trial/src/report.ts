@@ -87,22 +87,33 @@ export function videoNumbers(a: Analysis): Record<string, unknown> {
     mode: r.mode,
     prereg_sha: r.prereg_sha,
     content_hash: r.content_hash,
-  };
-  if (r.via_d6) return { ...base, wording: WORDINGS.D6_inconclusive, rates: null };
-  if (r.row === 'D5') return { ...base, wording: WORDINGS.D5_null(r.K, r.X), rates: null };
-  if (r.row === 'D1' && r.mode === 'commit-enforce')
-    return { ...base, wording: WORDINGS.D1_study_failed, rates: null };
-  return {
-    ...base,
+    // The 0:38 problem card (§11): tests caught Y of X re-applications, and the human re-proposal
+    // count (§9.9). That count is non-null only once a person has written `Confirmed total:` in
+    // reports/human-reproposals.md, and captions may use it only when confirmed.
+    Y: r.Y,
+    human_reproposals: r.secondary.human_reproposals,
+    human_reproposals_confirmed: r.secondary.human_reproposals !== null,
+    // §9.6 counts, on every row; whether a rate line is shown is decided per row below.
     K: r.K,
     X: r.X,
     K_eff: r.K_eff,
     X_eff: r.X_eff,
     S_eff: r.S_eff,
+  };
+  // D6 and D5 show no rate lines (§11): `rates: null` and no card.
+  if (r.via_d6) return { ...base, wording: WORDINGS.D6_inconclusive, rates: null };
+  if (r.row === 'D5') return { ...base, wording: WORDINGS.D5_null(r.K, r.X), rates: null };
+  const card = { X_eff: a.ratios['X_eff/K_eff'], S_eff: a.ratios['S_eff/K_eff'] };
+  // D1 with a failed study (§11): the No-DNR and Steering lines stay; only W_L and Q are dropped,
+  // because there was no live Kiro block.
+  if (r.row === 'D1' && r.mode === 'commit-enforce')
+    return { ...base, wording: WORDINGS.D1_study_failed, x_over_k: a.ratios['X/K'], card };
+  return {
+    ...base,
     W_L: r.W_L,
     Q: r.Q,
     x_over_k: a.ratios['X/K'],
-    card: { X_eff: a.ratios['X_eff/K_eff'], S_eff: a.ratios['S_eff/K_eff'], W_L: a.ratios['W_L/K_eff'] },
+    card: { ...card, W_L: a.ratios['W_L/K_eff'] },
     s_close_to_l: Math.abs(r.S_eff - r.W_L) <= 1,
   };
 }

@@ -33,6 +33,8 @@ export interface Scenario {
   gate?: Partial<GateResults>;
   /** When given, the outside labeler disagrees on these T reverts (lowers κ). */
   disagreeT?: number[];
+  /** A person's `Confirmed total:` from reports/human-reproposals.md (null = not confirmed). */
+  humanReproposals?: number | null;
 }
 
 const sha = (i: number) => (i + 1).toString(16).padStart(2, '0').repeat(20);
@@ -142,7 +144,7 @@ export function scoreScenario(sc: Scenario) {
     study: null,
     orders: [],
     baseline: null,
-    humanReproposals: null,
+    humanReproposals: sc.humanReproposals ?? null,
     preregSha: 'a'.repeat(40),
   };
   const a = score(inputs);

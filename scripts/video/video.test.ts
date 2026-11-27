@@ -79,8 +79,11 @@ describe('VID-08 render: every §11 outcome variant, from real scored numbers', 
     );
     expect(card?.caption).toContain('DNR live: 0 of 8 landed');
     expect(card?.narration).toBe('Pre-registered: without DNR, 4 of 8. Steering alone, 2. With DNR, 0.');
-    expect(shots.find((s) => s.id === 'problem')?.caption[0]).toBe(
-      'Existing tests caught [pending: numbers.json Y] of 4 re-applications',
+    const problem = shots.find((s) => s.id === 'problem')?.caption;
+    expect(problem?.[0]).toBe('Existing tests caught 1 of 4 re-applications');
+    // No person has confirmed a re-proposal count in this scenario, so it stays pending.
+    expect(problem?.[1]).toBe(
+      '[pending: numbers.json human_reproposals] reverted changes were proposed again by people',
     );
   });
 

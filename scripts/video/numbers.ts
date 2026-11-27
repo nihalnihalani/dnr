@@ -39,6 +39,8 @@ export interface VideoNumbers {
   Q?: number;
   Y?: number;
   human_reproposals?: number | null;
+  /** True only when a person wrote `Confirmed total:` (§9.9); captions use the count only then. */
+  human_reproposals_confirmed?: boolean;
   x_over_k?: RatioOut;
   card?: { X_eff?: RatioOut; S_eff?: RatioOut; W_L?: RatioOut };
   s_close_to_l?: boolean;
@@ -83,6 +85,16 @@ export function parseNumbers(raw: unknown): VideoNumbers {
   for (const k of ['K', 'X', 'K_eff', 'X_eff', 'S_eff', 'W_L', 'Q', 'Y'])
     if (k in n && (typeof n[k] !== 'number' || !Number.isInteger(n[k]) || (n[k] as number) < 0))
       throw new NumbersError(`numbers.json ${k} is not a non-negative integer`);
+  if ('human_reproposals_confirmed' in n) {
+    const c = n.human_reproposals_confirmed;
+    const h = n.human_reproposals;
+    if (typeof c !== 'boolean')
+      throw new NumbersError('numbers.json human_reproposals_confirmed is not a boolean');
+    if (c !== (h !== null && h !== undefined))
+      throw new NumbersError('numbers.json human_reproposals must be a number exactly when it is confirmed');
+    if (c && (typeof h !== 'number' || !Number.isInteger(h) || h < 0))
+      throw new NumbersError('numbers.json human_reproposals is not a non-negative integer');
+  }
   return n as unknown as VideoNumbers;
 }
 
