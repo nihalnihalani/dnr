@@ -142,11 +142,11 @@
     {
       "surface": "Spec: trial-harness",
       "file": ".kiro/specs/trial-harness/tasks.md",
-      "what": "Implementation Plan: trial-harness (1 of 55 tasks ticked)",
+      "what": "Implementation Plan: trial-harness (3 of 55 tasks ticked)",
       "history": [
+        "3d50c72 Add the pre-registered trial harness (wave 3)",
         "bd3ebb2 Make spec ticks truthful, amend R7, update threat model and README",
-        "9a951a2 Fix wave-1 review findings in Kiro artifacts and add review docs",
-        "59f5040 Add engine, schemas, grammars, testkit and Kiro artifacts (wave 1)"
+        "9a951a2 Fix wave-1 review findings in Kiro artifacts and add review docs"
       ]
     },
     {
@@ -154,6 +154,7 @@
       "file": ".kiro/steering/hook-contracts.md",
       "what": "Hook contracts (inclusion: fileMatch, [\"packages/hook/**\", \".kiro/hooks/**\"])",
       "history": [
+        "2cc138e Name N6 bypass tests; threat model, testing and S17 docs for wave 3",
         "9a951a2 Fix wave-1 review findings in Kiro artifacts and add review docs",
         "59f5040 Add engine, schemas, grammars, testkit and Kiro artifacts (wave 1)"
       ]
