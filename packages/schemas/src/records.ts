@@ -56,12 +56,17 @@ export const Order = z.object({
       by: z.string(),
       action: z.enum(['created', 'approved', 'retired', 'unretired', 'edited_reason', 'reapproved']),
       /**
-       * How a CLI approval was made: the launch markers of the approving process (as for grants)
-       * and, when the terminal was a pty driven by a known test harness, which one. Absent on
-       * entries written before it existed and on board actions.
+       * How the entry was made: `cli` (`dnr orders approve`) or `board` (a status change on the
+       * board, behind its launch nonce), the launch markers of that process (as for grants) and,
+       * when it ran under a pty driven by a known test harness, which one. Absent on entries
+       * written before it existed.
        */
       origin: z
-        .object({ via: z.literal('cli'), markers: z.array(z.string()), harness: z.string().nullable() })
+        .object({
+          via: z.enum(['cli', 'board']),
+          markers: z.array(z.string()),
+          harness: z.string().nullable(),
+        })
         .optional(),
     }),
   ),

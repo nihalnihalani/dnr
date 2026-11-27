@@ -83,9 +83,14 @@ export function testHarness(chain: readonly Proc[]): string | null {
   return null;
 }
 
-/** Provenance of a CLI approval (order history `origin`). */
-export function approvalOrigin(input: { env: NodeJS.ProcessEnv; isTTY?: boolean; chain?: Proc[] }): {
-  via: 'cli';
+/** Provenance of a CLI or board approval (order history `origin`). */
+export function approvalOrigin(input: {
+  via?: 'cli' | 'board';
+  env: NodeJS.ProcessEnv;
+  isTTY?: boolean;
+  chain?: Proc[];
+}): {
+  via: 'cli' | 'board';
   markers: string[];
   harness: string | null;
 } {
@@ -97,5 +102,5 @@ export function approvalOrigin(input: { env: NodeJS.ProcessEnv; isTTY?: boolean;
   });
   const harness = testHarness(chain);
   if (harness) markers.push(`harness:${harness}`);
-  return { via: 'cli', markers, harness };
+  return { via: input.via ?? 'cli', markers, harness };
 }

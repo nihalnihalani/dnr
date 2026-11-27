@@ -695,6 +695,20 @@ describe('approval provenance', () => {
   });
 });
 
+describe('board approval provenance', () => {
+  it('approve: a board status change records origin.via board', async () => {
+    fx = await revertFixture({ status: 'draft' });
+    const { createBoardStore } = await import('../src/board-store');
+    const { openContext } = await import('@dnr/hook');
+    const ctx = await openContext(fx.repo.dir, envFor(fx.repo));
+    const store = createBoardStore(ctx as never, { TransitionError: Error, NotFoundError: Error });
+    await store.patchOrder(fx.order.id, { status: 'approved' }, 'Board User');
+    const h = readOrder(fx).history.at(-1);
+    expect(h).toMatchObject({ by: 'Board User', action: 'approved', origin: { via: 'board' } });
+    expect(Order.safeParse(readOrder(fx)).success).toBe(true);
+  });
+});
+
 describe('orders verify and reason history', () => {
   it('P6-12: orders verify exits 0 on the real reports/orders and 65 on a corrupted copy', async () => {
     fx = await revertFixture();

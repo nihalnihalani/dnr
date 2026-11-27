@@ -4,7 +4,14 @@
  */
 import { relative } from 'node:path';
 import { catBlobs } from '@dnr/git';
-import { type EffectiveStatus, grantOrigin, type HookContext, readTamper, readViolations } from '@dnr/hook';
+import {
+  approvalOrigin,
+  type EffectiveStatus,
+  grantOrigin,
+  type HookContext,
+  readTamper,
+  readViolations,
+} from '@dnr/hook';
 import { Order } from '@dnr/schemas';
 import {
   nowIso,
@@ -25,6 +32,13 @@ export interface BoardErrors {
 export const ALLOW_ONCE = new Set<EffectiveStatus>(['approved', 'stale', 'relanded', 'violated']);
 
 export function createBoardStore(ctx: HookContext, errors: BoardErrors) {
+  // Board status changes record origin.via 'board' (the board process's markers and any test
+  // harness driving it), so they can be told apart from `dnr orders approve`.
+  let origin: ReturnType<typeof approvalOrigin> | null = null;
+  const boardOrigin = () => {
+    origin ??= approvalOrigin({ via: 'board', env: ctx.env });
+    return origin;
+  };
   const store = ctx.store;
   const ordersRel = relative(ctx.repoRoot, store.paths.ordersDir);
   const inRepo = !ordersRel.startsWith('..');
@@ -88,7 +102,7 @@ export function createBoardStore(ctx: HookContext, errors: BoardErrors) {
         }
         if (patch.status !== undefined) {
           // A no-op transition is invalid too (checkTransition): 409, same as `dnr orders`.
-          await store.orders.transition(id, patch.status, by, at);
+          await store.orders.transition(id, patch.status, by, at, boardOrigin());
         }
         return requireRow(id);
       }),

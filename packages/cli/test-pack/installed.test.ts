@@ -297,6 +297,12 @@ describe('installed dnr-guard package', () => {
       expect(ok.status, await ok.clone().text()).toBe(200);
       const order = JSON.parse(readFileSync(join(repo.dir, '.dnr', 'orders', `${id}.json`), 'utf8'));
       expect(order.status).toBe('approved');
+      // The board path is told apart from `dnr orders approve`.
+      expect(order.history.at(-1)).toMatchObject({
+        action: 'approved',
+        by: 'maintainer',
+        origin: { via: 'board', harness: 'vitest' },
+      });
       // DNS rebinding: a foreign Host is 421.
       const { request } = await import('node:http');
       const port = new URL(origin).port;
