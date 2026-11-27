@@ -168,7 +168,7 @@ export function constraintsScript(date: string, reqFile = 'py3.txt'): string {
     'fi',
     'up=""',
     'for i in $(seq 1 60); do',
-    "  [ -n \"$port\" ] || port=$(sed -n 's#.*Running on http://127.0.0.1:\\([0-9]*\\).*#\\1#p' /tmp/ptm.log | head -n 1)",
+    '  [ -n "$port" ] || port=$(sed -n \'s#.*Running on http://127.0.0.1:\\([0-9]*\\).*#\\1#p\' /tmp/ptm.log | head -n 1)',
     '  if [ -n "$port" ] && python -c "import socket,sys; socket.create_connection((\'127.0.0.1\', int(sys.argv[1])), 1)" "$port" 2>/dev/null; then up=1; break; fi',
     '  sleep 1',
     'done',
