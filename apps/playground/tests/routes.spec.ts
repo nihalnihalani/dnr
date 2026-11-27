@@ -1,7 +1,15 @@
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, type Page, test } from '@playwright/test';
-import { approveSim, DEMO, DEMO_ORDER, expectNoAxeViolations, openPlay, runPreset } from './helpers';
+import {
+  approveSim,
+  closedPort,
+  DEMO,
+  DEMO_ORDER,
+  expectNoAxeViolations,
+  openPlay,
+  runPreset,
+} from './helpers';
 
 const demoBundle = JSON.parse(
   readFileSync(fileURLToPath(new URL(`../public/cases/${DEMO}.json`, import.meta.url)), 'utf8'),
@@ -115,13 +123,33 @@ test('ROUTE-06: order page has the history and audit panel', { tag: ['@ROUTE-06'
 });
 
 test('deeplink-1: hosted /orders/:id?board=<port> with the board down → read-only + banner', {
-  tag: ['@deeplink-1', '@ROUTE-10'],
+  tag: ['@deeplink-1', '@ROUTE-10', '@P13-10'],
 }, async ({ page }) => {
-  await page.goto(`orders/${DEMO_ORDER}?board=9`);
-  await expect(page.getByTestId('banner-board-down')).toContainText(`dnr board --open ${DEMO_ORDER}`);
+  // A real closed port: bound, then released, so the probe's fetch is refused, not skipped.
+  const port = await closedPort();
+  await page.goto(`orders/${DEMO_ORDER}?board=${port}`);
+  const banner = page.getByTestId('banner-board-down');
+  await expect(banner).toContainText(`Run dnr board --open ${DEMO_ORDER} to act on this order`);
+  // The bundled demo order is shown, read-only: its headstone and history, and no actions.
+  await expect(banner).toContainText('Showing the bundled demo copy, read-only.');
+  await expect(page.getByRole('heading', { name: `Order ${DEMO_ORDER}` })).toBeVisible();
+  await expect(page.locator('table').first()).toContainText('created');
+  await expect(page.getByText('Read-only: actions need the local board.')).toBeVisible();
   await expect(page.locator('[data-action]')).toHaveCount(0);
-  await page.goto('orders/dnr-0123456789?board=9');
-  await expect(page.getByTestId('banner-board-down')).toContainText('dnr board --open dnr-0123456789');
+  // Where a browser blocks the probe (Safari), the banner still links to a board on that port.
+  await expect(page.getByTestId('board-link')).toHaveAttribute(
+    'href',
+    `http://127.0.0.1:${port}/orders/${DEMO_ORDER}`,
+  );
+  await expectNoAxeViolations(page);
+  // An unknown ID shows only the banner.
+  await page.goto(`orders/dnr-0123456789?board=${port}`);
+  await expect(page.getByTestId('banner-board-down')).toContainText(
+    'Run dnr board --open dnr-0123456789 to act on this order',
+  );
+  await expect(page.getByTestId('banner-board-down')).not.toContainText('read-only');
+  await expect(page.locator('article.stone')).toHaveCount(0);
+  await expect(page.locator('[data-action]')).toHaveCount(0);
 });
 
 test('ROUTE-04: /orders/view renders a raw GitHub order; Zod-invalid and foreign hosts show errors', {

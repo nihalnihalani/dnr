@@ -80,6 +80,17 @@ export function OrderPage({ id }: { id: string }) {
         <Banner kind="warn" title="Local board not reachable" testId="banner-board-down">
           Run <code>dnr board --open {id}</code> to act on this order.{' '}
           {q.data ? 'Showing the bundled demo copy, read-only.' : ''}
+          {board && /^\d{2,5}$/.test(board) && (
+            <>
+              {' '}
+              Some browsers (Safari) block this page from checking a local port. If <code>dnr board</code> is
+              already running on port {board},{' '}
+              <a href={`http://127.0.0.1:${board}/orders/${encodeURIComponent(id)}`} data-testid="board-link">
+                open this order on the board
+              </a>
+              .
+            </>
+          )}
         </Banner>
       )}
       {q.loading && !q.data && <Loading what={`order ${id}`} />}

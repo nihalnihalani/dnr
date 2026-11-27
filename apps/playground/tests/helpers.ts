@@ -1,3 +1,4 @@
+import { createServer } from 'node:net';
 import AxeBuilder from '@axe-core/playwright';
 import { expect, type Page } from '@playwright/test';
 
@@ -48,4 +49,17 @@ export async function expectNoAxeViolations(page: Page) {
 export async function approveSim(page: Page) {
   await page.locator('.sim-actions [data-action="approve"]').click();
   await expect(page.locator('.sim-actions')).toContainText('Approved: enforced');
+}
+
+/** A loopback port nothing listens on: bound by the OS, then closed (a real "board down"). */
+export function closedPort(): Promise<number> {
+  return new Promise((res, rej) => {
+    const srv = createServer();
+    srv.once('error', rej);
+    srv.listen(0, '127.0.0.1', () => {
+      const a = srv.address();
+      const port = typeof a === 'object' && a ? a.port : 0;
+      srv.close(() => res(port));
+    });
+  });
 }
