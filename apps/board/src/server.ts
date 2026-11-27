@@ -20,6 +20,11 @@ const ENFORCED = new Set(['approved', 'stale', 'relanded', 'violated']);
 export const NONCE_TTL_MS = 60_000;
 export const TICKET_TTL_MS = 60_000;
 export const DEFAULT_PLAYGROUND_ORIGIN = 'https://dnr-playground.pages.dev';
+/**
+ * Hosted Playground origins whose `/orders/:id?board=<port>` view may probe `/api/health` (§10):
+ * the Cloudflare Pages site and its GitHub Pages mirror. Health returns only `{origin, version}`.
+ */
+export const DEFAULT_PLAYGROUND_ORIGINS = [DEFAULT_PLAYGROUND_ORIGIN, 'https://nihalnihalani.github.io'];
 
 export const CSP =
   "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
@@ -34,7 +39,8 @@ export interface BoardContext {
   /** `'127.0.0.1'` skips the `.localhost` host entirely. */
   host: 'auto' | '127.0.0.1';
   openOrder?: string | undefined;
-  playgroundOrigin: string;
+  /** Hosted Playground origin(s) allowed to probe /api/health with CORS. */
+  playgroundOrigin: string | string[];
   staticDir: string;
   now: () => number;
   user: string;
@@ -220,8 +226,9 @@ export function createBoardApp(ctx: BoardContext): BoardApp {
     }
     return c.json({ origin: auth.activeOrigin(), version: ctx.version } satisfies Health);
   };
-  const healthHandler = health([ctx.playgroundOrigin]);
-  const pingHandler = health([ctx.playgroundOrigin, loopbackOrigin]);
+  const playground = ([] as string[]).concat(ctx.playgroundOrigin);
+  const healthHandler = health(playground);
+  const pingHandler = health([...playground, loopbackOrigin]);
   app.on(['GET', 'OPTIONS'], '/api/health', healthHandler);
   app.on(['GET', 'OPTIONS'], '/api/ping', pingHandler);
 

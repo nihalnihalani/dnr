@@ -3,11 +3,12 @@
  * backed by `@dnr/store`, then opens `launchUrl` in the browser. The launch URL carries the
  * single-use nonce: it is never printed or logged (AUTH-08).
  */
+import { existsSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { getRequestListener } from '@hono/node-server';
-import { createBoardApp, DEFAULT_PLAYGROUND_ORIGIN, randLabel } from './server';
+import { createBoardApp, DEFAULT_PLAYGROUND_ORIGINS, randLabel } from './server';
 import type { BoardStorePort } from './store-port';
 
 export interface StartBoardOptions {
@@ -19,9 +20,9 @@ export interface StartBoardOptions {
   host?: 'auto' | '127.0.0.1';
   /** --open <id>: after launch, land on /orders/<id>. */
   openOrder?: string;
-  /** Default 'https://dnr-playground.pages.dev'. */
-  playgroundOrigin?: string;
-  /** Built UI; default = apps/playground/dist resolved from this file. */
+  /** Default: the Cloudflare Pages site and the GitHub Pages mirror (DEFAULT_PLAYGROUND_ORIGINS). */
+  playgroundOrigin?: string | string[];
+  /** Built UI; default = DEFAULT_STATIC_DIR. */
   staticDir?: string;
   /** ms clock, for nonce expiry tests. */
   now?: () => number;
@@ -38,7 +39,18 @@ export interface BoardHandle {
   close(): Promise<void>;
 }
 
-export const DEFAULT_STATIC_DIR = fileURLToPath(new URL('../../playground/dist', import.meta.url));
+/**
+ * Where the built UI is. In the published `dnr` bundle this module lives in
+ * `packages/cli/dist/`, and the build copies the Playground build next to it as `dist/ui/`. In the
+ * workspace (tests, `tsx`) it is `apps/playground/dist`, two levels up from `apps/board/src/`.
+ */
+export function resolveStaticDir(here = import.meta.url): string {
+  const bundled = fileURLToPath(new URL('./ui/', here));
+  if (existsSync(`${bundled}index.html`)) return bundled;
+  return fileURLToPath(new URL('../../playground/dist', here));
+}
+
+export const DEFAULT_STATIC_DIR = resolveStaticDir();
 
 export async function startBoard(opts: StartBoardOptions): Promise<BoardHandle> {
   const server = createServer();
@@ -57,7 +69,7 @@ export async function startBoard(opts: StartBoardOptions): Promise<BoardHandle> 
     rand: randLabel(),
     host: opts.host ?? 'auto',
     openOrder: opts.openOrder,
-    playgroundOrigin: opts.playgroundOrigin ?? DEFAULT_PLAYGROUND_ORIGIN,
+    playgroundOrigin: opts.playgroundOrigin ?? DEFAULT_PLAYGROUND_ORIGINS,
     staticDir: opts.staticDir ?? DEFAULT_STATIC_DIR,
     now: opts.now ?? Date.now,
     user: opts.user ?? process.env.USER ?? 'human',

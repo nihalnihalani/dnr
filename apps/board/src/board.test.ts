@@ -4,17 +4,19 @@
  * and a real order (see real-repo.ts). `node:http` is used so Host, Origin and Cookie can be set freely.
  */
 
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { request } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type { EventRecord } from '@dnr/schemas';
 import type { OrderRow } from '@dnr/ui/model';
 import { afterEach, describe, expect, it } from 'vitest';
-import { type BoardHandle, type StartBoardOptions, startBoard } from './index';
+import { type BoardHandle, resolveStaticDir, type StartBoardOptions, startBoard } from './index';
 import { MAINTAINER, RealRepo } from './real-repo';
 
 const PLAYGROUND = 'https://dnr-playground.pages.dev';
+const MIRROR = 'https://nihalnihalani.github.io';
 const UNKNOWN = 'dnr-ffffffffff';
 
 interface Res {
@@ -478,6 +480,31 @@ describe('board API', () => {
     expect(preOrders.headers['access-control-allow-origin']).toBeUndefined();
   });
 
+  it('ROUTE-10: health answers CORS to the GitHub Pages mirror too, and only health/ping', async () => {
+    const { board } = await start();
+    for (const path of ['/api/health', '/api/ping']) {
+      const r = await http(board.port, path, {
+        method: 'OPTIONS',
+        headers: {
+          origin: MIRROR,
+          'access-control-request-method': 'GET',
+          'access-control-request-private-network': 'true',
+        },
+      });
+      expect(r.headers['access-control-allow-origin']).toBe(MIRROR);
+      expect(r.headers['access-control-allow-private-network']).toBe('true');
+      const pg = await http(board.port, path, { headers: { origin: PLAYGROUND } });
+      expect(pg.headers['access-control-allow-origin']).toBe(PLAYGROUND);
+    }
+    const lookalike = await http(board.port, '/api/health', {
+      headers: { origin: 'https://nihalnihalani.github.io.evil.com' },
+    });
+    expect(lookalike.headers['access-control-allow-origin']).toBeUndefined();
+    const cookie = await login(board);
+    const orders = await http(board.port, '/api/orders', { headers: { cookie, origin: MIRROR } });
+    expect(orders.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
   it('API-02: list, get, diff and events (real store, real git, a real hook event)', async () => {
     const { board, repo, id } = await start();
     const cookie = await login(board);
@@ -715,5 +742,18 @@ describe('board API', () => {
 
     const e = await http(board.port, '/', { host: 'evil.com' });
     expect(e.headers['x-content-type-options']).toBe('nosniff');
+  });
+});
+
+describe('board static UI', () => {
+  it('npm-bundle: the bundled dist/ui/ next to the module wins; else apps/playground/dist', () => {
+    const pkg = mkdtempSync(join(tmpdir(), 'dnr-board-bundle-'));
+    const dist = join(pkg, 'packages', 'cli', 'dist');
+    mkdirSync(join(dist, 'ui'), { recursive: true });
+    const mod = pathToFileURL(join(dist, 'board-x.js')).href;
+    // No dist/ui/index.html yet: falls back to the workspace layout.
+    expect(resolveStaticDir(mod)).toBe(join(pkg, 'packages', 'playground', 'dist'));
+    writeFileSync(join(dist, 'ui', 'index.html'), '<!doctype html><title>x</title>');
+    expect(resolveStaticDir(mod)).toBe(`${join(dist, 'ui')}/`);
   });
 });
