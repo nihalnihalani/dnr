@@ -29,6 +29,8 @@ test('ROUTE-02: order card with A/R chips, editor on the post-revert baseline, p
   await expect(card).toContainText('Query.clear_ordering');
   await expect(card.getByRole('list', { name: 'Added tokens (A)' }).locator('li').first()).toContainText('+');
   // Editor opens on the post-revert baseline (R). Sending it unchanged is ALLOW (C would BLOCK).
+  // It mounts when it nears the viewport (below the fold on phones), as a reader scrolls to it.
+  await page.locator('#editor-panel').scrollIntoViewIfNeeded();
   await expect(page.getByTestId('editor')).toContainText('Create SQL statements for QuerySets');
   for (const kind of ['original-change', 'hard-negative', 'formatting-only'])
     await expect(page.locator(`[data-preset-kind="${kind}"]`)).toBeVisible();

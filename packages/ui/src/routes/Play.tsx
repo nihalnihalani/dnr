@@ -1,7 +1,7 @@
 import type { OrderBreakdown } from '@dnr/core';
 import { DEFAULT_MATCH_CONFIG, grammarForPath } from '@dnr/core';
 import type { CaseBundle, Order } from '@dnr/schemas';
-import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useConfig } from '../app/context';
 import { Link } from '../app/router';
 import { Banner, ErrorBanner, Loading, useAsync, useTitle } from '../components/common';
@@ -22,6 +22,30 @@ import { STATE_INFO } from '../model/states';
 import type { OrderDetail } from '../model/types';
 
 /** Resolve after the next paint and an idle slot (falls back to a short timeout). */
+/**
+ * True once the element is near the viewport (and stays true). CodeMirror's setup and its first
+ * syntax parse are the heaviest main-thread work on /play, so the editor mounts only when it is
+ * about to be seen: below the fold on a phone, that is after the page is interactive.
+ */
+function useNearViewport<T extends Element>(): [React.RefObject<T | null>, boolean] {
+  const ref = useRef<T | null>(null);
+  const [near, setNear] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (near || !el) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      setNear(true);
+      return;
+    }
+    const io = new IntersectionObserver((es) => es.some((e) => e.isIntersecting) && setNear(true), {
+      rootMargin: '200px 0px',
+    });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [near]);
+  return [ref, near];
+}
+
 function afterPaint(): Promise<void> {
   return new Promise((resolve) =>
     requestAnimationFrame(() =>
@@ -83,7 +107,11 @@ export function Play({ caseId }: { caseId: string }) {
   const entry = index.data?.find((c) => c.id === caseId);
   // The case renders as soon as its JSON arrives; the WASM grammar and the engine load behind it.
   const bundleQ = useAsync(() => cfg.loadCase(caseId), [caseId]);
-  const checkQ = useAsync(() => cfg.checkCase(caseId), [caseId]);
+  // Zod validation of the bundle is off the critical path: it runs once the engine is ready.
+  const checkQ = useAsync(async () => {
+    await afterPaint();
+    return cfg.checkCase(caseId);
+  }, [caseId]);
   const engineQ = useAsync(async () => {
     const bundle = await cfg.loadCase(caseId);
     const { createLazyProvider } = await import('../engine/grammar');
@@ -153,6 +181,7 @@ function PlayBody({
 }) {
   const cfg = useConfig();
   const sim = cfg.sim;
+  const [editorRef, editorNear] = useNearViewport<HTMLDivElement>();
   const orderId = bundle.order.id;
   const [detail, setDetail] = useState<OrderDetail | null>(null);
   const [state, setState] = useState<SimState>(() => ({ ...initialState(bundle, cfg.clock.now()) }));
@@ -348,10 +377,10 @@ function PlayBody({
                 </button>
               ))}
             </div>
-            <div id="editor-panel" role="tabpanel" aria-label={`Editing ${file}`}>
-              <Suspense fallback={<p style={{ padding: 10 }}>Loading editor…</p>}>
-                {!engine ? (
-                  <p style={{ padding: 10 }}>Loading editor…</p>
+            <div id="editor-panel" role="tabpanel" aria-label={`Editing ${file}`} ref={editorRef}>
+              <Suspense fallback={<p className="editor-placeholder">Loading editor…</p>}>
+                {!engine || !editorNear ? (
+                  <p className="editor-placeholder">Loading editor…</p>
                 ) : (
                   <CodeEditor
                     key={file}

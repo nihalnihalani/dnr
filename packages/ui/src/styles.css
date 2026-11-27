@@ -167,6 +167,8 @@ main {
   padding: 24px clamp(16px, 4vw, 40px) 64px;
   max-width: 1280px;
   margin: 0 auto;
+  /* Keeps the footer below the fold while a route loads, so it never shifts into view (CLS). */
+  min-height: 100vh;
 }
 .lede {
   font-size: 1.15rem;
@@ -440,6 +442,13 @@ main {
 .editor-wrap .cm-editor {
   height: 420px;
   font-size: 0.82rem;
+}
+.editor-wrap .editor-placeholder {
+  /* Same height as the editor, so mounting it shifts nothing. */
+  height: 420px;
+  margin: 0;
+  padding: 10px;
+  box-sizing: border-box;
 }
 .editor-wrap textarea.fallback {
   width: 100%;

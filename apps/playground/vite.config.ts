@@ -1,5 +1,5 @@
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin } from 'vite';
@@ -35,6 +35,58 @@ function packCases(): Plugin {
         const full = JSON.parse(readFileSync(resolve(dir, f), 'utf8'));
         if (full.schema !== 'dnr.case/v1') continue;
         writeFileSync(resolve(dir, f), JSON.stringify(packCase(full)));
+      }
+    },
+  };
+}
+
+/**
+ * One HTML file per /play case (dist/play/<id>/index.html) that preloads what that page needs
+ * first: its case JSON and the /play route chunks. Without it the browser only learns about them
+ * after the entry script has run, which put them late on the critical path (Lighthouse LCP on a
+ * mobile CPU). Static hosts serve these files for the deep link directly (GitHub Pages; vite
+ * preview), and they are the same app as index.html otherwise.
+ */
+function playRoutePages(): Plugin {
+  return {
+    name: 'dnr-play-route-pages',
+    apply: 'build',
+    enforce: 'post',
+    generateBundle(_opts, bundle) {
+      const html = Object.values(bundle).find((a) => a.type === 'asset' && a.fileName === 'index.html');
+      if (html?.type !== 'asset') return;
+      const chunks = Object.values(bundle).filter((c) => c.type === 'chunk');
+      const holds = (end: string) =>
+        chunks.find((c) => c.type === 'chunk' && c.moduleIds.some((m) => m.endsWith(end)));
+      const play = holds('/routes/Play.tsx');
+      const pack = holds('/engine/pack.ts');
+      if (play?.type !== 'chunk') this.error('play route pages: no chunk holds routes/Play.tsx');
+      const files = new Set<string>();
+      const walk = (name: string) => {
+        if (files.has(name)) return;
+        const c = bundle[name];
+        if (c?.type !== 'chunk' || c.isEntry) return;
+        files.add(name);
+        for (const i of c.imports) walk(i);
+      };
+      walk(play.fileName);
+      if (pack?.type === 'chunk') walk(pack.fileName);
+      const index = JSON.parse(readFileSync(resolve(here, 'public/cases/index.json'), 'utf8')) as {
+        cases: Array<{ id: string }>;
+      };
+      // The entry script's own URL tells us the base path this build uses.
+      const entry = String(html.source).match(/src="([^"]*)assets\/index-[^"]+\.js"/)?.[1] ?? '/';
+      for (const { id } of index.cases) {
+        const links = [
+          `<link rel="preload" href="${entry}cases/${id}.json" as="fetch" crossorigin />`,
+          `<link rel="preload" href="${entry}cases/index.json" as="fetch" crossorigin />`,
+          ...[...files].map((f) => `<link rel="modulepreload" crossorigin href="${entry}${f}" />`),
+        ];
+        this.emitFile({
+          type: 'asset',
+          fileName: `play/${id}/index.html`,
+          source: String(html.source).replace('</head>', `    ${links.join('\n    ')}\n  </head>`),
+        });
       }
     },
   };
@@ -137,6 +189,16 @@ function previewHeaders(): Plugin {
     name: 'dnr-preview-headers',
     configurePreviewServer(server) {
       const rules = parseHeaders(readFileSync(resolve(here, 'public/_headers'), 'utf8'));
+      const outDir = resolve(here, server.config.build.outDir);
+      // Like GitHub Pages and Cloudflare Pages: /play/<id> is served from play/<id>/index.html when
+      // the build has one (playRoutePages), before the SPA fallback.
+      server.middlewares.use((req, _res, next) => {
+        const [path, query] = (req.url ?? '/').split('?') as [string, string?];
+        const clean = path.replace(/\/+$/, '');
+        if (clean && !clean.includes('..') && existsSync(join(outDir, clean, 'index.html')))
+          req.url = `${clean}/index.html${query ? `?${query}` : ''}`;
+        next();
+      });
       server.middlewares.use((req, res, next) => {
         const path = (req.url ?? '/').split('?')[0] as string;
         const set = new Map<string, string>();
@@ -174,7 +236,7 @@ const shipped = {
 };
 
 export default defineConfig({
-  plugins: [react(), socialMeta(), previewHeaders(), trialData(), packCases(), inlineCss()],
+  plugins: [react(), socialMeta(), previewHeaders(), trialData(), packCases(), inlineCss(), playRoutePages()],
   define: { __DNR_DATA__: JSON.stringify(shipped) },
   build: {
     target: 'es2022',
