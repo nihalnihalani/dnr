@@ -66,10 +66,10 @@ Placeholders: `$ROOT` = this repo, `$DJ` = `$DJANGO_SRC`, `$TR` = `$TRIAL_ROOT`,
 | P0-03 | 0 | `kiro-cli` installed (≥ 3.4, prefer ≥ 3.6) and logged in on this machine | `kiro-cli --version` ; `kiro-cli chat --v3 --no-interactive "say hi"` exits 0 | user | needs-user | open |
 | P0-04 | 0 | Model chosen from the CLI list and pinned | `kiro-cli chat --list-models --format json` ; `jq -e '.model != ""' fixtures/pins.json` | kiro | needs-kiro | open |
 | P0-05 | 0 | Headless login works with an API key and an empty HOME | `HOME=$(mktemp -d) KIRO_API_KEY=… kiro-cli chat --v3 --no-interactive "say hi"` exits 0 | user | needs-user | open |
-| P0-06 | 0 | Public GitHub repo `dnr`, MIT detected; first commit holds product.md, LICENSE, NOTICE | `gh repo view dnr --json licenseInfo -q .licenseInfo.key` = `mit` ; `git show --stat $(git rev-list --max-parents=0 HEAD)` | user | needs-user | open |
+| P0-06 | 0 | Public GitHub repo `dnr`, MIT detected; first commit holds product.md, LICENSE, NOTICE | `gh repo view dnr --json licenseInfo -q .licenseInfo.key` = `mit` ; `git show --stat $(git rev-list --max-parents=0 HEAD)` | user | needs-user | **proven** — `gh`: nihalnihalani/dnr public, license mit (check.sh SUB-02) |
 | P0-07 | 0 | Cloudflare token (Pages: Edit), project `dnr-playground`, both secrets in repo | `npx wrangler pages project list` lists it ; `gh secret list` shows `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` | user | needs-user | open |
-| P0-08 | 0 | GitHub Pages mirror enabled (workflow build) | `gh api repos/<you>/dnr/pages -q .build_type` = `workflow` | user | needs-user | open |
-| P0-09 | 0 | `SECOND_SRC` CPython clone builds and a test passes | in `$SECOND_SRC`: `./configure && make -j && ./python.exe -m test test_os` | mining | local | open |
+| P0-08 | 0 | GitHub Pages mirror enabled (workflow build) | `gh api repos/<you>/dnr/pages -q .build_type` = `workflow` | user | needs-user | **proven** — live https://nihalnihalani.github.io/dnr/ (deploy-playground Pages jobs green) |
+| P0-09 | 0 | `SECOND_SRC` CPython clone builds and a test passes | in `$SECOND_SRC`: `./configure && make -j && ./python.exe -m test test_os` | mining | local | **proven** — CPython built (docs/spikes.md P0-09) |
 | P0-10 | 0 | Node 24 active (not 25/26) | `node -v` starts `v24.` (today: `v25.2.1`, fails) | kiro | local | open — local Node v25.2.1; engines now `>=24 <27` |
 | P0-11 | 0 | pnpm, uv, Python present | `pnpm -v` ; `uv --version` ; `uv python list` | kiro | local | open |
 | P0-12 | 0 | hyperfine and ast-grep installed (both missing today) | `hyperfine --version` ; `ast-grep --version` | kiro | local | open |
@@ -77,8 +77,8 @@ Placeholders: `$ROOT` = this repo, `$DJ` = `$DJANGO_SRC`, `$TR` = `$TRIAL_ROOT`,
 | P0-14 | 0 | Lighthouse CI, ruff, biome present | `npx @lhci/cli --version` ; `ruff --version` ; `npx @biomejs/biome --version` | kiro | local | open |
 | P0-15 | 0 | Docker running; python 3.5/3.6/3.7-slim pulled and digests pinned (daemon not running today) | `docker info` ; `jq -e '.docker_images \| length == 3' fixtures/pins.json` | mining | local | open |
 | P0-16 | 0 | Tool versions recorded | `jq -e '.tools \| has("node") and has("pnpm") and has("uv") and has("ast-grep")' fixtures/pins.json` | kiro | local | open |
-| P0-17 | 0 | Workspace installs, lints, typechecks, tests | `pnpm i --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm test` | engine | local | **proven** — clean clone at 5b62bb3: frozen install, typecheck, 385 tests, build; lint 0 errors |
-| P0-18 | 0 | CI workflow (Node 24: lint, typecheck, test, build) green on `main` | `gh run list -w ci.yml -b main -L 1 --json conclusion -q '.[0].conclusion'` = `success` | kiro | needs-user | open — no remote; at `59f5040` CI would be red (C1) |
+| P0-17 | 0 | Workspace installs, lints, typechecks, tests | `pnpm i --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm test` | engine | local | **proven** — public clone, stranger HOME: frozen install, typecheck, 575 tests, lint 0 errors |
+| P0-18 | 0 | CI workflow (Node 24: lint, typecheck, test, build) green on `main` | `gh run list -w ci.yml -b main -L 1 --json conclusion -q '.[0].conclusion'` = `success` | kiro | needs-user | **proven** — ci.yml green on 2497fef |
 | P0-19 | 0 | Playground e2e job enabled once `apps/playground` exists | `grep -n 'playwright' .github/workflows/ci.yml` | kiro | local | **proven** — ci.yml `playground-e2e` job (skips until `playwright.config.ts` exists) |
 | P0-20 | 0 | Grammars vendored and load | `node scripts/check-grammar.mjs` exits 0 ; `shasum -a 256 vendor/grammars/*.wasm` matches PROVENANCE.md | engine | local | **proven** — `node scripts/check-grammar.mjs` ok, sha256 = PROVENANCE.md |
 | P0-21 | 0 | `DJANGO_SRC` is a full, non-shallow clone | `git -C "$DJ" rev-parse --is-shallow-repository` = `false` ; `jq -r .django_sha fixtures/pins.json` = `git -C "$DJ" rev-parse origin/main` on Phase 0 day | mining | local | open |
@@ -209,7 +209,7 @@ Run with `DNR_ORDERS=$ROOT/reports/orders`, `cwd=DEMO`.
 | P5-14 | 5 | Five scripted hard negatives `hardneg-<sha10>.json`, one per gate revert, template `sha256("dnr-2026:hn:"+sha) mod 3` | `ls fixtures/hook-events/hardneg-*.json \| wc -l` ≥ 7 ; template check test | hook | needs-user | open |
 | P5-15 | 5 | Demo hard negatives `hardneg-43933a1dca.json`, `hardneg-d0e4dd5cdd.json` | files exist and replay to `allow` or `warn_*` | hook | local | **proven** — `golden.test.ts` › P5-15 (both demo hard negatives) |
 | P5-16 | 5 | Block stderr ≤ 1,200 chars, first line `DNR: <reason> <revert URL>`, names `dnr board --open <id>` and `dnr allow <id>` | `pnpm test -t 'R1:'` ; `wc -c` on captured stderr | hook | local | **proven** — live stderr matches §6, under 1,200 chars |
-| P5-17 | 5 | Protect tier denies `.dnr/**`, `.kiro/{hooks,settings,agents}/**`, `$HOME/.kiro/**`, realpath of `DNR_ORDERS`, `DNR_STATE_DIR`, `DNR_CONFIG` | `pnpm test -t 'R6:'` | hook | local | partial — `.git/config`, steering, parent dirs fixed; `.git/HEAD`/refs and DNR's own bundle writable (see review-wave3-security N1, N2) |
+| P5-17 | 5 | Protect tier denies `.dnr/**`, `.kiro/{hooks,settings,agents}/**`, `$HOME/.kiro/**`, realpath of `DNR_ORDERS`, `DNR_STATE_DIR`, `DNR_CONFIG` | `pnpm test -t 'R6:'` | hook | local | partial — bundle, shims, rc files, `.git/**` protected; node runtime writable (see review-production P3) |
 | P5-18 | 5 | Tool adapters: fs_write (incl. legacy `command`), str_replace (0 or ≥ 2 matches allowed through), fs_append, delete_file = empty, unknown write tool → warn | `pnpm test -t 'adapter:'` | hook | local | partial — adapters tested; S2 pending |
 | P5-19 | 5 | Fast path + blob-SHA cache for uncovered files | `jq -e '.decision.fast_path' ` on the uncovered event | hook | local | **proven** — fast path ~65 ms |
 | P5-20 | 5 | Credit budget recomputed with S11 cost and K | `docs/spikes.md` "Budget (Phase 5)" | user | needs-user | open |
@@ -221,7 +221,7 @@ Run with `DNR_ORDERS=$ROOT/reports/orders`, `cwd=DEMO`.
 | P6-01 | 6 | guard-shell table of ≥ 40 commands passes (R1–R7, wrappers, splits on `; && \|\| \| $( )` and backticks) | `pnpm test -t 'guard-shell:'` ; table in `packages/hook/test/shell-table.ts` | hook | local | partial — wave-2 catalog now denied except `$(git rev-parse …)` and `:/msg`; post-shell catches those |
 | P6-02 | 6 | guard-shell PreToolUse tree snapshot + `dnr session shell-after` adds changed files to `touched` | `pnpm test -t 'post-shell:'` | hook | local | **proven** — post-shell scores after every shell call, committed or not (review) |
 | P6-03 | 6 | Stop forces ≤ 2 turns, exits 0 on crash, skips orders whose grant applies; scores only `touched` | `pnpm test -t 'stop:'` | hook | local | **proven** — `session.test.ts` › stop; live: 2 forced turns then allow |
-| P6-04 | 6 | Stop order-set hash check: any non-R6 change to orders/config/hook files forces a reporting turn | `pnpm test -t 'stop: orders hash'` | hook | local | partial — reported once; laundered into the next session or via a commit (see review-wave3-security N3) |
+| P6-04 | 6 | Stop order-set hash check: any non-R6 change to orders/config/hook files forces a reporting turn | `pnpm test -t 'stop: orders hash'` | hook | local | partial — reported and persistent; next session still allows with uncommitted orders (see review-production P4) |
 | P6-05 | 6 | P12, P13, P15 and P10's pre-commit blob clause pass | `pnpm test -t 'P12:' -t 'P13:' -t 'P15:' -t 'P10: pre-commit'` | hook | local | **proven** — `session.test.ts` › P12, P13, P15, P10 pre-commit blobs |
 | P6-06 | 6 | Mode acceptance (`commit-enforce`): pre-write records + warns; Stop capped at 1; `dnr check --staged` exits 1 on a crossing | `pnpm test -t 'mode: commit-enforce'` | hook | local | **proven** — `prewrite.test.ts` › commit-enforce; live staged exit 1 |
 | P6-07 | 6 | `warn-only`: match downgraded to warn tier; Stop 1 turn with "Tell the user; do not revert unless asked"; pre-commit exits 0 | `pnpm test -t 'mode: warn-only'` | hook | local | **proven** — `prewrite.test.ts` / `session.test.ts` warn-only; live |
@@ -231,7 +231,7 @@ Run with `DNR_ORDERS=$ROOT/reports/orders`, `cwd=DEMO`.
 | P6-11 | 6 | `dnr doctor` green in DEMO (node, git, grammar ABI, hook JSON, PATH as hooks see it, kiro-cli version, board port) | `cd DEMO && dnr doctor` exits 0 | hook | needs-kiro | partial — `dnr doctor` all green except kiro-cli (not installed) |
 | P6-12 | 6 | `dnr orders verify` | `dnr orders verify --orders reports/orders` exits 0; exits 65 on a corrupted copy | hook | local | open |
 | P6-13 | 6 | Re-run `make-demo-checkout.sh` with full init | script runs `dnr init --hooks all` | kiro | local | open |
-| P6-14 | 6 | R6 process-ancestry guard and Kiro-variable check refuse approval subcommands from an agent; pass from a node-pty human terminal | `pnpm test -t 'R6 guard:'` | hook | local | **fails (security)** — guard still escapable; suspect grant still applies (see review-wave3-security N5) |
+| P6-14 | 6 | R6 process-ancestry guard and Kiro-variable check refuse approval subcommands from an agent; pass from a node-pty human terminal | `pnpm test -t 'R6 guard:'` | hook | local | partial — escape still creates a grant, but it is suspect and does not apply (review) |
 | P6-15 | 6 | Live: headless `git cherry-pick <C>` denied | `cd DEMO && kiro-cli chat --v3 --no-interactive --trust-all-tools "run git cherry-pick <C>"` ; `git log -1` unchanged | hook | needs-kiro | open |
 | P6-16 | 6 | Live: `sed` re-application undone by a forced Stop turn; human's pre-session tracked and untracked edits survive | scripted session; `git diff` shows only the human edits | hook | needs-kiro | open |
 | P6-17 | 6 | Live: `python -c` write that never names its file caught by `dnr-post-shell` + Stop | scripted session; event log shows `touched` + forced turn | hook | needs-kiro | open |
@@ -248,7 +248,7 @@ Run with `DNR_ORDERS=$ROOT/reports/orders`, `cwd=DEMO`.
 | P7-05 | 7 | `/orders/view` renders a committed `django-demo-crew` order; Zod-invalid file shows the error state | `playwright test --grep @ROUTE-orders-view` | ui | needs-user | open |
 | P7-06 | 7 | P9 parity on Chromium, Firefox, WebKit | `pnpm -F @dnr/playground exec playwright test --grep @P9 --project=chromium --project=firefox --project=webkit` | ui | local | partial — passes on Firefox and WebKit, but compares UI engine to itself, not to the hook (M2) |
 | P7-07 | 7 | axe: 0 violations | `playwright test --grep @axe` | ui | local | **proven** — `routes.spec.ts` › A11Y-01 axe 0 on every route (Firefox, WebKit) |
-| P7-08 | 7 | Deployed to Cloudflare Pages from `main`; smoke passes on the preview URL | `gh run list -w deploy-playground.yml -L1` success ; `PLAYGROUND_URL=<preview> playwright test --grep @smoke` | ui | needs-user | open |
+| P7-08 | 7 | Deployed to Cloudflare Pages from `main`; smoke passes on the preview URL | `gh run list -w deploy-playground.yml -L1` success ; `PLAYGROUND_URL=<preview> playwright test --grep @smoke` | ui | needs-user | partial — GitHub Pages live; Cloudflare job fails without secrets (see review-production P7) |
 | P7-09 | 7 | `_headers`: WASM as `application/wasm`; CSP with `'wasm-unsafe-eval'` and the stated `connect-src` | `grep -n wasm-unsafe-eval apps/playground/public/_headers` ; `curl -sI <url>/…wasm \| grep -i content-type` | ui | local | open |
 
 ## Phase 8: Drafter
@@ -275,7 +275,7 @@ Run with `DNR_ORDERS=$ROOT/reports/orders`, `cwd=DEMO`.
 | P9-06 | 9 | repo2 envs + dry run | `dnr trial envs --repo <repo> && dnr trial prepare --cohort repo2 && dnr trial run --namespace repo2 --dry-run --only <sha>` | trial | needs-kiro | open |
 | P9-07 | 9 | Demo and practice namespace dry runs | `dnr trial run --namespace demo --dry-run --only 43933a1dca` ; same for `practice` | trial | needs-kiro | open |
 | P9-08 | 9 | Probe dry run | `dnr trial probe --dry-run --only <sha>` | trial | needs-kiro | open |
-| P9-09 | 9 | Two-file `session_patch` dry run: second event's patch contains both files; Q packet shows both | `DNR_MODE=record dnr check --file <a> …; dnr check --file <b> …` on `two-file-order.json`; `jq -r .session_patch \| grep -c '^diff --git'` = 2 | trial | local | open |
+| P9-09 | 9 | Two-file `session_patch` dry run: second event's patch contains both files; Q packet shows both | `DNR_MODE=record dnr check --file <a> …; dnr check --file <b> …` on `two-file-order.json`; `jq -r .session_patch \| grep -c '^+++ '` = 2 | trial | local | open |
 | P9-10 | 9 | Agent configs `trial/agents/trial-{T,U,B,S,H,L,probe}.json`: pinned model, file + shell tools only, no web | `jq -e '.model and (.tools\|index("web")\|not)' trial/agents/*.json` ; probe has `tools: []` | trial | needs-kiro | **fails** — trial agent configs pin `{{pins.model}}` (H1); tools file+shell ok |
 | P9-11 | 9 | Packet generation incl. probe packets; 6-char codes; shuffle seed 2026 | `pnpm test -t 'packets:'` | trial | local | **proven** — `scoring.test.ts` › P9-11 packets |
 | P9-12 | 9 | 600 s limit kills the process group (no GNU `timeout`) | `pnpm test -t 'run: timeout'` with a sleeping fake CLI | trial | local | **proven** — `harness.test.ts` › P9-12 run timeout |
@@ -346,8 +346,8 @@ Results in `reports/gate.md`.
 | P12-10 | 12 | TS versions of all six mutation operators | `pnpm -F @dnr/testkit test -t 'mutate: ts'` | engine | local | **proven** — `mutate.test.ts` (py-pricing and ts-pricing fixtures, all families) |
 | P12-11 | 12 | Product mode on the TS demo repo: `dnr init && dnr scan && dnr orders build` (defaults to `.dnr/candidates.json`) → orders; after approval a scripted re-application is blocked | script in `scripts/demo/product-mode.sh` exits 0 | hook | local | open |
 | P12-12 | 12 | `dnr scan`: language globs, no trial E-rules, `--branch` default from `origin/HEAD` | `pnpm test -t 'scan:'` | mining | local | open |
-| P12-13 | 12 | `dnr-crew`: reusable workflow, install composite action, `dnr init --crew` writes the caller; `v1` tag moved | `gh api repos/<you>/dnr-crew/git/refs/tags/v1` ; `dnr init --crew && cat .github/workflows/dnr.yml` | kiro | needs-user | partial — reusable workflow, action and caller exist; `OWNER/` and stale pin (see review-wave3-trial-crew C2) |
-| P12-14 | 12 | Crew acceptance: scripted Crew session re-applying `43933a1dca` → `dnr` check fails; one bot comment naming `dnr-43933a1dca` | `gh pr checks <pr> -R <you>/django-demo-crew` ; `gh pr view <pr> --comments` | kiro | needs-user | **fails** (claim) — acceptance.sh records A1 PASS without a Crew session (see review-wave3-trial-crew C1); live pending |
+| P12-13 | 12 | `dnr-crew`: reusable workflow, install composite action, `dnr init --crew` writes the caller; `v1` tag moved | `gh api repos/<you>/dnr-crew/git/refs/tags/v1` ; `dnr init --crew && cat .github/workflows/dnr.yml` | kiro | needs-user | partial — dnr-crew public, pin updated, no `OWNER/`; no `v1` tag (see review-production P6) |
+| P12-14 | 12 | Crew acceptance: scripted Crew session re-applying `43933a1dca` → `dnr` check fails; one bot comment naming `dnr-43933a1dca` | `gh pr checks <pr> -R <you>/django-demo-crew` ; `gh pr view <pr> --comments` | kiro | needs-user | partial — acceptance.sh records A1 PENDING without a real Crew PR (fixed); live pending |
 | P12-15 | 12 | Write-access human's `/dnr allow dnr-43933a1dca` turns the check green on the head SHA | `gh pr checks` after the comment | kiro | needs-user | partial — HMAC grant logic tested (dnr-crew `grant.test.ts`); live pending |
 | P12-16 | 12 | Non-Crew human PR reports `dnr` success | `gh pr checks` on a human PR | kiro | needs-user | open — live pending (acceptance.sh A3) |
 | P12-17 | 12 | Spoofing: other-App comment rejected; non-write PR editing `.github/**` or `.dnr/**` fails; a `dnr` check from another App doesn't satisfy protection | three scripted PRs ; results in `reports/crew-load.md` | kiro | needs-user | partial — rules tested (dnr-crew `rules.test.ts`); live S1–S3 pending |
@@ -361,11 +361,11 @@ Results in `reports/gate.md`.
 | P13-01 | 13 | `/trial`, `/replay`, `/kiro` routes and the recorded-agent preset | `playwright test --grep @ROUTE-trial --grep @ROUTE-replay --grep @ROUTE-kiro` | ui | needs-trial-data | open |
 | P13-02 | 13 | Real CLI loop on `/` (20 s loop of a real block) | asset in `apps/playground/public/` traced to a run ID | ui | needs-kiro | open |
 | P13-03 | 13 | `docs/threat-model.md` (all §5.13 limits + board limits) and `docs/architecture.md` (diagram) | `grep -c` each §5.13 bullet in threat-model.md | kiro | local | partial — docs exist; missing `.git/hooks`/`--no-verify`/osascript limits (M3) |
-| P13-04 | 13 | CI green on Node 24 and 26 | `gh run list -w ci.yml -L1` matrix both green | kiro | needs-user | open — CI matrix is Node 24 and 26 (ci.yml:23); needs remote |
-| P13-05 | 13 | `lhci autorun` on `/`, `/play/<demo>`, `/graveyard` (mobile): perf ≥ 90, a11y = 100 | `npx @lhci/cli autorun` | ui | local | open |
+| P13-04 | 13 | CI green on Node 24 and 26 | `gh run list -w ci.yml -L1` matrix both green | kiro | needs-user | **proven** — ci.yml matrix Node 24/26 green on 2497fef |
+| P13-05 | 13 | `lhci autorun` on `/`, `/play/<demo>`, `/graveyard` (mobile): perf ≥ 90, a11y = 100 | `npx @lhci/cli autorun` | ui | local | **fails** — Lighthouse job failing (see review-production P10) |
 | P13-06 | 13 | Same Lighthouse gate on `/trial` | `npx @lhci/cli autorun` incl. `/trial` | ui | needs-trial-data | open |
 | P13-07 | 13 | Uptime (daily Playwright smoke until 2027-02-05) and monthly keepalive workflows; manual dispatch passes | `gh workflow run uptime.yml && gh run watch` | kiro | needs-user | open |
-| P13-08 | 13 | npm `0.0.0` published by hand, trusted publishing linked, `release.yml` publishes `v0.1.0` with provenance; `vendor/grammars` in `files`; `bin.dnr` | `npm view "$(jq -r .npm_package fixtures/pins.json)" --json \| jq -e '.dist.attestations'` | user | needs-user | open |
+| P13-08 | 13 | npm `0.0.0` published by hand, trusted publishing linked, `release.yml` publishes `v0.1.0` with provenance; `vendor/grammars` in `files`; `bin.dnr` | `npm view "$(jq -r .npm_package fixtures/pins.json)" --json \| jq -e '.dist.attestations'` | user | needs-user | open — not published to npm (user); pack+install works (review) |
 | P13-09 | 13 | `dnr init` refuses an npx cache path; `dnr doctor` confirms the hook command resolves | `pnpm test -t 'init: npx'` | hook | local | open |
 | P13-10 | 13 | Deep link case 1: hosted `/orders/:id?board=<port>`, board down → read-only + "Run `dnr board --open <id>`" banner | `playwright test --grep @deeplink-1` | ui | local | open |
 | P13-11 | 13 | Deep link case 2: after `dnr board`, a deep link in a new page has working actions | `playwright test --grep @deeplink-2` | ui | local | open |
@@ -374,8 +374,8 @@ Results in `reports/gate.md`.
 | P13-14 | 13 | Empty states: no orders, all retired, board down, no trial data | `playwright test --grep @empty-states` | ui | local | open |
 | P13-15 | 13 | Recovery capture: Phase 12 flow against a live `kiro-cli` session with `DNR_NOW` +1 h, saved with run ID | `ls reports/video/recovery/` | ui | needs-kiro | open |
 | P13-16 | 13 | Maintainer pilot: prerequisites checked, written consent, `reports/pilot.md` + `pilot.json` (not pre-registered, never in `trial.json`) | `jq . reports/pilot.json` ; `grep -c consent reports/pilot.md` ≥ 3 | user | needs-user | open |
-| P13-17 | 13 | README#testing passes on a clean devcontainer (5 steps: Playground, live block via `write.txt`, Codespaces `dnr doctor`, `npx {{pkg}} demo`, own repo) | a fresh Codespace walkthrough log in `docs/testing.md` | kiro | needs-user | open |
-| P13-18 | 13 | `dnr demo` offline replay works with no network, no Kiro, no Django | `(unset DJANGO_SRC; dnr demo)` with networking off | hook | local | **proven** — live `dnr demo` offline |
+| P13-17 | 13 | README#testing passes on a clean devcontainer (5 steps: Playground, live block via `write.txt`, Codespaces `dnr doctor`, `npx {{pkg}} demo`, own repo) | a fresh Codespace walkthrough log in `docs/testing.md` | kiro | needs-user | partial — steps 1, 4, 5 work; Quick-start link fails for a stranger (see review-production P1); step 2 needs kiro-cli |
+| P13-18 | 13 | `dnr demo` offline replay works with no network, no Kiro, no Django | `(unset DJANGO_SRC; dnr demo)` with networking off | hook | local | partial — `dnr demo --live` exit 2 with real stderr; `dnr demo` exits 69 until a recorded session exists |
 
 ## Phase 14: Ship
 
@@ -383,7 +383,7 @@ Results in `reports/gate.md`.
 |---|---|---|---|---|---|---|
 | P14-01 | 14 | dev.to post, says it was written for Kiroween Hackathon 2026, covers Kiro, the property counterexample, the regex surprise; published in the window | link in Devpost form | user | needs-user | open |
 | P14-02 | 14 | X and LinkedIn posts starting with `#KiroweenHackathon26`, saying what Kiro changed | links in Devpost form | user | needs-user | open |
-| P14-03 | 14 | Crew bonus submission: `dnr-crew` README, `/.kiro`, description + S16 requirements | `gh repo view <you>/dnr-crew` ; `git -C dnr-crew ls-files .kiro` | user | needs-user | open |
+| P14-03 | 14 | Crew bonus submission: `dnr-crew` README, `/.kiro`, description + S16 requirements | `gh repo view <you>/dnr-crew` ; `git -C dnr-crew ls-files .kiro` | user | needs-user | partial — dnr-crew public with `.kiro`; links.json not set; live Crew pending |
 | P14-04 | 14 | Startup/Student/Ghost profiles and the adoption/market paragraph, if eligible | Devpost form | user | needs-user | open |
 | P14-05 | 14 | Kiro-surfaces card and write-up item 5 generated from files present in `.kiro/` and `powers/` | `node scripts/release/kiro-surfaces.mjs` output equals the card source | kiro | local | open |
 | P14-06 | 14 | Tag `submission-2026`; Playground deploys only from that tag afterwards | `git ls-remote --tags origin submission-2026` ; `deploy-playground.yml` `on.push.tags` | user | needs-user | open |
@@ -422,7 +422,7 @@ P6 was dropped (jsdiff). All fast-check, 500 runs locally, 2,000 nightly.
 | REQ-R4 | 5 | Baseline = session snapshot tree | `pnpm test -t 'R4:'` | hook | local | **proven** — `prewrite.test.ts` › R4 (incl. unborn HEAD) |
 | REQ-R5 | 4 | A and R matched separately with repeats; two-sided rule (≥ 0.3 each side) | `pnpm test -t 'R5:'` | engine | local | **proven** — `django.test.ts` › half of the re-application does not meet the two-sided rule; mutation M1 caught |
 | REQ-R6 | 5 | Protected globs denied in every format | `pnpm test -t 'R6:'` | hook | local | partial — gaps closed except git internals and the DNR bundle (see review-wave3-security N1, N2) |
-| REQ-R7 | 5 | Internal errors allow and log; Stop always exits 0 | `pnpm test -t 'R7:'` | hook | local | partial — amended R7 holds for DNR state; not for a broken repo (see review-wave3-security N1) |
+| REQ-R7 | 5 | Internal errors allow and log; Stop always exits 0 | `pnpm test -t 'R7:'` | hook | local | partial — tampered state fails closed; an unrunnable hook (broken node) is allowed by Kiro (see review-production P3) |
 | REQ-R8 | 5 | p95 < 300 ms on the demo file | = P5-07 | hook | local | **proven** — fast path p95 67–71 ms, match 158–172 ms (review); margin thin (N8) |
 | REQ-R9 | 5 | Grant applies while unexpired or for rest of session once used; each use logged, added to `grants_used` | `pnpm test -t 'R9:'` | hook | local | **proven** — `prewrite.test.ts` › R9 |
 | REQ-R10 | 4 | Stale orders only warn | `pnpm test -t 'R10:'` | engine | local | **proven** — `engine.test.ts` › stale and re-landed orders only warn |
@@ -541,7 +541,7 @@ Each command exists, prints help, and returns 64 on bad usage. Behavioural check
 | ROUTE-04 | 7 | `/orders/view?src=`: only `raw.githubusercontent.com`; Zod-validated; error state | `--grep @ROUTE-04` | ui | local | open |
 | ROUTE-05 | 7 | `/graveyard` headstones: epitaph (reason), birth (commit), death (revert), links; every element has a text label | `--grep @ROUTE-05` | ui | local | open |
 | ROUTE-06 | 7 | `/orders/:id` with history and audit panel (history, grants with uses and expiry, Crew overrides) | `--grep @ROUTE-06` | ui | local | open |
-| ROUTE-07 | 13 | `/trial` Trial Explorer: headline lines, per-arm tables, per-run diff, timeline, labels, tests, decision, false alarms, pins, prereg hash; Recompute in browser matches `trial.json` | `--grep @ROUTE-07` | ui | needs-trial-data | partial — sample data shown with banner (M4) |
+| ROUTE-07 | 13 | `/trial` Trial Explorer: headline lines, per-arm tables, per-run diff, timeline, labels, tests, decision, false alarms, pins, prereg hash; Recompute in browser matches `trial.json` | `--grep @ROUTE-07` | ui | needs-trial-data | **proven** — live `/trial` shows the honest empty state, no numbers |
 | ROUTE-08 | 13 | `/replay`: paste PreToolUse stdin or pick a fixture → decision | `--grep @ROUTE-08` | ui | local | open |
 | ROUTE-09 | 13 | `/kiro`: each Kiro feature → file → what it changed | `--grep @ROUTE-09` | ui | local | open |
 | ROUTE-10 | 7 | Hosted `/orders/:id?board=<port>`: probe board `/api/health`; success → navigate to returned origin; failure → read-only demo orders or banner for unknown IDs | = P13-10…13 | ui | local | open |
@@ -568,7 +568,7 @@ Each command exists, prints help, and returns 64 on bad usage. Behavioural check
 | AUTH-07 | 12 | Mutating route without `X-DNR-CSRF: 1` → 403 | `-t 'AUTH-07:'` | ui | local | **proven** — `board.test.ts` |
 | AUTH-08 | 12 | Nonce never printed or written to stderr | `dnr board 2>&1 \| grep -c 'n='` = 0 | ui | local | partial — off argv; 0600 temp file readable by same user (see review-wave3-security N7) |
 | AUTH-09 | 12 | R7: board's live port in `$DNR_STATE_DIR/board.json` covered by guard-shell; other localhost ports allowed | `pnpm test -t 'R7 port:'` | hook | local | **proven** — `shell.test.ts` › R7 port |
-| DEPLOY-01 | 7 | GitHub Pages mirror serves WASM (no custom CSP) | `curl -sI https://<you>.github.io/dnr/… \| grep application/wasm` | ui | needs-user | open |
+| DEPLOY-01 | 7 | GitHub Pages mirror serves WASM (no custom CSP) | `curl -sI https://<you>.github.io/dnr/… \| grep application/wasm` | ui | needs-user | **proven** — live site serves the app and WASM (review) |
 
 ## Kiro artifacts (05 §12.2–12.5)
 
@@ -616,7 +616,7 @@ Each command exists, prints help, and returns 64 on bad usage. Behavioural check
 | VID-02 | 14 | **Real block on screen by 0:19** (D1-failed-study: commit refused by 0:19), from `demo/L` (or `demo/LU`), run ID on screen | frame at 0:19 shows the DNR stderr and run ID | kiro | needs-kiro | open |
 | VID-03 | 14 | Filmed case chosen by the §11 rule (demo/T re-applied + tests pass; demo/L `stopped_and_reported`/`retried_and_blocked`), else LU, else FB-1 | `reports/video/choice.md` with run IDs | trial | needs-kiro | open |
 | VID-04 | 14 | Raw stream-json transcripts and events of filmed runs committed | `ls reports/runs/demo/*/` | trial | needs-kiro | open |
-| VID-05 | 14 | Every caption/narration line generated from `numbers.json` for the applied row; checker passes (numbers vs `trial.json`, §9.8 wording verbatim, word caps, banned stems under D3/D5/D6 outside code spans) | `node scripts/video/check-numbers.mjs` | trial | needs-trial-data | open |
+| VID-05 | 14 | Every caption/narration line generated from `numbers.json` for the applied row; checker passes (numbers vs `trial.json`, §9.8 wording verbatim, word caps, banned stems under D3/D5/D6 outside code spans) | `npx tsx scripts/video/check.ts` | trial | needs-trial-data | open |
 | VID-06 | 14 | Caption word caps: audience ≤ 8, reason_short ≤ 5, task_short ≤ 4 (no path) | included in VID-05 | trial | local | open |
 | VID-07 | 14 | Captions burned in ≥ 36 px; understandable with sound off | review frame grabs | user | needs-user | open |
 | VID-08 | 14 | Results card: three lines over K_eff; `s_close_to_l` variant; D6 shows no rate lines | numbers.json fields | trial | needs-trial-data | open |
@@ -632,13 +632,13 @@ Each command exists, prints help, and returns 64 on bad usage. Behavioural check
 | ID | Ph | Check | Proof | Owner | Class | Status |
 |---|---|---|---|---|---|---|
 | SUB-01 | 14 | Video under 3 minutes, public on YouTube | = VID-01, VID-11 | user | needs-user | open |
-| SUB-02 | 14 | Repo public; open-source license detectable in the About panel | `gh repo view <you>/dnr --json visibility,licenseInfo` | user | needs-user | open |
-| SUB-03 | 14 | `git ls-files .kiro` non-empty; `.kiro` not ignored | = P0-44, KIRO-13 | kiro | local | **proven** |
-| SUB-04 | 14 | Playground URL works without a login, free, stays up through judging (to 2027-01-29) | logged-out browser ; uptime workflow | user | needs-user | open |
-| SUB-05 | 14 | `README.md#testing` present | `grep -n '^## Testing' README.md` | kiro | local | partial — README#testing present, but step 2 prompt targets the wrong method (C2) and README:9 claims results (H4) |
+| SUB-02 | 14 | Repo public; open-source license detectable in the About panel | `gh repo view <you>/dnr --json visibility,licenseInfo` | user | needs-user | **proven** — check.sh SUB-02 |
+| SUB-03 | 14 | `git ls-files .kiro` non-empty; `.kiro` not ignored | = P0-44, KIRO-13 | kiro | local | **proven** — check.sh SUB-03 |
+| SUB-04 | 14 | Playground URL works without a login, free, stays up through judging (to 2027-01-29) | logged-out browser ; uptime workflow | user | needs-user | partial — URL 200, deep links 200 (check.sh); first /play click shows ALLOW ({R} P2) |
+| SUB-05 | 14 | `README.md#testing` present | `grep -n '^## Testing' README.md` | kiro | local | **proven** — check.sh SUB-05 |
 | SUB-06 | 14 | Category: Frankenstein | Devpost form | user | needs-user | open |
 | SUB-07 | 14 | Bonus entries: Crew (separate repo, own account), Blog, Social Blitz, Startup/Student/Ghost if eligible | Devpost form | user | needs-user | open |
-| SUB-08 | 14 | Every claim links to a file in `reports/` or `.kiro/` | `node scripts/release/check-claims.mjs docs/kiro-usage.md README.md` | kiro | local | open |
+| SUB-08 | 14 | Every claim links to a file in `reports/` or `.kiro/` | `npx tsx scripts/submission/verify.ts links` | kiro | local | **proven** — `scripts/submission/verify.ts links`: 130 links resolve |
 | SUB-09 | 14 | Devpost form submitted before Dec 4 14:00 PT (target 10:00 PT) | Devpost confirmation | user | needs-user | open |
 
 ## Row counts
@@ -653,16 +653,24 @@ Each command exists, prints help, and returns 64 on bad usage. Behavioural check
 
 (Counted with `awk '/^## Row counts/{exit} 1' docs/acceptance-matrix.md | grep -oE '[|] (local|needs-kiro|needs-user|needs-trial-data) [|] [^|]* [|]$' | awk '{print $2}' | sort | uniq -c`; re-run after edits.)
 
-**Status after the wave-3 trial and Crew review (`2b86e58`, dnr-crew `766fc03`, Nov 27):**
+**Status after the production-readiness audit (dnr `2497fef`, dnr-crew `d988028`, Nov 27):**
 
 | Status | Rows |
 |---|---:|
-| proven (some "logic only", pending real data) | 115 |
-| partial (incl. 1 proven in review only) | 50 |
-| fails | 9 |
-| open | 273 |
+| proven (some "logic only", pending real data) | 124 |
+| partial (incl. 1 proven in review only) | 55 |
+| fails | 8 |
+| open | 260 |
 
-New failures: TRIAL-02 and TRIAL-03 (run isolation and leak detection), and P12-14 (the Crew acceptance script overclaims A1). Details are in [docs/review-wave3-trial-crew.md](review-wave3-trial-crew.md). Earlier reviews: [wave-3 security](review-wave3-security.md), [wave 2](review-wave2.md), [wave 1](review-wave1.md).
+The repos are public, the Playground is live on GitHub Pages, and the package installs from `pnpm pack`. The open gaps are in [docs/review-production.md](review-production.md):
+- the Quick-start link step fails for a stranger;
+- the first `/play` click shows ALLOW;
+- the node runtime can be written to;
+- an open tamper finding doesn't block in the next session;
+- the npm package ships no license texts;
+- dnr-crew has no `v1` tag.
+
+This revision also corrects three matrix errors: the P9-09 proof now checks `^+++ `, and the VID-05 and SUB-08 proofs now name `scripts/video/check.ts` and `scripts/submission/verify.ts links`. Earlier reviews: [wave-3 trial and Crew](review-wave3-trial-crew.md), [wave-3 security](review-wave3-security.md), [wave 2](review-wave2.md), [wave 1](review-wave1.md).
 
 ---
 
