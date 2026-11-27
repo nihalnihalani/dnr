@@ -1,0 +1,58 @@
+[
+  {
+    "revert_sha": "43933a1dca07047e95ec990d9289d0212668009e",
+    "kind": "uv",
+    "python": "3.14",
+    "path": "/var/tmp/dnr-trial/envs/43933a1dca",
+    "image": null,
+    "ok": true
+  },
+  {
+    "revert_sha": "d0e4dd5cdd743a5c43c4ccc2c8fa29d3982eaa71",
+    "kind": "uv",
+    "python": "3.13",
+    "path": "/var/tmp/dnr-trial/envs/d0e4dd5cdd",
+    "image": null,
+    "ok": true
+  },
+  {
+    "revert_sha": "976bd519a879b2fd7a356cb21bde32696adb545f",
+    "kind": "docker",
+    "python": "3.5",
+    "path": "/var/tmp/dnr-trial/envs/976bd519a8",
+    "image": "dnr-env-976bd519a8",
+    "ok": true
+  },
+  {
+    "revert_sha": "5cc81cd9eb69f5f7a711412c02039b435c393135",
+    "kind": "docker",
+    "python": "3.6",
+    "path": "/var/tmp/dnr-trial/envs/5cc81cd9eb",
+    "image": "dnr-env-5cc81cd9eb",
+    "ok": true
+  },
+  {
+    "revert_sha": "f3fa86a89b3b85242f49b2b9acf58b5ea35acc1f",
+    "kind": "docker",
+    "python": "3.7",
+    "path": "/var/tmp/dnr-trial/envs/f3fa86a89b",
+    "image": "dnr-env-f3fa86a89b",
+    "ok": true
+  },
+  {
+    "revert_sha": "549445519ce90cc5c1e3f981853cc0c67725f3ed",
+    "kind": "uv",
+    "python": "3.8",
+    "path": "/var/tmp/dnr-trial/envs/549445519c",
+    "image": null,
+    "ok": true
+  },
+  {
+    "revert_sha": "3dac3271d286f2790780e89d31ddbb7197f8defa",
+    "kind": "uv",
+    "python": "3.12",
+    "path": "/var/tmp/dnr-trial/envs/3dac3271d2",
+    "image": null,
+    "ok": true
+  }
+]

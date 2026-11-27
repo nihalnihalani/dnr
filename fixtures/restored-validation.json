@@ -1,0 +1,108 @@
+{
+  "43933a1dca07047e95ec990d9289d0212668009e": {
+    "fails_post_revert": true,
+    "passes_on_original": true,
+    "valid": true,
+    "flaky": [],
+    "note": "start fail, with C pass",
+    "provisional": true,
+    "labels": [
+      "aggregation_regress.tests.AggregationTests.test_count_preserve_group_by"
+    ],
+    "python": "3.14",
+    "kind": "uv"
+  },
+  "d0e4dd5cdd743a5c43c4ccc2c8fa29d3982eaa71": {
+    "fails_post_revert": true,
+    "passes_on_original": true,
+    "valid": true,
+    "flaky": [],
+    "note": "start fail, with C pass",
+    "provisional": true,
+    "labels": [
+      "utils_tests.test_crypto.TestUtilsCryptoMisc.test_constant_time_compare_deprecated"
+    ],
+    "python": "3.13",
+    "kind": "uv"
+  },
+  "976bd519a879b2fd7a356cb21bde32696adb545f": {
+    "fails_post_revert": true,
+    "passes_on_original": true,
+    "valid": true,
+    "flaky": [],
+    "note": "start fail, with C pass",
+    "provisional": true,
+    "labels": [
+      "invalid_models_tests.test_ordinary_fields.BooleanFieldTests.test_invalid_default",
+      "invalid_models_tests.test_ordinary_fields.CharFieldTests.test_invalid_default",
+      "invalid_models_tests.test_ordinary_fields.DateFieldTests.test_invalid_default",
+      "invalid_models_tests.test_ordinary_fields.DecimalFieldTests.test_invalid_default"
+    ],
+    "python": "3.5",
+    "kind": "docker"
+  },
+  "5cc81cd9eb69f5f7a711412c02039b435c393135": {
+    "fails_post_revert": false,
+    "passes_on_original": true,
+    "valid": false,
+    "flaky": [],
+    "note": "start pass, with C pass",
+    "provisional": true,
+    "labels": [
+      "settings_tests.tests.SettingsTests.test_secret_key_empty_string"
+    ],
+    "python": "3.6",
+    "kind": "docker"
+  },
+  "f3fa86a89b3b85242f49b2b9acf58b5ea35acc1f": {
+    "fails_post_revert": true,
+    "passes_on_original": true,
+    "valid": true,
+    "flaky": [],
+    "note": "start fail, with C pass",
+    "provisional": true,
+    "labels": [
+      "auth_tests.test_forms.UserChangeFormTest.test_customer_user_model_with_different_username_field",
+      "auth_tests.test_forms.UserChangeFormTest.test_with_custom_user_model",
+      "auth_tests.test_forms.UserCreationFormTest.test_customer_user_model_with_different_username_field",
+      "auth_tests.test_forms.UserCreationFormTest.test_with_custom_user_model"
+    ],
+    "python": "3.7",
+    "kind": "docker"
+  },
+  "549445519ce90cc5c1e3f981853cc0c67725f3ed": {
+    "fails_post_revert": true,
+    "passes_on_original": true,
+    "valid": true,
+    "flaky": [],
+    "note": "start fail, with C pass",
+    "provisional": true,
+    "labels": [
+      "responses.test_fileresponse.FileResponseTests.test_file_to_stream_closes_response",
+      "responses.test_fileresponse.FileResponseTests.test_file_to_stream_closes_response_on_error"
+    ],
+    "python": "3.8",
+    "kind": "uv"
+  },
+  "3dac3271d286f2790780e89d31ddbb7197f8defa": {
+    "fails_post_revert": false,
+    "passes_on_original": true,
+    "valid": false,
+    "flaky": [],
+    "note": "start pass, with C pass",
+    "provisional": true,
+    "labels": [
+      "migrations.test_operations.OperationTests.test_add_charfield",
+      "schema.tests.SchemaTests.test_charfield_change_max_length_no_index_created",
+      "schema.tests.SchemaTests.test_charfield_db_index_to_textfield_db_index",
+      "schema.tests.SchemaTests.test_charfield_primary_key_to_db_index",
+      "schema.tests.SchemaTests.test_charfield_primary_key_to_db_index_and_unique",
+      "schema.tests.SchemaTests.test_charfield_primary_key_to_unique",
+      "schema.tests.SchemaTests.test_charfield_primary_key_unique_to_just_unique",
+      "schema.tests.SchemaTests.test_remove_db_index",
+      "schema.tests.SchemaTests.test_slugfields_change_primary_key"
+    ],
+    "python": "3.12",
+    "kind": "uv"
+  }
+}
