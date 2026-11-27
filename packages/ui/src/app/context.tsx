@@ -27,15 +27,15 @@ export interface AppConfig {
   loadCase(id: string): Promise<CaseBundle>;
   /** Zod-validate a case (null when valid); the page shows an error banner otherwise. */
   checkCase(id: string): Promise<string | null>;
-  /** URL of trial.json (real results only; the page shows an empty state until it exists). */
-  trialUrl: string;
-  /** {tag, sha} of prereg-v1 once it exists (written at build time). */
-  preregUrl: string;
+  /** URL of trial.json (real results only), or null when this build has none (empty state). */
+  trialUrl: string | null;
+  /** {tag, sha} of prereg-v1 once it exists (written at build time), else null. */
+  preregUrl: string | null;
   /** Simulated clock shared by /play and the localStorage adapter (Advance 1 h). */
   clock: SimClock;
   kiroUrl: string;
   /** Recorded output of the built CLI on the demo checkout (data/cli-capture.json), if one exists. */
-  captureUrl: string;
+  captureUrl: string | null;
   /** Cases not available yet, and why (from cases/index.json). */
   loadPending(): Promise<Array<{ what: string; why: string }>>;
   /** Public repository URL (VITE_REPO_URL), or null. */

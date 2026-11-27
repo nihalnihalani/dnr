@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { Loading } from '../components/common';
+import { Loading, useTitle } from '../components/common';
 import { Home } from '../routes/Home';
 import { type AppConfig, ConfigContext, useConfig } from './context';
 import { Link, match, RouterProvider, useRouter } from './router';
@@ -47,13 +47,36 @@ function Routes() {
   if (path === '/trial') return <Trial />;
   if (path === '/replay') return <Replay />;
   if (path === '/kiro') return <Kiro />;
+  return <NotFound path={path} />;
+}
+
+function NotFound({ path }: { path: string }) {
+  useTitle('Page not found');
   return (
-    <>
+    <section className="not-found" data-testid="not-found" aria-labelledby="page-title">
+      <p className="eyebrow">404 · page not found</p>
       <h1 id="page-title">Nothing buried here</h1>
       <p className="lede">
-        No page at <code>{path}</code>. Try the <Link to="/graveyard">graveyard</Link>.
+        There is no page at <code>{path}</code>. It may have moved, or the link has a typo.
       </p>
-    </>
+      <ul className="not-found-links">
+        <li>
+          <Link to="/" className="btn">
+            Home
+          </Link>
+        </li>
+        <li>
+          <Link to="/play" className="btn">
+            Try a revert
+          </Link>
+        </li>
+        <li>
+          <Link to="/graveyard" className="btn">
+            The graveyard
+          </Link>
+        </li>
+      </ul>
+    </section>
   );
 }
 

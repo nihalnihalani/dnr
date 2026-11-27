@@ -1,7 +1,7 @@
 import { TrialResult } from '@dnr/schemas';
 import { Fragment, useState } from 'react';
 import { useConfig } from '../app/context';
-import { Banner, ErrorBanner, Loading, useAsync, useTitle } from '../components/common';
+import { ErrorBanner, Loading, useAsync, useTitle } from '../components/common';
 
 interface TrialRun {
   run_id: string;
@@ -77,38 +77,36 @@ export function Trial() {
       {real.error !== undefined && <ErrorBanner error={real.error} />}
       {real.data && <TrialBody d={real.data} />}
       {!real.loading && !real.data && real.error === undefined && (
-        <>
-          <div className="card" data-testid="empty-trial">
-            <h2 id="empty-trial-h" style={{ marginTop: 0 }}>
-              The pre-registered trial has not run yet
-            </h2>
-            <p>
-              When it has, this page shows, from <code>reports/trial.json</code>:
-            </p>
-            <ul>
-              <li>
-                three headline lines over the same reverts: without DNR, with a steering file from history,
-                and with DNR live;
-              </li>
-              <li>per-arm run tables with the blind labels, test results, decisions and each run's diff;</li>
-              <li>the timeline, false alarms, pins, κ and the decision row;</li>
-              <li>a Recompute in browser button that checks every figure against the run list.</li>
-            </ul>
-            <p data-testid="prereg">
-              Pre-registration:{' '}
-              {prereg.data ? (
-                <>
-                  tag <code>{prereg.data.tag}</code> at <code>{prereg.data.sha}</code>
-                </>
-              ) : (
-                <>
-                  tag <code>prereg-v1</code> not created yet
-                </>
-              )}
-              .
-            </p>
-          </div>
-        </>
+        <div className="card" data-testid="empty-trial">
+          <h2 id="empty-trial-h" style={{ marginTop: 0 }}>
+            The pre-registered trial has not run yet
+          </h2>
+          <p>
+            When it has, this page shows, from <code>reports/trial.json</code>:
+          </p>
+          <ul>
+            <li>
+              three headline lines over the same reverts: without DNR, with a steering file from history, and
+              with DNR live;
+            </li>
+            <li>per-arm run tables with the blind labels, test results, decisions and each run's diff;</li>
+            <li>the timeline, false alarms, pins, κ and the decision row;</li>
+            <li>a Recompute in browser button that checks every figure against the run list.</li>
+          </ul>
+          <p data-testid="prereg">
+            Pre-registration:{' '}
+            {prereg.data ? (
+              <>
+                tag <code>{prereg.data.tag}</code> at <code>{prereg.data.sha}</code>
+              </>
+            ) : (
+              <>
+                tag <code>prereg-v1</code> not created yet
+              </>
+            )}
+            .
+          </p>
+        </div>
       )}
     </>
   );

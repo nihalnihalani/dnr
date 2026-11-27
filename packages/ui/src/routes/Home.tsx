@@ -13,7 +13,8 @@ export interface CliCapture {
   dnr_version: string;
 }
 
-async function loadCapture(url: string): Promise<CliCapture | null> {
+async function loadCapture(url: string | null): Promise<CliCapture | null> {
+  if (!url) return null;
   const res = await fetch(url);
   if (!res.ok || !(res.headers.get('content-type') ?? '').includes('json')) return null;
   return (await res.json()) as CliCapture;

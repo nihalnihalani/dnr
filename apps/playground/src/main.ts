@@ -70,10 +70,10 @@ const config: AppConfig = {
   loadCaseIndex,
   loadCase,
   checkCase,
-  trialUrl: asset('data/trial.json'),
-  preregUrl: asset('data/prereg.json'),
+  trialUrl: __DNR_DATA__.trial ? asset('data/trial.json') : null,
+  preregUrl: __DNR_DATA__.prereg ? asset('data/prereg.json') : null,
   kiroUrl: asset('data/kiro.json'),
-  captureUrl: asset('data/cli-capture.json'),
+  captureUrl: __DNR_DATA__.capture ? asset('data/cli-capture.json') : null,
   loadPending: async () =>
     (await json<{ pending?: Array<{ what: string; why: string }> }>('cases/index.json')).pending ?? [],
   repoUrl: import.meta.env.VITE_REPO_URL || null,

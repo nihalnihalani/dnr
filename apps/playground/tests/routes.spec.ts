@@ -7,6 +7,7 @@ import {
   DEMO,
   DEMO_ORDER,
   expectNoAxeViolations,
+  isRemote,
   openPlay,
   runPreset,
 } from './helpers';
@@ -265,4 +266,45 @@ test('A11Y-01: reduced motion stops the mist animation', { tag: ['@A11Y-01'] }, 
   const anim = await page.locator('.mist').evaluate((el) => getComputedStyle(el).animationName);
   expect(anim).toBe('none');
   // The candle's flame (re-landed orders) is checked on the board, where a real re-land exists.
+});
+
+test('polish: unknown routes get the 404 page with ways back; static hosts answer HTTP 404', {
+  tag: ['@polish', '@not-found'],
+}, async ({ page }) => {
+  const res = await page.goto('no-such-page');
+  // The GitHub Pages mirror serves 404.html with status 404; vite preview falls back with 200.
+  if (isRemote) expect(res?.status()).toBe(404);
+  await expect(page.getByTestId('not-found')).toContainText('404 · page not found');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Nothing buried here');
+  await expect(page).toHaveTitle('Page not found · DNR');
+  await expectNoAxeViolations(page);
+  await page.getByTestId('not-found').getByRole('link', { name: 'Try a revert' }).click();
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  expect(new URL(page.url()).pathname).toMatch(/\/play$/);
+});
+
+test('polish: favicon, touch icon and social preview tags resolve to real files', {
+  tag: ['@polish', '@meta'],
+}, async ({ page, request }) => {
+  await page.goto('./');
+  const attr = (sel: string, a: string) => page.locator(sel).first().getAttribute(a);
+  const icon = await attr('link[rel="icon"]', 'href');
+  const touch = await attr('link[rel="apple-touch-icon"]', 'href');
+  for (const [href, type] of [
+    [icon, 'image/svg+xml'],
+    [touch, 'image/png'],
+  ] as const) {
+    const r = await request.get(new URL(href as string, page.url()).href);
+    expect(r.status(), href ?? '').toBe(200);
+    expect(r.headers()['content-type']).toContain(type);
+  }
+  for (const p of ['og:title', 'og:description', 'og:image', 'og:url'])
+    expect(await attr(`meta[property="${p}"]`, 'content'), p).toBeTruthy();
+  expect(await attr('meta[name="twitter:card"]', 'content')).toBe('summary_large_image');
+  const og = (await attr('meta[property="og:image"]', 'content')) as string;
+  expect(og).toMatch(/^https:\/\/.+\/og\.png$/);
+  // The image itself ships in this build (fetched from this deployment, not the absolute URL).
+  const img = await request.get(new URL('og.png', new URL('./', page.url())).href);
+  expect(img.status()).toBe(200);
+  expect(img.headers()['content-type']).toContain('image/png');
 });
