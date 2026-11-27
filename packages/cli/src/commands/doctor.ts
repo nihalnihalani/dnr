@@ -2,7 +2,7 @@
  * `dnr doctor` (§8): node, git, the grammar ABI, the hook JSON, the `dnr` command as hooks see it
  * (it must resolve on PATH), the kiro-cli version, and the board port. Exit 0 when all pass.
  */
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { isAbsolute, join } from 'node:path';
@@ -33,6 +33,26 @@ function portFree(port: number): Promise<boolean> {
     s.once('error', () => res(false));
     s.listen(port, '127.0.0.1', () => s.close(() => res(true)));
   });
+}
+
+/**
+ * Whether kiro-cli has a login session (`kiro-cli whoami`; it exits non-zero with "Not logged in"
+ * when there is none). Without one, Kiro sessions cannot run, so the hooks never fire.
+ */
+export function kiroLogin(version: string, env: NodeJS.ProcessEnv): Check {
+  const r = spawnSync('kiro-cli', ['whoami'], { encoding: 'utf8', env, timeout: 10_000 });
+  const text = `${r.stdout ?? ''}${r.stderr ?? ''}`.trim();
+  const first = text.split('\n').find((l) => l.trim()) ?? '';
+  if (r.error)
+    return { name: 'kiro-cli login', ok: false, detail: `kiro-cli whoami failed: ${r.error.message}` };
+  if (r.status === 0) return { name: 'kiro-cli login', ok: true, detail: first || 'logged in' };
+  return {
+    name: 'kiro-cli login',
+    ok: false,
+    detail: /not logged in/i.test(text)
+      ? `${version} is installed but not logged in: run \`kiro-cli login\``
+      : `kiro-cli whoami exited ${r.status}: ${first}`,
+  };
 }
 
 export async function cmdDoctor(argv: string[], io: CliIO): Promise<number> {
@@ -149,6 +169,7 @@ export async function cmdDoctor(argv: string[], io: CliIO): Promise<number> {
     const m = /(\d+)\.(\d+)/.exec(out);
     const ok = !!m && (Number(m[1]) > 3 || (Number(m[1]) === 3 && Number(m[2]) >= 4));
     checks.push({ name: 'kiro-cli', ok, detail: `${out} (need ≥ 3.4, 3.6 preferred)` });
+    checks.push(kiroLogin(out, io.env));
   } catch {
     checks.push({ name: 'kiro-cli', ok: false, detail: 'kiro-cli not found on PATH' });
   }
