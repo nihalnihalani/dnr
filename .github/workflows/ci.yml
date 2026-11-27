@@ -11,9 +11,12 @@ on:
 permissions:
   contents: read
 
+# Pull requests cancel superseded runs; main never does, so every pushed commit gets a full
+# result (several teammates push to main, and cancelled runs left the e2e and Lighthouse jobs
+# with no result at all).
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ci-${{ github.ref }}-${{ github.event_name == 'pull_request' && 'pr' || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check:
