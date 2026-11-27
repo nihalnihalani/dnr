@@ -76,6 +76,7 @@ jobs:
       contents: read
       pages: write
       id-token: write
+      actions: read
     environment:
       name: github-pages
       url: ${{ steps.pages.outputs.page_url }}
@@ -112,6 +113,19 @@ jobs:
       - uses: actions/upload-pages-artifact@v3
         with:
           path: apps/playground/dist-pages
+      # deploy-pages looks the artifact up by name right away, and the artifacts API can lag the
+      # upload: three runs on 2026-11-27 failed with "Found 0 artifact(s)" 0.4 s after the upload
+      # finalized (a re-run then found 2: the old attempt's and the new). Wait until it is listed.
+      - name: Wait until the Pages artifact is listed
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for i in $(seq 1 30); do
+            n=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts?name=github-pages" --jq '.total_count')
+            if [ "$n" = "1" ]; then echo "listed after ${i} check(s)"; exit 0; fi
+            echo "listed: $n"; sleep 4
+          done
+          echo "::error::the github-pages artifact is not listed exactly once after 2 minutes"; exit 1
       - id: pages
         uses: actions/deploy-pages@v4
       # Check the live site after each deploy (Pages can take a moment to serve the new build).
