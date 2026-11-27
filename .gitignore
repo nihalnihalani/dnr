@@ -19,3 +19,7 @@ apps/playground/public/data/kiro.json
 apps/playground/public/data/prereg.json
 apps/playground/public/data/kiro.json
 /dnr-guard-*.tgz
+packages/cli/LICENSE
+packages/cli/NOTICE
+packages/cli/README.md
+packages/cli/THIRD_PARTY_LICENSES

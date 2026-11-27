@@ -10,7 +10,11 @@
   "files": [
     "dist",
     "vendor/grammars",
-    "templates"
+    "templates",
+    "LICENSE",
+    "NOTICE",
+    "README.md",
+    "THIRD_PARTY_LICENSES"
   ],
   "engines": {
     "node": ">=24 <27"

@@ -1,8 +1,9 @@
 // Copies the assets the npm package ships next to the bundle:
 // - the vendored grammars into `vendor/grammars/` (shipped in `files`);
-// - the built board UI (`apps/playground/dist`, served by `dnr board`) into `dist/ui/`.
+// - the built board UI (`apps/playground/dist`, served by `dnr board`) into `dist/ui/`;
+// - LICENSE, NOTICE, README.md and a generated THIRD_PARTY_LICENSES (audit P5).
 // A missing UI build is a hard failure: the package must never ship the "UI not built" stub.
-import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { copyFileSync, cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const from = fileURLToPath(new URL('../../vendor/grammars/', import.meta.url));
@@ -25,3 +26,16 @@ cpSync(uiFrom, uiTo, {
   recursive: true,
   filter: (src) => !/[\\/](_headers|robots\.txt)$/.test(src),
 });
+
+// Production audit P5: the package's own LICENSE, NOTICE and README, and the generated
+// THIRD_PARTY_LICENSES for everything bundled or installed with it.
+for (const f of ['LICENSE', 'NOTICE', 'README.md'])
+  copyFileSync(
+    fileURLToPath(new URL(`../../${f}`, import.meta.url)),
+    fileURLToPath(new URL(`./${f}`, import.meta.url)),
+  );
+const { render } = await import('./scripts/third-party-licenses.mjs');
+const { version } = JSON.parse(
+  (await import('node:fs')).readFileSync(new URL('./package.json', import.meta.url), 'utf8'),
+);
+writeFileSync(fileURLToPath(new URL('./THIRD_PARTY_LICENSES', import.meta.url)), render(version));

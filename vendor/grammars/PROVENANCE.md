@@ -14,4 +14,6 @@ published tarball, so the plan's fallback (build in `emscripten/emsdk`) was not 
 The runtime itself is not vendored. It comes from the pinned `web-tree-sitter@0.27.2`
 package (`web-tree-sitter.wasm`, sha256 `488beeff7adb7fd7e21e97cc29a43dc6d031977755eda892d6d96c7f456cfdec`).
 
+License texts: `LICENSE-tree-sitter-python.txt` and `LICENSE-tree-sitter-typescript.txt`, copied from the same npm packages.
+
 To verify: `shasum -a 256 vendor/grammars/*.wasm`, then `node scripts/check-grammar.mjs`.

@@ -28,6 +28,8 @@ let HOME: string;
 const repos: Repo[] = [];
 /** Who approves in these throwaway repos: the test harness, never a person. */
 const HARNESS = 'node-pty test harness (not a human)';
+/** The THIRD_PARTY_LICENSES generator (plain .mjs, imported by path). */
+const GENERATOR: string = join(CLI_PKG, 'scripts', 'third-party-licenses.mjs');
 
 function env(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   const e: NodeJS.ProcessEnv = {
@@ -108,6 +110,52 @@ describe('installed dnr-guard package', () => {
       .map((f) => `dist/ui/${f.replace(/^\.\//, '')}`);
     expect(ui.length).toBeGreaterThan(5);
     for (const f of ui) expect(files, f).toContain(f);
+  });
+
+  it('P5: the tarball ships LICENSE, NOTICE, README.md and THIRD_PARTY_LICENSES covering every bundled package, the grammars and the Django and Vite excerpts', async () => {
+    const files = new Set(
+      execFileSync('tar', ['tzf', tarball], { encoding: 'utf8' })
+        .split('\n')
+        .filter(Boolean)
+        .map((f) => f.replace(/^package\//, '')),
+    );
+    for (const f of [
+      'LICENSE',
+      'NOTICE',
+      'README.md',
+      'THIRD_PARTY_LICENSES',
+      'vendor/grammars/LICENSE-tree-sitter-python.txt',
+      'vendor/grammars/LICENSE-tree-sitter-typescript.txt',
+    ])
+      expect(files, f).toContain(f);
+    const tpl = readFileSync(join(PKG, 'THIRD_PARTY_LICENSES'), 'utf8');
+    expect(readFileSync(join(PKG, 'LICENSE'), 'utf8')).toBe(readFileSync(join(ROOT, 'LICENSE'), 'utf8'));
+    // Every package in the production closure of dnr-guard and the workspace packages it bundles.
+    const { collect } = (await import(GENERATOR)) as {
+      collect: () => Array<{ name: string; version: string; license: string | null; texts: unknown[] }>;
+    };
+    const pkgs = collect();
+    for (const name of [
+      'react',
+      'react-dom',
+      '@codemirror/view',
+      'zod',
+      'web-tree-sitter',
+      'hono',
+      'tree-sitter-python',
+    ])
+      expect(
+        pkgs.map((p) => p.name),
+        name,
+      ).toContain(name);
+    for (const p of pkgs) {
+      expect(p.license, `${p.name}@${p.version} declares a license`).toBeTruthy();
+      expect(tpl, `${p.name}@${p.version} listed`).toContain(
+        `\n${p.name}@${p.version}\nLicense: ${p.license}`,
+      );
+    }
+    expect(tpl).toContain('Redistribution and use in source and binary forms'); // Django BSD-3-Clause
+    expect(tpl).toContain('VoidZero Inc. and Vite contributors');
   });
 
   it('pkg: installed `dnr --version` prints the package version', () => {
