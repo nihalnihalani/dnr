@@ -1,8 +1,16 @@
 {
   "django_sha": "f0e7bd90884b5da0a7418f3c78d1fd309c905014",
-  "second_repo": null,
-  "second_sha": null,
-  "ts_demo": null,
+  "second_repo": "cpython",
+  "second_sha": "551df9d7d6054dac9ce78a2f04d46113b1ef9650",
+  "ts_demo": {
+    "repo": "https://github.com/vitejs/vite",
+    "R": "afc44f0957f7ef52d27d5026200a289de374c215",
+    "C": "a3b28e8744ffae9abd018696ad4fc01b27ac71ce",
+    "file": "packages/vite/src/node/build.ts",
+    "qualname": "injectSsrFlag",
+    "license": "MIT",
+    "c_file_count": 4
+  },
   "demo_cases": [
     {
       "R": "43933a1dca07047e95ec990d9289d0212668009e",
