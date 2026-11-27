@@ -7,7 +7,10 @@ import { packCase } from './scripts/pack';
 
 const here = dirname(fileURLToPath(import.meta.url));
 
-/** Copy the real reports/trial.json into the build when it exists (the sample is used otherwise). */
+/**
+ * Copy the real reports/trial.json into the build when it exists. Without it, /trial shows its empty
+ * state; no sample ships.
+ */
 function trialData(): Plugin {
   return {
     name: 'dnr-trial-data',

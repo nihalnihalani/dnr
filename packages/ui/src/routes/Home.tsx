@@ -53,6 +53,7 @@ function Capture({ c }: { c: CliCapture }) {
 export function Home() {
   useTitle('Do Not Resurrect');
   const cfg = useConfig();
+  const repo = (cfg.repoUrl ?? 'https://github.com/nihalnihalani/dnr').replace(/\/$/, '');
   const idx = useAsync(() => cfg.loadCaseIndex(), []);
   const cap = useAsync(() => loadCapture(cfg.captureUrl).catch(() => null), []);
   const first = idx.data?.[0]?.id;
@@ -64,10 +65,22 @@ export function Home() {
           <h1 id="page-title">Some changes should stay dead.</h1>
           <p className="lede">
             When a project reverts a change, it remembers why. An AI agent doesn't. DNR turns every revert
-            into an order: the reason, the links, and the exact tokens the change added and removed. When an
-            agent's write would bring the change back, the hook blocks it before the file changes and tells
-            the agent why.
+            into an order: the reason, the links, and the exact tokens the change added and removed. Its Kiro
+            PreToolUse hook checks each agent write against the approved orders, and a write that would bring
+            a reverted change back is refused before the file changes, with the reason.
           </p>
+          <ul className="evidence" data-testid="home-evidence">
+            <li data-status="proven">
+              <strong>Proven:</strong> the built <code>dnr</code> hook command, run on a real Django checkout
+              at revert <code>43933a1dca</code>, blocks the re-application with exit 2 and the revert's reason
+              (<a href={`${repo}/blob/main/reports/perf.md`}>reports/perf.md</a>).
+            </li>
+            <li data-status="pending">
+              <strong>Pending:</strong> a recorded live block inside a Kiro session. It waits on spike S1 and
+              gate check 1b, which need <code>kiro-cli</code> (
+              <a href={`${repo}/blob/main/docs/spikes.md`}>docs/spikes.md</a>).
+            </li>
+          </ul>
           <div className="row" style={{ marginTop: 18 }}>
             <Link className="btn primary" to={first ? `/play/${first}` : '/play'}>
               Try a revert

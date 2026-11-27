@@ -82,7 +82,8 @@ const config: AppConfig = {
   captureUrl: __DNR_DATA__.capture ? asset('data/cli-capture.json') : null,
   loadPending: async () =>
     (await json<{ pending?: Array<{ what: string; why: string }> }>('cases/index.json')).pending ?? [],
-  repoUrl: import.meta.env.VITE_REPO_URL || null,
+  // The public repository (claims on the site link to files in it).
+  repoUrl: import.meta.env.VITE_REPO_URL || 'https://github.com/nihalnihalani/dnr',
   version: import.meta.env.VITE_DNR_VERSION || '0.0.0',
 };
 
