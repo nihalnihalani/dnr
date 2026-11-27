@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -609,6 +610,78 @@ describe('scan', () => {
     expect((await dnr(fx.repo.dir, ['scan', '--lang', 'ts', '--branch', 'main'])).out).toContain(
       '0 revert(s)',
     );
+  });
+
+  it('scan: --branch defaults to origin/HEAD, not the checked-out branch (P12-12)', async () => {
+    fx = await revertFixture();
+    const clone = mkdtempSync(join(tmpdir(), 'dnr-scan-clone-'));
+    try {
+      execFileSync('git', ['clone', '-q', fx.repo.dir, clone], { stdio: 'pipe' });
+      expect(
+        execFileSync('git', ['-C', clone, 'symbolic-ref', 'refs/remotes/origin/HEAD'], {
+          encoding: 'utf8',
+        }).trim(),
+      ).toBe('refs/remotes/origin/main');
+      // Check out a branch that predates C: only origin/HEAD holds the revert.
+      execFileSync('git', ['-C', clone, 'checkout', '-q', '-b', 'old', `${fx.C}~1`], { stdio: 'pipe' });
+      const r = await dnr(clone, ['scan']);
+      expect(r.code, r.err).toBe(0);
+      const c = JSON.parse(readFileSync(join(clone, '.dnr', 'candidates.json'), 'utf8'));
+      expect(c.map((x: { revert_sha: string }) => x.revert_sha)).toEqual([fx.R]);
+      // An explicit --branch still wins.
+      expect((await dnr(clone, ['scan', '--branch', 'old'])).out).toContain('0 revert(s)');
+    } finally {
+      rmSync(clone, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('orders verify and reason history', () => {
+  it('P6-12: orders verify exits 0 on the real reports/orders and 65 on a corrupted copy', async () => {
+    fx = await revertFixture();
+    const root = join(__dirname, '..', '..', '..');
+    const real = join(root, 'reports', 'orders');
+    const ok = await dnr(fx.repo.dir, ['orders', 'verify', '--orders', real]);
+    expect(ok.code, ok.err).toBe(0);
+    expect(ok.out).toMatch(/DNR: [1-9]\d* order\(s\) valid/);
+    const copy = mkdtempSync(join(tmpdir(), 'dnr-verify-'));
+    for (const f of readdirSync(real).filter((x) => x.endsWith('.json')))
+      writeFileSync(join(copy, f), readFileSync(join(real, f)));
+    const victim = readdirSync(copy).find((x) => x.endsWith('.json')) as string;
+    const o = JSON.parse(readFileSync(join(copy, victim), 'utf8'));
+    writeFileSync(join(copy, victim), JSON.stringify({ ...o, original_sha: 'not-a-sha' }));
+    const bad = await dnr(fx.repo.dir, ['orders', 'verify', '--orders', copy]);
+    expect(bad.code).toBe(65);
+    expect(bad.err).toContain(`invalid`);
+    writeFileSync(join(copy, victim), '{"truncated": ');
+    expect((await dnr(fx.repo.dir, ['orders', 'verify', '--orders', copy])).code).toBe(65);
+    rmSync(copy, { recursive: true, force: true });
+  });
+
+  it('draft: history — replacing the reason of an approved order appends edited_reason and keeps it approved (P8-06)', async () => {
+    fx = await revertFixture();
+    const before = readOrder(fx);
+    expect(before.status).toBe('approved');
+    const r = await dnr(fx.repo.dir, [
+      'orders',
+      'edit',
+      fx.order.id,
+      '--reason',
+      'It double-counted refunds.',
+      '--by',
+      'maintainer',
+    ]);
+    expect(r.code, r.err).toBe(0);
+    const after = readOrder(fx);
+    expect(after.status).toBe('approved');
+    expect(after.reason).toBe('It double-counted refunds.');
+    expect(after.history.slice(0, before.history.length)).toEqual(before.history);
+    expect(after.history).toHaveLength(before.history.length + 1);
+    expect(after.history.at(-1)).toMatchObject({ action: 'edited_reason', by: 'maintainer' });
+    // Still enforced: the re-application blocks.
+    writeFileSync(join(fx.repo.dir, 'again.py'), AFTER);
+    const c = await dnr(fx.repo.dir, ['check', '--file', 'shop.py', '--proposed', 'again.py']);
+    expect(JSON.parse(c.out).decision.outcome).toBe('block');
   });
 });
 
