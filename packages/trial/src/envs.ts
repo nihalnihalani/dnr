@@ -4,7 +4,7 @@
  * validation (fail on R, pass on C; at R+Δ with C cherry-picked), flaky detection (two baseline
  * runs). Tests always run with PYTHONPATH=<the working copy>, never `-e .`.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -54,15 +54,21 @@ export async function pythonFor(gitDir: string, sha: string, table: DjangoPython
   return detectPython(gitDir, sha, table);
 }
 
-/** The minimal dependency set: `install_requires` from setup.cfg or `dependencies` from pyproject.toml, plus tblib. */
+/** The minimal dependency set: `install_requires` from setup.cfg or setup.py, or `dependencies` from pyproject.toml, plus tblib. */
 export async function minimalDeps(gitDir: string, sha: string): Promise<string[]> {
   const out = new Set<string>(['tblib']);
   const cfg = await readBlob(gitDir, sha, 'setup.cfg');
   const m = cfg ? /install_requires\s*=\s*\n((?:[ \t]+\S.*\n?)+)/.exec(cfg) : null;
   if (m) for (const l of (m[1] as string).split('\n')) if (l.trim()) out.add(l.trim());
+  // Older Django (before setup.cfg metadata): setup.py `install_requires=['pytz', …]`.
+  const setup = await readBlob(gitDir, sha, 'setup.py');
+  const sp = setup ? /install_requires\s*=\s*\[([^\]]*)\]/.exec(setup) : null;
+  if (sp)
+    for (const x of (sp[1] as string).matchAll(/"([^"]+)"|'([^']+)'/g)) out.add((x[1] ?? x[2]) as string);
   const py = await readBlob(gitDir, sha, 'pyproject.toml');
   const d = py ? /dependencies\s*=\s*\[([^\]]*)\]/.exec(py) : null;
-  if (d) for (const x of (d[1] as string).matchAll(/["']([^"']+)["']/g)) out.add(x[1] as string);
+  // A quoted requirement may itself hold the other quote: "tzdata; sys_platform == 'win32'".
+  if (d) for (const x of (d[1] as string).matchAll(/"([^"]+)"|'([^']+)'/g)) out.add((x[1] ?? x[2]) as string);
   return [...out].sort();
 }
 
@@ -100,7 +106,8 @@ export async function buildUvEnv(i: BuildEnvInput): Promise<{ ok: boolean; note:
       },
     );
     if (r.code === 0) return { ok: true, note: 'tests/requirements/py3.txt' };
-    log(`uv pip install -r py3.txt failed for ${sha10(i.revertSha)}; trying the minimal set`);
+    const why = /error: [^\n]*|fatal error: [^\n]*/.exec(r.stderr)?.[0] ?? r.stderr.trim().slice(-200);
+    log(`uv pip install -r py3.txt failed for ${sha10(i.revertSha)} (${why.trim()}); trying the minimal set`);
   }
   const deps = await minimalDeps(i.gitDir, i.startSha);
   const r2 = await i.exec(
@@ -115,36 +122,67 @@ export async function buildUvEnv(i: BuildEnvInput): Promise<{ ok: boolean; note:
     : { ok: false, note: `minimal install failed: ${r2.stderr.trim().slice(0, 300)}` };
 }
 
-export function dockerfile(image: string): string {
+export function dockerfile(image: string, reqFile = 'py3.txt'): string {
   return [
     `FROM ${image}`,
     'ENV PIP_DISABLE_PIP_VERSION_CHECK=1 PYTHONDONTWRITEBYTECODE=1',
     'COPY requirements/ /req/',
     'COPY constraints.txt /constraints.txt',
-    'RUN pip install --no-cache-dir -c /constraints.txt -r /req/py3.txt',
+    `RUN pip install --no-cache-dir -c /constraints.txt -r /req/${reqFile}`,
     '',
   ].join('\n');
+}
+
+/** The first line of a committed constraints file names the requirement set it pins. */
+export const CONSTRAINTS_HEADER = '# dnr: requirements=';
+
+export function constraintsRequirements(text: string): string {
+  const first = text.split('\n')[0] ?? '';
+  return first.startsWith(CONSTRAINTS_HEADER) ? first.slice(CONSTRAINTS_HEADER.length).trim() : 'py3.txt';
+}
+
+/** pypi-timemachine's cutoff: the revert's commit time in UTC, without an offset. */
+export function cutoffUtc(iso: string): string {
+  return new Date(iso).toISOString().slice(0, 19);
 }
 
 /**
  * Constraints (full transitive closure) for Python 3.5–3.7, generated once inside the digest-pinned
  * image with pypi-timemachine serving the index as of the revert date; committed as
- * `fixtures/constraints/<sha10>.txt`.
+ * `fixtures/constraints/<sha10>.txt`. pypi-timemachine runs from its own venv so its own
+ * dependencies stay out of `pip freeze`. The release pip resolves depends on the image: 0.1
+ * (Python 3.5, 3.6) picks a random port and prints it, so the port is read from its log; 0.2
+ * (Python 3.7) takes `--port` and prints nothing. Either way pip waits until the port accepts.
  */
-export function constraintsScript(date: string): string {
+export function constraintsScript(date: string, reqFile = 'py3.txt'): string {
+  const cutoff = cutoffUtc(date);
   return [
     'set -e',
-    'pip install -q pypi-timemachine >/dev/null',
-    `(pypi-timemachine ${date} --port 9876 >/tmp/ptm.log 2>&1 &)`,
-    'sleep 4',
-    'pip install -q --index-url http://127.0.0.1:9876/ -r /req/py3.txt >/dev/null',
-    'pip freeze --exclude pypi-timemachine',
+    'python -m venv /ptm',
+    '/ptm/bin/pip install -q pypi-timemachine >/tmp/ptm-install.log 2>&1 || { cat /tmp/ptm-install.log >&2; exit 3; }',
+    'port=""',
+    'if /ptm/bin/pypi-timemachine --help 2>/dev/null | grep -q -- --port; then',
+    `  port=9876; (/ptm/bin/pypi-timemachine ${cutoff} --port 9876 >/tmp/ptm.log 2>&1 &)`,
+    'else',
+    `  (/ptm/bin/pypi-timemachine ${cutoff} >/tmp/ptm.log 2>&1 &)`,
+    'fi',
+    'up=""',
+    'for i in $(seq 1 60); do',
+    "  [ -n \"$port\" ] || port=$(sed -n 's#.*Running on http://127.0.0.1:\\([0-9]*\\).*#\\1#p' /tmp/ptm.log | head -n 1)",
+    '  if [ -n "$port" ] && python -c "import socket,sys; socket.create_connection((\'127.0.0.1\', int(sys.argv[1])), 1)" "$port" 2>/dev/null; then up=1; break; fi',
+    '  sleep 1',
+    'done',
+    '[ -n "$up" ] || { echo "pypi-timemachine did not start" >&2; cat /tmp/ptm.log >&2; exit 3; }',
+    `pip install -q --index-url "http://127.0.0.1:$port/" --trusted-host 127.0.0.1 -r /req/${reqFile} >/tmp/pip.log 2>&1 || { tail -n 30 /tmp/pip.log >&2; exit 4; }`,
+    `echo '${CONSTRAINTS_HEADER}${reqFile}'`,
+    'pip freeze',
   ].join('\n');
 }
 
 export async function buildDockerEnv(
   i: BuildEnvInput,
 ): Promise<{ ok: boolean; note: string; image: string | null }> {
+  const log = i.log ?? (() => {});
   const minor = i.python;
   const image = i.docker.images[`python:${minor}-slim`] ?? i.docker.images[minor];
   if (!image)
@@ -177,32 +215,50 @@ export async function buildDockerEnv(
         note: `could not export tests/requirements: ${ex.stderr.slice(0, 200)}`,
         image: null,
       };
+    // The §9.1 step 6 minimal set, offered when py3.txt cannot be installed in the image.
+    const minimal = await minimalDeps(i.gitDir, i.startSha);
+    await writeFile(join(ctx, 'requirements', 'minimal.txt'), `${minimal.join('\n')}\n`);
     if (!existsSync(i.constraintsFile)) {
-      const gen = await i.exec(
-        'docker',
-        [
-          'run',
-          '--rm',
-          '-v',
-          `${join(ctx, 'requirements')}:/req:ro`,
-          image,
-          'sh',
-          '-c',
-          constraintsScript(i.excludeNewer),
-        ],
-        { cwd: ctx, timeoutMs: 60 * 60_000 },
-      );
+      const generate = (reqFile: string) =>
+        i.exec(
+          'docker',
+          [
+            'run',
+            '--rm',
+            '-v',
+            `${realpathSync(join(ctx, 'requirements'))}:/req:ro`,
+            image,
+            'sh',
+            '-c',
+            constraintsScript(i.excludeNewer, reqFile),
+          ],
+          { cwd: ctx, timeoutMs: 60 * 60_000 },
+        );
+      let gen = await generate('py3.txt');
+      if (gen.code === 4) {
+        const why = /error: [^\n]*|ERROR: [^\n]*/.exec(gen.stderr)?.[0] ?? gen.stderr.trim().slice(-200);
+        log(
+          `py3.txt does not install in ${image.split('@')[0]} for ${sha10(i.revertSha)} (${why}); trying the minimal set`,
+        );
+        gen = await generate('minimal.txt');
+      }
       if (gen.code !== 0)
-        return { ok: false, note: `constraints generation failed: ${gen.stderr.slice(0, 300)}`, image: null };
+        return {
+          ok: false,
+          note: `constraints generation failed (exit ${gen.code}): ${gen.stderr.trim().slice(-400)}`,
+          image: null,
+        };
       await mkdir(join(i.constraintsFile, '..'), { recursive: true });
       await writeFile(i.constraintsFile, gen.stdout);
     }
-    await writeFile(join(ctx, 'constraints.txt'), readFileSync(i.constraintsFile, 'utf8'));
-    await writeFile(join(ctx, 'Dockerfile'), dockerfile(image));
+    const constraints = readFileSync(i.constraintsFile, 'utf8');
+    const reqFile = constraintsRequirements(constraints);
+    await writeFile(join(ctx, 'constraints.txt'), constraints);
+    await writeFile(join(ctx, 'Dockerfile'), dockerfile(image, reqFile));
     const tag = `dnr-env-${sha10(i.revertSha)}`;
     const b = await i.exec('docker', ['build', '-q', '-t', tag, ctx], { cwd: ctx, timeoutMs: 60 * 60_000 });
     return b.code === 0
-      ? { ok: true, note: `docker image ${tag}`, image: tag }
+      ? { ok: true, note: `docker image ${tag} (${reqFile})`, image: tag }
       : { ok: false, note: `docker build failed: ${b.stderr.slice(0, 300)}`, image: null };
   } finally {
     await rm(ctx, { recursive: true, force: true });
@@ -228,7 +284,9 @@ export function testCommand(
         '-e',
         'PYTHONDONTWRITEBYTECODE=1',
         '-v',
-        `${workdir}:/w`,
+        // The real path: on macOS tmpdir() is under the /var symlink, which a Docker VM
+        // (colima, Docker Desktop) only shares as /private/var/….
+        `${realpathSync(workdir)}:/w`,
         '-e',
         'PYTHONPATH=/w',
         '-w',
@@ -300,6 +358,49 @@ export async function scratchAt(
     : { dir, ok: false, note: `cherry-pick of ${sha10(pick)} onto ${sha10(sha)} conflicts`, cleanup };
 }
 
+/** Writes `rev:<path>` from `repoDir` into `dir` for each path (a missing blob is an error). */
+export async function overlayFiles(
+  repoDir: string,
+  rev: string,
+  paths: string[],
+  dir: string,
+): Promise<void> {
+  for (const p of paths) {
+    const text = await readBlob(repoDir, rev, p);
+    if (text === null) throw new Error(`${rev}:${p} does not exist; cannot restore the test file`);
+    await mkdir(join(dir, p, '..'), { recursive: true });
+    await writeFile(join(dir, p), text);
+  }
+}
+
+/**
+ * Puts every `tests/` file R changed back to its `R^` state in `dir` (a file R added is removed).
+ * `paths` (the files holding the restored tests) must be among them.
+ */
+export async function restoreTestSide(
+  repoDir: string,
+  revertSha: string,
+  paths: string[],
+  dir: string,
+): Promise<string[]> {
+  const out = await git(
+    ['diff', '--no-renames', '--name-status', `${revertSha}^`, revertSha, '--', 'tests/'],
+    {
+      cwd: repoDir,
+    },
+  );
+  const changed: string[] = [];
+  for (const line of out.split('\n').filter(Boolean)) {
+    const [status, file] = line.split('\t') as [string, string];
+    if (status === 'A') await rm(join(dir, file), { force: true });
+    else changed.push(file);
+  }
+  const missing = paths.filter((p) => !changed.includes(p));
+  if (missing.length > 0) throw new Error(`R did not change ${missing.join(', ')}; not restored tests`);
+  await overlayFiles(repoDir, `${revertSha}^`, changed, dir);
+  return changed.sort();
+}
+
 export interface Validation {
   fails_post_revert: boolean | null;
   passes_on_original: boolean | null;
@@ -319,8 +420,12 @@ export async function validateRestored(i: {
   repoDir: string;
   startSha: string;
   originalSha: string;
+  /** R: the restored test files are put back from `R^` (the state R deleted them from). */
+  revertSha: string;
   rdelta: boolean;
   labels: string[];
+  /** The test files that hold the restored tests (`restored_tests.paths`). */
+  paths: string[];
 }): Promise<Validation> {
   if (i.labels.length === 0)
     return {
@@ -331,21 +436,32 @@ export async function validateRestored(i: {
       note: 'no restored tests',
     };
   const atStart = await scratchAt(i.repoDir, i.startSha);
+  // At the start state the restored tests were deleted, so running their labels there proves
+  // nothing. Undo R's whole test-side change (the restored tests plus the models and helpers
+  // they import, which R removed with them): R's code, with the tests as they were at R^.
+  try {
+    await restoreTestSide(i.repoDir, i.revertSha, i.paths, atStart.dir);
+  } catch (e) {
+    await atStart.cleanup();
+    throw e;
+  }
   const withC = i.rdelta
     ? await scratchAt(i.repoDir, i.startSha, i.originalSha)
     : await scratchAt(i.repoDir, i.originalSha);
   try {
     const flaky = new Set<string>();
-    const twice = async (dir: string) => {
+    const twice = async (dir: string, keep?: TestRun[]) => {
       const a = await runTests(i.exec, i.env, dir, i.labels);
       const b = await runTests(i.exec, i.env, dir, i.labels);
+      keep?.push(a, b);
       const fa = new Set(a.failed);
       const fb = new Set(b.failed);
       for (const t of [...fa, ...fb]) if (fa.has(t) !== fb.has(t)) flaky.add(t);
       if (a.status !== b.status) for (const t of i.labels) flaky.add(t);
       return a.status === b.status ? a.status : 'could-not-run';
     };
-    const r = await twice(atStart.dir);
+    const startRuns: TestRun[] = [];
+    const r = await twice(atStart.dir, startRuns);
     if (!withC.ok) {
       return {
         fails_post_revert: r === 'fail',
@@ -356,14 +472,16 @@ export async function validateRestored(i: {
       };
     }
     const c = await twice(withC.dir);
-    const fails = r === 'could-not-run' ? null : r === 'fail';
+    // "Fails on R" means each restored test itself fails, not that its module failed to import.
+    const missed = r === 'fail' ? i.labels.filter((l) => !startRuns.every((t) => t.failed.includes(l))) : [];
+    const fails = r === 'could-not-run' ? null : r === 'fail' && missed.length === 0;
     const passes = c === 'could-not-run' ? null : c === 'pass';
     return {
       fails_post_revert: fails,
       passes_on_original: passes,
       valid: fails === true && passes === true && flaky.size === 0,
       flaky: [...flaky].sort(),
-      note: `start ${r}, with C ${c}`,
+      note: `start ${r}${missed.length > 0 ? ` (not failing there: ${missed.join(', ')})` : ''}, with C ${c}`,
     };
   } finally {
     await atStart.cleanup();

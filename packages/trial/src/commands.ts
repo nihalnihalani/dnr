@@ -439,12 +439,13 @@ async function cmdEnvs(argv: string[], io: TrialIO): Promise<number> {
     repo: { type: 'string' },
     stratum: { type: 'string' },
     only: { type: 'string' },
+    candidates: { type: 'boolean' },
     'dry-run': { type: 'boolean' },
   });
   if (v.help)
     return help(
       io,
-      'dnr trial envs [--repo django|cpython|sympy|syn] [--stratum rdelta] [--only <sha>] [--dry-run]',
+      'dnr trial envs [--repo django|cpython|sympy|syn] [--stratum rdelta] [--only <sha>[,<sha>…]] [--candidates] [--dry-run]',
     );
   const P = paths(io, !!v['dry-run']);
   const repo = (v.repo as string | undefined) ?? 'django';
@@ -455,7 +456,27 @@ async function cmdEnvs(argv: string[], io: TrialIO): Promise<number> {
   const only = v.only as string | undefined;
   const log = (m: string) => io.err(`[envs] ${m}\n`);
   const sel: Selector = v.stratum === 'rdelta' ? { namespace: 'rdelta' } : { wave: 1 };
-  let cases = await casesFor(P, sel, only, log);
+  let cases: TrialCase[];
+  if (v.candidates) {
+    // Before Phase 3 labels exist: build and validate environments for named mined candidates
+    // (E1–E5 and E7 passing), so the environment recipe is proven on real reverts early. The
+    // output says these are provisional; the K + 4 run after `trial assign` replaces it.
+    if (!only) throw new Usage('--candidates needs --only <sha>[,<sha>…]');
+    cases = [];
+    for (const prefix of only.split(',').filter(Boolean)) {
+      const p = provisionalCase(P.root, prefix, null);
+      if (!p) throw new Usage(`--only ${prefix}: not a mined candidate passing E1–E5 and E7`);
+      const gitDir = gitDirOf(P, p.repo);
+      if (!gitDir) throw new Dependency('DJANGO_SRC not found');
+      const plan = await planTestLabels(gitDir, p.original_sha, p.revert_sha);
+      p.restored_tests.paths = plan.restored.paths;
+      p.restored_tests.labels = plan.restored.labels;
+      cases.push(p);
+    }
+    log(`provisional: ${cases.length} mined candidate(s) from fixtures/candidates.jsonl (no Phase 3 labels)`);
+  } else {
+    cases = await casesFor(P, sel, only, log);
+  }
   cases = cases.filter((c) => c.repo === repo && c.role !== null);
   if (cases.length === 0) throw new Usage('no assigned cases (fixtures/assignment.json) for this selection');
   const table = existsSync(join(P.root, 'fixtures/django-python.json'))
@@ -541,10 +562,18 @@ async function cmdEnvs(argv: string[], io: TrialIO): Promise<number> {
         repoDir,
         startSha: start,
         originalSha: c.original_sha,
+        revertSha: c.revert_sha,
         rdelta: v.stratum === 'rdelta',
         labels: c.restored_tests.labels,
+        paths: c.restored_tests.paths,
       });
-      validations[c.revert_sha] = val;
+      validations[c.revert_sha] = {
+        ...val,
+        provisional: c.provisional,
+        labels: c.restored_tests.labels,
+        python: entry.python,
+        kind: entry.kind,
+      };
       for (const t of val.flaky) flaky.push({ revert_sha: c.revert_sha, test: t });
       log(`${sha10(c.revert_sha)}: restored tests: ${val.note}${val.valid ? ' (valid)' : ''}`);
     }
