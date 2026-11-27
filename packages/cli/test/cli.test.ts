@@ -1,4 +1,5 @@
-import { existsSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { CaseBundle, EventRecord, Order } from '@dnr/schemas';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -733,8 +734,13 @@ describe('board', () => {
     let launchMode = 0;
     let health: unknown = null;
     let rows: unknown = null;
+    // This test is about the nonce, not the UI: a one-file static dir stands in for dist/ui, which
+    // only exists after `pnpm build` (the installed-package test serves the real built UI).
+    const staticDir = mkdtempSync(join(tmpdir(), 'dnr-board-ui-'));
+    writeFileSync(join(staticDir, 'index.html'), '<!doctype html><html><head></head><body></body></html>\n');
     const code = await runCli(['board', '--port', '0'], {
       ...i,
+      boardStaticDir: staticDir,
       openBrowser: (u) => {
         opened = u;
         launchText = readFileSync(u, 'utf8');
@@ -769,6 +775,26 @@ describe('board', () => {
     expect(existsSync(opened)).toBe(false); // deleted on first use
     expect(health).toHaveProperty('version');
     expect(rows).toEqual([{ order: fx.order, effective: 'approved', drift: false }]);
+    expect(existsSync(join(fx.repo.dir, '.dnr', 'board.json'))).toBe(false);
+  });
+});
+
+describe('board UI packaging', () => {
+  it('pkg-ui: `dnr board` without a built UI fails loudly instead of serving the stub', async () => {
+    fx = await revertFixture();
+    const i = io(fx.repo.dir);
+    let started = false;
+    const code = await runCli(['board', '--port', '0'], {
+      ...i,
+      boardStaticDir: mkdtempSync(join(tmpdir(), 'dnr-board-noui-')),
+      openBrowser: () => {
+        started = true;
+      },
+      untilExit: async () => {},
+    });
+    expect(code).not.toBe(0);
+    expect(i.buf.err).toContain('the board UI is missing from this install');
+    expect(started).toBe(false);
     expect(existsSync(join(fx.repo.dir, '.dnr', 'board.json'))).toBe(false);
   });
 });

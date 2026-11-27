@@ -5,7 +5,7 @@
  */
 import { spawn } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { mkdir, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { DNR_VERSION } from '@dnr/hook';
 import { parse, str } from '../args';
+import { packagePath } from '../assets';
 import { createBoardStore } from '../board-store';
 import { repoContext, requireHuman } from '../context';
 import { EXIT, missingDependency, usage } from '../errors';
@@ -94,9 +95,10 @@ export async function cmdBoard(argv: string[], io: CliIO): Promise<number> {
     port: { type: 'string' },
     open: { type: 'string' },
     host: { type: 'string' },
+    'no-open': { type: 'boolean' },
   });
   if (v.help) {
-    io.out('dnr board [--port 4317] [--open <order_id>] [--host 127.0.0.1]\n');
+    io.out('dnr board [--port 4317] [--open <order_id>] [--host 127.0.0.1] [--no-open]\n');
     return EXIT.OK;
   }
   const host = str(v.host);
@@ -122,7 +124,15 @@ export async function cmdBoard(argv: string[], io: CliIO): Promise<number> {
     }
   }
   const store = createBoardStore(ctx, errors);
+  // The built UI ships in the package at dist/ui (scripts-copy-assets.mjs). A missing build fails
+  // loudly rather than serving the "UI not built" stub.
+  const staticDir = io.boardStaticDir ?? packagePath('dist/ui');
+  if (!existsSync(join(staticDir, 'index.html')))
+    throw missingDependency(
+      `DNR: the board UI is missing from this install (${join(staticDir, 'index.html')}). Reinstall dnr-guard, or run \`pnpm build\` in a checkout.`,
+    );
   const handle = await start({
+    staticDir,
     store,
     version: DNR_VERSION,
     port,
@@ -138,7 +148,10 @@ export async function cmdBoard(argv: string[], io: CliIO): Promise<number> {
   );
   io.out(`DNR board on ${handle.origin} (Ctrl-C to stop)\n`);
   const launch = await oneShotLaunch(handle.launchUrl);
-  (io.openBrowser ?? defaultOpen)(launch.file);
+  // --no-open (SSH, headless): print the launch file's path instead. The file holds only the
+  // one-shot loopback URL, never the nonce, so printing its path keeps N7.
+  if (v['no-open']) io.out(`Open this file in your browser to sign in: ${launch.file}\n`);
+  else (io.openBrowser ?? defaultOpen)(launch.file);
   try {
     await (io.untilExit ?? untilSignal)();
   } finally {

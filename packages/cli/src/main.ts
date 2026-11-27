@@ -16,7 +16,7 @@ export const HELP = `dnr ${DNR_VERSION}: blocks agent writes that re-apply rever
   dnr guard-shell --stdin
   dnr session start|confirm|shell-after|show|end|gc
   dnr allow <order_id> [--ttl 1h]
-  dnr board [--port 4317] [--open <order_id>] [--host 127.0.0.1]
+  dnr board [--port 4317] [--open <order_id>] [--host 127.0.0.1] [--no-open]
   dnr mcp
   dnr explain <file> <qualname>
   dnr export-case <revert> [--orders] [--git-dir] [--out]

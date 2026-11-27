@@ -31,6 +31,8 @@ export interface CliIO {
   scriptPath: string;
   draftRunner?: DraftRunner;
   boardStarter?: BoardStarter;
+  /** The built board UI directory (default: the package's `dist/ui`). */
+  boardStaticDir?: string;
   openBrowser?: (url: string) => void;
   /** Resolves when the board should shut down (default: SIGINT/SIGTERM). */
   untilExit?: () => Promise<void>;

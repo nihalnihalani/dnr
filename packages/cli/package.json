@@ -42,6 +42,7 @@
     "@dnr/grammar": "workspace:*",
     "@dnr/hook": "workspace:*",
     "@dnr/mcp": "workspace:*",
+    "@dnr/playground": "workspace:*",
     "@dnr/schemas": "workspace:*",
     "@dnr/store": "workspace:*",
     "@dnr/trial": "workspace:*"
