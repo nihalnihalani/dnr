@@ -15,7 +15,9 @@ const CLI = join(ROOT, 'packages', 'cli', 'dist', 'cli.js');
 let fx: Fixture;
 
 beforeAll(async () => {
-  if (!existsSync(CLI)) execFileSync('pnpm', ['-F', 'dnr-guard', 'build'], { cwd: ROOT, stdio: 'pipe' });
+  // `dnr-guard...` also builds what the package bundles (the board UI from @dnr/playground).
+  if (!existsSync(CLI))
+    execFileSync('pnpm', ['--filter', 'dnr-guard...', 'build'], { cwd: ROOT, stdio: 'pipe' });
   fx = await revertFixture({ status: 'draft' });
 }, 120_000);
 afterAll(() => fx?.repo.cleanup());
