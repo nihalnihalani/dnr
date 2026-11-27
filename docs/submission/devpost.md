@@ -52,7 +52,7 @@ Limits: **Pending:** reports/trial.md (`dnr trial report`, Phase 11).
 
 ## 5. How Kiro built it
 
-- **Specs and tasks:** 2 specs with requirements, design and tasks, [dnr-check](../../.kiro/specs/dnr-check/) and [trial-harness](../../.kiro/specs/trial-harness/) (last change [3d50c72](https://github.com/nihalnihalani/dnr/commit/3d50c72)). Running them in Kiro IDE spec mode: **Pending:** spike S14, the IDE (needs kiro-cli).
+- **Specs and tasks:** 2 specs with requirements, design and tasks, [dnr-check](../../.kiro/specs/dnr-check/) and [trial-harness](../../.kiro/specs/trial-harness/) (last change [4a237f9](https://github.com/nihalnihalani/dnr/commit/4a237f9)). Running them in Kiro IDE spec mode: **Pending:** spike S14, the IDE (needs kiro-cli).
 - **CLI hooks and headless runs:** 6 DNR hook files, [dnr-guard-shell.json](../../.kiro/hooks/dnr-guard-shell.json), [dnr-post-shell.json](../../.kiro/hooks/dnr-post-shell.json), [dnr-post-write.json](../../.kiro/hooks/dnr-post-write.json), [dnr-pre-write.json](../../.kiro/hooks/dnr-pre-write.json), [dnr-session-start.json](../../.kiro/hooks/dnr-session-start.json), [dnr-stop-backstop.json](../../.kiro/hooks/dnr-stop-backstop.json) (last change [59f5040](https://github.com/nihalnihalani/dnr/commit/59f5040)). A live headless Kiro block: **Pending:** spike S1, an always-block hook under kiro-cli (needs kiro-cli).
 - **Kiro Web and IDE:** **Pending:** spike S14, whether hooks run on Kiro Web and in the IDE (needs kiro-cli).
 - **Crew bot:** [https://github.com/nihalnihalani/dnr-crew](https://github.com/nihalnihalani/dnr-crew). **Pending:** spike S16, how Crew exposes a session to a bot (needs kiro-cli and Crew access).
