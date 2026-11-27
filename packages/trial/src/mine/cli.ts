@@ -27,10 +27,11 @@ import { cohenKappa, mergeReasonAnswers, writeReasonPackets } from './label';
 import { type MineResult, mine, PROFILES, toJsonl, toRevertCase } from './mine';
 import { buildDjangoPythonTable, detectPython } from './python-version';
 import { computeRdelta } from './rdelta';
-import { renderEligibility } from './report';
+import { renderEligibility, renderSecondRepo, type SecondRepoSummary, summarizeSecondRepo } from './report';
 import {
   countDjangoRelands,
   countGithub,
+  countRelands,
   countRevertOfRevert,
   countTracDuplicates,
   renderReproposals,
@@ -77,6 +78,21 @@ async function defaultRef(repo: string): Promise<string> {
   return 'origin/main';
 }
 
+/** The committed repo2 candidates (cpython first, then sympy), for the Django report's §9.11 section. */
+async function readSecondRepo(): Promise<SecondRepoSummary | null> {
+  for (const repo of ['cpython', 'sympy'] as const) {
+    const rel = `fixtures/candidates.${repo}.jsonl`;
+    const f = join(ROOT, rel);
+    if (!existsSync(f)) continue;
+    const cs = (await readFile(f, 'utf8'))
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => Candidate.parse(JSON.parse(l)));
+    return summarizeSecondRepo(repo, rel, cs);
+  }
+  return null;
+}
+
 async function readCandidates(): Promise<Candidate[]> {
   const text = await readFile(P.candidates, 'utf8');
   return text
@@ -105,6 +121,8 @@ async function cmdMine(args: string[]): Promise<number> {
   if (!profile) throw new Error(`unknown repo ${repo}`);
   const gitDir = gitDirFor(repo, values['git-dir']);
   const ref = values.ref ?? (await defaultRef(repo));
+  // The report names where the ref came from, so pinning it does not change the bytes.
+  const refLabel = values.ref ?? (repo === 'django' && ref !== 'origin/main' ? 'pins.json django_sha' : ref);
   const labels = values.labels
     ? ReasonLabels.parse(JSON.parse(await readFile(resolve(values.labels), 'utf8')))
     : null;
@@ -129,7 +147,9 @@ async function cmdMine(args: string[]): Promise<number> {
   const candPath = P.candidates.replace(/\.jsonl$/, `${suffix}.jsonl`);
   const eligPath = P.eligibility.replace(/\.md$/, `${suffix}.md`);
   await writeText(candPath, toJsonl(cands));
-  await writeText(eligPath, renderEligibility(res, { repo, gitDir, ref, labels: values.labels ?? null }));
+  let report = renderEligibility(res, { repo, gitDir, ref: refLabel, labels: values.labels ?? null });
+  if (repo === 'django') report += `\n${renderSecondRepo(await readSecondRepo())}`;
+  await writeText(eligPath, report);
   log(`wrote ${candPath} (${cands.length}) and ${eligPath}`);
 
   let status = 0;
@@ -334,6 +354,10 @@ async function cmdReproposals(args: string[]): Promise<number> {
   const ref = await revParse(gitDir, values.ref ?? (await defaultRef('django')));
   const rows = [];
   rows.push(...(await countDjangoRelands(gitDir, ref)).rows);
+  // §9.9 also counts CPython's Reapply/Reland commits; from the local clone when SECOND_SRC is CPython.
+  const second = process.env.SECOND_SRC;
+  if (second && existsSync(join(second, 'Lib')))
+    rows.push(...(await countRelands(second, await revParse(second, 'origin/main'), 'CPython')).rows);
   if (existsSync(P.candidates)) rows.push(countRevertOfRevert(await readCandidates()));
   rows.push(await countTracDuplicates(new PoliteFetcher()));
   rows.push(...(await countGithub(defaultGh, defaultSleep)));

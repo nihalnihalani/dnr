@@ -19,6 +19,15 @@ export async function countDjangoRelands(
   gitDir: string,
   ref: string,
 ): Promise<{ rows: CountRow[]; shas: string[] }> {
+  return countRelands(gitDir, ref, 'Django');
+}
+
+/** §9.9 "Reapply and Reland commits" in a local clone (Django, CPython). */
+export async function countRelands(
+  gitDir: string,
+  ref: string,
+  repoName: string,
+): Promise<{ rows: CountRow[]; shas: string[] }> {
   const args = ['log', ref, '--no-merges', '-i', '-E', `--grep=${RELAND_GREP}`, '--format=%H%x1f%s'];
   const out = await git(args, { cwd: gitDir });
   const lines = out.split('\n').filter(Boolean);
@@ -26,12 +35,12 @@ export async function countDjangoRelands(
   return {
     rows: [
       {
-        what: 'Django commits whose message mentions reapply/reland',
+        what: `${repoName} commits whose message mentions reapply/reland`,
         count: lines.length,
         source: `git log ${ref.slice(0, 10)} --no-merges -i -E --grep='${RELAND_GREP}'`,
       },
       {
-        what: '…of which the subject itself says reapply/reland',
+        what: `…of which the ${repoName} subject itself says reapply/reland`,
         count: subjectHits.length,
         source: 'same, subject filter',
       },

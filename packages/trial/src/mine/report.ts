@@ -150,6 +150,63 @@ export function renderEligibility(
   return L.join('\n');
 }
 
+/** §9.11: repo2 needs at least this many eligible reverts in its source root, else sympy. */
+export const REPO2_MIN_ELIGIBLE = 15;
+
+export interface SecondRepoSummary {
+  repo: 'cpython' | 'sympy';
+  candidatesFile: string;
+  candidates: number;
+  pool: number;
+  eligible: number;
+  pending: boolean;
+}
+
+/** Counts a repo2 candidates file the same way as the Django K table (pool = no failed rule). */
+export function summarizeSecondRepo(
+  repo: SecondRepoSummary['repo'],
+  candidatesFile: string,
+  cs: readonly Candidate[],
+): SecondRepoSummary {
+  const inWin = cs.filter((c) => c.window !== null);
+  return {
+    repo,
+    candidatesFile,
+    candidates: cs.length,
+    pool: inWin.filter((c) => RULE_IDS.every((id) => c.rules[id] !== 'fail')).length,
+    eligible: inWin.filter((c) => RULE_IDS.every((id) => c.rules[id] === 'pass')).length,
+    pending: inWin.some((c) => RULE_IDS.some((id) => c.rules[id] === 'pending')),
+  };
+}
+
+/** The "Second repo" section of the Django eligibility report (P3-20, §9.11). */
+export function renderSecondRepo(s: SecondRepoSummary | null): string {
+  const L: string[] = ['## Second repo (§9.11)', ''];
+  if (!s) {
+    L.push(
+      'Not mined yet: run `SECOND_SRC=<cpython clone> pnpm tsx packages/trial/src/mine/cli.ts mine --repo cpython` (excluding `Lib/test/**` through `test_globs`).',
+    );
+    return `${L.join('\n')}\n`;
+  }
+  L.push(
+    `Mined \`${s.repo}\` into \`${s.candidatesFile}\`: ${s.candidates} candidates, pool ${s.pool} (no failed rule, 2015–2025 windows), ${s.eligible} eligible with every rule passing. Test directories are excluded from E4 (\`Lib/test/**\`, \`sympy/**/tests/**\`). The switch rule: fewer than ${REPO2_MIN_ELIGIBLE} eligible reverts in the source root means sympy.`,
+  );
+  L.push('');
+  const min = REPO2_MIN_ELIGIBLE;
+  if (s.pool < min)
+    L.push(
+      `**Choice: sympy.** Even the pool upper bound (${s.pool}) is below ${min}, so ${s.repo} cannot qualify.`,
+    );
+  else if (s.pending)
+    L.push(
+      `**Choice: ${s.repo}, provisional.** The pool upper bound (${s.pool}) is at least ${min}, but E6 waits for the reason labels. If fewer than ${min} stay eligible after labeling, the second repo switches to sympy.`,
+    );
+  else if (s.eligible >= min)
+    L.push(`**Choice: ${s.repo}.** ${s.eligible} eligible reverts (at least ${min}).`);
+  else L.push(`**Choice: sympy.** Only ${s.eligible} eligible reverts (below ${min}).`);
+  return `${L.join('\n')}\n`;
+}
+
 export function windowIds(): MiningWindow[] {
   return WINDOWS.map((w) => w.id);
 }
