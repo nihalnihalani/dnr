@@ -11,6 +11,8 @@ export default defineConfig({
         },
       },
       { test: { name: 'fixtures', include: ['packages/schemas/test/fixtures.test.ts'] } },
+      // The installed npm package (needs `pnpm build` and network): `pnpm test:pack`.
+      { test: { name: 'pack', include: ['packages/cli/test-pack/**/*.test.ts'], fileParallelism: false } },
     ],
   },
 });
