@@ -51,6 +51,12 @@ const dnrBin =
   values.dnr ?? (which.status === 0 ? which.stdout.trim() : fail('dnr is not on PATH; pass --dnr'));
 const outDir = values.out ? resolve(base, values.out) : join(ROOT, 'reports', 'ts-demo');
 const id = `dnr-${pins.R.slice(0, 10)}`;
+/**
+ * This script types the human-only commands itself, so it is the approver. It says so: approvals
+ * are never attributed to the git user or any person, and the exported case keeps the order as
+ * `dnr orders build` made it (draft).
+ */
+const HARNESS = 'node-pty test harness (not a human)';
 
 const env: NodeJS.ProcessEnv = { ...process.env };
 for (const k of Object.keys(env)) if (k.startsWith('KIRO_') || k.startsWith('DNR_')) delete env[k];
@@ -107,11 +113,37 @@ check(
   `scan resolves ${pins.file}:${pins.qualname}`,
   !!cand?.units.some((u) => u.file === pins.file && u.qualname === pins.qualname),
 );
-const build = await human(['orders', 'build']);
+const build = await human(['orders', 'build', '--by', HARNESS]);
 check('dnr orders build (terminal) exits 0', build.code === 0);
 check(`orders build creates ${id}`, existsSync(join(repo, '.dnr', 'orders', `${id}.json`)));
-const approve = await human(['orders', 'approve', id]);
-check(`dnr orders approve ${id} (terminal) exits 0`, approve.code === 0);
+
+// The case bundle for the Playground's /play, exported before any approval: the order is a draft,
+// as `dnr orders build` made it. Visitors approve it themselves (simulated) in /play.
+mkdirSync(outDir, { recursive: true });
+const caseFile = join(outDir, `${id}.case.json`);
+const exp = dnr(['export-case', pins.R, '--out', caseFile]);
+steps.push({ cmd: `dnr export-case ${pins.R.slice(0, 10)}`, exit: exp.code, ms: exp.ms });
+const bundle = exp.code === 0 ? CaseBundle.safeParse(JSON.parse(readFileSync(caseFile, 'utf8'))) : null;
+check('dnr export-case writes a valid CaseBundle', !!bundle?.success);
+check(
+  'the exported order is a draft with only its created entry',
+  !!bundle?.success &&
+    bundle.data.order.status === 'draft' &&
+    bundle.data.order.history.map((h) => h.action).join(',') === 'created',
+);
+
+const approve = await human(['orders', 'approve', id, '--by', HARNESS]);
+check(`dnr orders approve ${id} --by '${HARNESS}' (terminal) exits 0`, approve.code === 0);
+const approvedEntry = (
+  JSON.parse(readFileSync(join(repo, '.dnr', 'orders', `${id}.json`), 'utf8')) as {
+    history: Array<{ by: string; action: string; origin?: { harness: string | null } }>;
+  }
+).history.at(-1);
+check(
+  'the approval is recorded as the test harness, with the harness named in its origin',
+  approvedEntry?.by === HARNESS && approvedEntry.action === 'approved' && !!approvedEntry.origin?.harness,
+);
+steps.push({ approval_recorded: approvedEntry });
 
 // A real re-application of C: the reland commit (c0d590d697, #24067) re-landed C unchanged. An
 // agent at demo_head writes the reland's version of every file the order covers, one write at a
@@ -188,16 +220,6 @@ const negHook = dnr(['check', '--stdin', '--hook', 'kiro'], event(pins.file, neg
 steps.push({ cmd: 'dnr check --stdin --hook kiro (hard negative)', exit: negHook.code, ms: negHook.ms });
 check('PreToolUse hook lets the hard negative through (exit 0)', negHook.code === 0);
 rmSync(tmp, { recursive: true, force: true });
-
-// The case bundle for the Playground's /play.
-mkdirSync(outDir, { recursive: true });
-const caseFile = join(outDir, `${id}.case.json`);
-const exp = dnr(['export-case', pins.R, '--out', caseFile]);
-steps.push({ cmd: `dnr export-case ${pins.R.slice(0, 10)}`, exit: exp.code, ms: exp.ms });
-check(
-  'dnr export-case writes a valid CaseBundle',
-  exp.code === 0 && CaseBundle.safeParse(JSON.parse(readFileSync(caseFile, 'utf8'))).success,
-);
 
 const doctor = dnr(['doctor']);
 const report = {

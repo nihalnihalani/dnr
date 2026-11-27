@@ -1,5 +1,5 @@
 {
-  "ran_at": "2026-11-27T15:06:41.414Z",
+  "ran_at": "2026-11-27T15:29:25.883Z",
   "dnr": {
     "bin": "~/Desktop/Github/dnr-work/dnr-prefix/bin/dnr",
     "version": "0.1.0"
@@ -17,25 +17,44 @@
       "cmd": "dnr init",
       "via": "node-pty terminal",
       "exit": 0,
-      "ms": 122
+      "ms": 137
     },
     {
       "cmd": "dnr scan",
       "exit": 0,
-      "ms": 15091,
+      "ms": 15069,
       "out": "DNR: 39 revert(s) that change a py/ts unit, written to ~/Desktop/Github/dnr-work/vite/.dnr/candidates.json.\nNext: dnr orders build"
     },
     {
-      "cmd": "dnr orders build",
+      "cmd": "dnr orders build --by node-pty test harness (not a human)",
       "via": "node-pty terminal",
       "exit": 0,
-      "ms": 3145
+      "ms": 3084
     },
     {
-      "cmd": "dnr orders approve dnr-afc44f0957",
+      "cmd": "dnr export-case afc44f0957",
+      "exit": 0,
+      "ms": 308
+    },
+    {
+      "cmd": "dnr orders approve dnr-afc44f0957 --by node-pty test harness (not a human)",
       "via": "node-pty terminal",
       "exit": 0,
-      "ms": 139
+      "ms": 158
+    },
+    {
+      "approval_recorded": {
+        "at": "2026-11-27T15:29:24.115Z",
+        "by": "node-pty test harness (not a human)",
+        "action": "approved",
+        "origin": {
+          "via": "cli",
+          "markers": [
+            "harness:tsx"
+          ],
+          "harness": "tsx"
+        }
+      }
     },
     {
       "cmd": "dnr check --stdin --hook kiro (reland, file by file)",
@@ -46,7 +65,7 @@
           "exit": 2,
           "outcome": "warn_block",
           "edit_score": 0.030303030303030304,
-          "ms": 236
+          "ms": 243
         },
         {
           "file": "packages/vite/rolldown.dts.config.ts",
@@ -54,7 +73,7 @@
           "exit": 0,
           "outcome": "warn_pass",
           "edit_score": 0.030303030303030304,
-          "ms": 154
+          "ms": 169
         },
         {
           "file": "packages/vite/src/node/plugin.ts",
@@ -62,7 +81,7 @@
           "exit": 0,
           "outcome": "warn_pass",
           "edit_score": 0.5454545454545454,
-          "ms": 160
+          "ms": 169
         },
         {
           "file": "packages/vite/src/node/build.ts",
@@ -70,7 +89,7 @@
           "exit": 2,
           "outcome": "block",
           "edit_score": 0.9696969696969697,
-          "ms": 174
+          "ms": 191
         }
       ],
       "stderr": "DNR: chore: revert \"fix(build): keep `magicString` and `ast` in transform hook meta (#24012)\" (#24065) https://github.com/vitejs/vite/commit/afc44f0957f7ef52d27d5026200a289de374c215\nDNR order dnr-afc44f0957 matched (edit 0.97 ≥ 0.60) in <module>, injectSsrFlag. Original: https://github.com/vitejs/vite/commit/a3b28e8744ffae9abd018696ad4fc01b27ac71ce. Ticket: https://github.com/vitejs/vite/issues/24012.\nThis change was tried and reverted. Do not re-apply it or route around this block. Tell the user. Only a human maintainer, not the agent, can approve a re-land: `dnr board --open dnr-afc44f0957` or `dnr allow dnr-afc44f0957`, which both need a terminal and refuse inside an agent session.\n"
@@ -147,7 +166,7 @@
         "reason_line": "DNR: chore: revert \"fix(build): keep `magicString` and `ast` in transform hook meta (#24012)\" (#24065) https://github.com/vitejs/vite/commit/afc44f0957f7ef52d27d5026200a289de374c215",
         "fast_path": false,
         "scope": "order",
-        "latency_ms": 18.123334
+        "latency_ms": 18.166916000000015
       }
     },
     {
@@ -222,18 +241,13 @@
         "order_id": null,
         "fast_path": false,
         "scope": "order",
-        "latency_ms": 12.533915999999977
+        "latency_ms": 12.816833000000003
       }
     },
     {
       "cmd": "dnr check --stdin --hook kiro (hard negative)",
       "exit": 0,
-      "ms": 236
-    },
-    {
-      "cmd": "dnr export-case afc44f0957",
-      "exit": 0,
-      "ms": 285
+      "ms": 256
     }
   ],
   "doctor": [
@@ -279,7 +293,19 @@
       "ok": true
     },
     {
-      "what": "dnr orders approve dnr-afc44f0957 (terminal) exits 0",
+      "what": "dnr export-case writes a valid CaseBundle",
+      "ok": true
+    },
+    {
+      "what": "the exported order is a draft with only its created entry",
+      "ok": true
+    },
+    {
+      "what": "dnr orders approve dnr-afc44f0957 --by 'node-pty test harness (not a human)' (terminal) exits 0",
+      "ok": true
+    },
+    {
+      "what": "the approval is recorded as the test harness, with the harness named in its origin",
       "ok": true
     },
     {
@@ -300,10 +326,6 @@
     },
     {
       "what": "PreToolUse hook lets the hard negative through (exit 0)",
-      "ok": true
-    },
-    {
-      "what": "dnr export-case writes a valid CaseBundle",
       "ok": true
     }
   ],

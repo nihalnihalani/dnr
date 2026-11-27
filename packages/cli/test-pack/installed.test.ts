@@ -26,6 +26,8 @@ let DNR: string;
 let PKG: string;
 let HOME: string;
 const repos: Repo[] = [];
+/** Who approves in these throwaway repos: the test harness, never a person. */
+const HARNESS = 'node-pty test harness (not a human)';
 
 function env(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
   const e: NodeJS.ProcessEnv = {
@@ -187,14 +189,20 @@ describe('installed dnr-guard package', () => {
     ]);
     // orders build into the live directory is human-only, so it refuses here and runs in a terminal.
     expect(dnr(repo.dir, ['orders', 'build']).status).toBe(64);
-    const build = await runInTerminal([DNR, 'orders', 'build'], t);
+    const build = await runInTerminal([DNR, 'orders', 'build', '--by', HARNESS], t);
     expect(build.code, build.output).toBe(0);
     const id = `dnr-${R.slice(0, 10)}`;
     expect(build.output).toContain(`${id} created (draft)`);
-    expect(dnr(repo.dir, ['orders', 'approve', id]).status).toBe(64);
-    const approve = await runInTerminal([DNR, 'orders', 'approve', id], t);
+    expect(dnr(repo.dir, ['orders', 'approve', id, '--by', HARNESS]).status).toBe(64);
+    const approve = await runInTerminal([DNR, 'orders', 'approve', id, '--by', HARNESS], t);
     expect(approve.code, approve.output).toBe(0);
-    expect(approve.output).toContain(`${id} approved by maintainer`);
+    expect(approve.output).toContain(`${id} approved by ${HARNESS} (test harness: vitest)`);
+    const approved = JSON.parse(readFileSync(join(repo.dir, '.dnr', 'orders', `${id}.json`), 'utf8'));
+    expect(approved.history.at(-1)).toMatchObject({
+      by: HARNESS,
+      action: 'approved',
+      origin: { via: 'cli', harness: 'vitest' },
+    });
 
     writeFileSync(join(repo.dir, '.proposed-reapply.py'), AFTER);
     const block = dnr(repo.dir, ['check', '--file', 'shop.py', '--proposed', '.proposed-reapply.py']);
@@ -221,7 +229,7 @@ describe('installed dnr-guard package', () => {
     const t = { cwd: repo.dir, env: env(), answers: [[/\[y\/N\]/, 'n\r']] as Array<[RegExp, string]> };
     expect((await runInTerminal([DNR, 'init'], t)).code).toBe(0);
     expect(dnr(repo.dir, ['scan']).status).toBe(0);
-    expect((await runInTerminal([DNR, 'orders', 'build'], t)).code).toBe(0);
+    expect((await runInTerminal([DNR, 'orders', 'build', '--by', HARNESS], t)).code).toBe(0);
     const id = `dnr-${R.slice(0, 10)}`;
     // Refuses without a TTY.
     expect(dnr(repo.dir, ['board', '--no-open']).status).toBe(64);

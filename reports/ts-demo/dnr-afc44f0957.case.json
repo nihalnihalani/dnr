@@ -5,7 +5,7 @@
   "order": {
     "schema": "dnr.order/v1",
     "id": "dnr-afc44f0957",
-    "status": "approved",
+    "status": "draft",
     "source": "revert",
     "original_sha": "a3b28e8744ffae9abd018696ad4fc01b27ac71ce",
     "revert_sha": "afc44f0957f7ef52d27d5026200a289de374c215",
@@ -173,15 +173,10 @@
         "at": "2026-11-11T01:54:36.000Z",
         "by": "dnr",
         "action": "created"
-      },
-      {
-        "at": "2026-11-27T15:06:39.539Z",
-        "by": "nihalnihalani",
-        "action": "approved"
       }
     ],
     "created_at": "2026-11-11T01:54:36.000Z",
-    "updated_at": "2026-11-27T15:06:39.539Z"
+    "updated_at": "2026-11-11T01:54:36.000Z"
   },
   "files": [
     {
